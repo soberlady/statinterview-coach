@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "statinterview-agent"
+version = "0.1.0"
+description = "Deterministic decision kernel for the StatInterview adaptive interview agent"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [
+  { name = "StatInterview contributors" }
+]
+dependencies = [
+  "pydantic>=2.7,<3"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8,<9"
+]
+voice = [
+  "httpx>=0.28,<1",
+  "livekit-agents[silero]>=1.6.1,<1.7",
+  "python-dotenv>=1.1,<2"
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+pythonpath = ["src"]
