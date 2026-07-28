@@ -21,10 +21,6 @@ export async function generateMetadata(): Promise<Metadata> {
       template: "%s · StatInterview Coach",
     },
     description,
-    icons: {
-      icon: "/favicon.svg",
-      shortcut: "/favicon.svg",
-    },
     openGraph: {
       type: "website",
       title: "StatInterview Coach",
