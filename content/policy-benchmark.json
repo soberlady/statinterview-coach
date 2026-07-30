@@ -1,0 +1,171 @@
+{
+  "schemaVersion": "1.0.0",
+  "generatedAt": "2026-07-30T08:56:05.566692+00:00",
+  "status": "synthetic_offline_benchmark",
+  "claimBoundary": "These results validate deterministic policy behavior under stated simulation assumptions. They do not establish interview validity or real-user learning impact.",
+  "adaptiveSelection": {
+    "design": {
+      "candidates_per_profile": 1000,
+      "profiles": 4,
+      "total_simulated_candidates": 4000,
+      "question_budget": 6,
+      "fixed_anchors": 4,
+      "adaptive_or_baseline_follow_ups": 2,
+      "response_model": "one-parameter logistic Rasch simulation",
+      "seed": 20260730
+    },
+    "aggregate": {
+      "adaptive": {
+        "weighted_mae": 0.690563788907387,
+        "weighted_rmse": 0.8626029758652258,
+        "mean_weighted_posterior_sd": 0.8593376291528929,
+        "weighted_90pct_interval_coverage": 0.8976875,
+        "mean_selected_job_weight": 0.3625
+      },
+      "fixed": {
+        "weighted_mae": 0.7067427898682516,
+        "weighted_rmse": 0.8808097051045746,
+        "mean_weighted_posterior_sd": 0.874392929455033,
+        "weighted_90pct_interval_coverage": 0.8970625,
+        "mean_selected_job_weight": 0.2375
+      },
+      "random": {
+        "weighted_mae": 0.7042637389050141,
+        "weighted_rmse": 0.8812558725650063,
+        "mean_weighted_posterior_sd": 0.8780664058692333,
+        "weighted_90pct_interval_coverage": 0.8978125,
+        "mean_selected_job_weight": 0.24961250000000001
+      }
+    },
+    "by_profile": {
+      "balanced": {
+        "adaptive": {
+          "weighted_mae": 0.6969765011678841,
+          "weighted_rmse": 0.8723443136522656,
+          "mean_weighted_posterior_sd": 0.8735207473428255,
+          "weighted_90pct_interval_coverage": 0.8975,
+          "mean_selected_job_weight": 0.25
+        },
+        "fixed": {
+          "weighted_mae": 0.699640964146134,
+          "weighted_rmse": 0.8750175669222746,
+          "mean_weighted_posterior_sd": 0.8726261869332551,
+          "weighted_90pct_interval_coverage": 0.8985,
+          "mean_selected_job_weight": 0.25
+        },
+        "random": {
+          "weighted_mae": 0.6973990382901066,
+          "weighted_rmse": 0.8722389868793422,
+          "mean_weighted_posterior_sd": 0.8778675141523562,
+          "weighted_90pct_interval_coverage": 0.8995,
+          "mean_selected_job_weight": 0.25
+        }
+      },
+      "growth_analytics": {
+        "adaptive": {
+          "weighted_mae": 0.6856817375550228,
+          "weighted_rmse": 0.8545472317161781,
+          "mean_weighted_posterior_sd": 0.8595374860830558,
+          "weighted_90pct_interval_coverage": 0.9027999999999999,
+          "mean_selected_job_weight": 0.35
+        },
+        "fixed": {
+          "weighted_mae": 0.6899805486196965,
+          "weighted_rmse": 0.8636180052416551,
+          "mean_weighted_posterior_sd": 0.8691670861306806,
+          "weighted_90pct_interval_coverage": 0.9021,
+          "mean_selected_job_weight": 0.275
+        },
+        "random": {
+          "weighted_mae": 0.6928134156325795,
+          "weighted_rmse": 0.8696970690275088,
+          "mean_weighted_posterior_sd": 0.8783986694566411,
+          "weighted_90pct_interval_coverage": 0.9034,
+          "mean_selected_job_weight": 0.2469
+        }
+      },
+      "experiment_analysis": {
+        "adaptive": {
+          "weighted_mae": 0.7010860631179705,
+          "weighted_rmse": 0.8709670073214856,
+          "mean_weighted_posterior_sd": 0.8583946532738959,
+          "weighted_90pct_interval_coverage": 0.8914,
+          "mean_selected_job_weight": 0.35
+        },
+        "fixed": {
+          "weighted_mae": 0.7193158085175274,
+          "weighted_rmse": 0.8946409579039886,
+          "mean_weighted_posterior_sd": 0.8762799655488014,
+          "weighted_90pct_interval_coverage": 0.89435,
+          "mean_selected_job_weight": 0.22499999999999998
+        },
+        "random": {
+          "weighted_mae": 0.7105703512988706,
+          "weighted_rmse": 0.8893781409662654,
+          "mean_weighted_posterior_sd": 0.8782614493994594,
+          "weighted_90pct_interval_coverage": 0.89755,
+          "mean_selected_job_weight": 0.24817499999999998
+        }
+      },
+      "data_engineering": {
+        "adaptive": {
+          "weighted_mae": 0.6785108537886705,
+          "weighted_rmse": 0.8523593580458905,
+          "mean_weighted_posterior_sd": 0.8458976299117941,
+          "weighted_90pct_interval_coverage": 0.8990499999999999,
+          "mean_selected_job_weight": 0.5
+        },
+        "fixed": {
+          "weighted_mae": 0.718033838189648,
+          "weighted_rmse": 0.8896227860537923,
+          "mean_weighted_posterior_sd": 0.879498479207395,
+          "weighted_90pct_interval_coverage": 0.8933,
+          "mean_selected_job_weight": 0.2
+        },
+        "random": {
+          "weighted_mae": 0.7162721503985,
+          "weighted_rmse": 0.893465350187287,
+          "mean_weighted_posterior_sd": 0.8777379904684766,
+          "weighted_90pct_interval_coverage": 0.8907999999999999,
+          "mean_selected_job_weight": 0.253375
+        }
+      }
+    },
+    "comparisons": {
+      "adaptive_vs_fixed": {
+        "weighted_mae_difference": -0.01617900096086451,
+        "paired_95pct_ci": [
+          -0.021437222805650472,
+          -0.010920779116078545
+        ],
+        "relative_mae_change_pct": -2.28923466822782
+      },
+      "adaptive_vs_random": {
+        "weighted_mae_difference": -0.013699949997627192,
+        "paired_95pct_ci": [
+          -0.0191967126941462,
+          -0.008203187301108184
+        ],
+        "relative_mae_change_pct": -1.9452868635445875
+      }
+    }
+  },
+  "reliabilityGuardrail": {
+    "design": {
+      "samples": 4000,
+      "fault": "detected final-transcript answer inversion",
+      "verification": "one clean approved follow-up; conflict abstains",
+      "scope": "policy response after detection, not detector recall",
+      "seed": 20260730
+    },
+    "always_accept": {
+      "mean_absolute_deviation_from_oracle": 0.814211426377882,
+      "unsafe_update_rate": 1.0
+    },
+    "verify_or_abstain": {
+      "mean_absolute_deviation_from_oracle": 0.407105713188941,
+      "unsafe_update_rate": 0.0
+    },
+    "relative_oracle_deviation_reduction_pct": 50.0
+  }
+}

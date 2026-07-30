@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { InterviewSetupForm } from "./components/InterviewSetupForm";
+import benchmark from "@/content/policy-benchmark.json";
 
 export default function Home() {
   return (
@@ -17,6 +18,7 @@ export default function Home() {
         <nav className="topnav" aria-label="主导航">
           <a href="#method">方法</a>
           <a href="#trust">可信评测</a>
+          <Link href="/lab">策略实验</Link>
           <span className="status-pill">
             <span aria-hidden="true" />
             Public beta
@@ -111,9 +113,52 @@ export default function Home() {
         </article>
       </section>
 
+      <section className="evidence-strip" aria-labelledby="evidence-title">
+        <div>
+          <p className="eyebrow">POLICY EVIDENCE · SYNTHETIC OFFLINE</p>
+          <h2 id="evidence-title">创新不是一句“自适应”，而是可复现的对照结果。</h2>
+          <p>
+            在相同六题预算下，4,000 个合成候选人的岗位加权能力估计 MAE
+            相对固定题序下降{" "}
+            {Math.abs(
+              benchmark.adaptiveSelection.comparisons.adaptive_vs_fixed
+                .relative_mae_change_pct,
+            ).toFixed(2)}
+            %。均衡岗位上差异很小，收益主要来自岗位能力权重不均时的定向测量。
+          </p>
+        </div>
+        <div className="evidence-numbers">
+          <div>
+            <strong>
+              {
+                benchmark.adaptiveSelection.design
+                  .total_simulated_candidates
+              }
+            </strong>
+            <span>合成候选人</span>
+          </div>
+          <div>
+            <strong>
+              {(
+                benchmark.adaptiveSelection.aggregate.adaptive
+                  .weighted_90pct_interval_coverage * 100
+              ).toFixed(1)}
+              %
+            </strong>
+            <span>90% 区间覆盖率</span>
+          </div>
+          <Link className="secondary-button" href="/lab">
+            查看实验设计与边界
+          </Link>
+        </div>
+      </section>
+
       <footer className="footer">
         <p>StatInterview Coach · 训练用途，不用于自动化招聘决策</p>
-        <p>评分只基于回答内容，不分析面部、眼神或情绪。</p>
+        <p>
+          <Link href="/lab">查看可复现实验</Link> ·
+          评分只基于回答内容，不分析面部、眼神或情绪。
+        </p>
       </footer>
     </main>
   );

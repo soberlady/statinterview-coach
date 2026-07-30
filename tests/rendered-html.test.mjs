@@ -5,19 +5,22 @@ import test from "node:test";
 const projectRoot = new URL("../", import.meta.url);
 
 test("keeps the production product copy and safety boundary", async () => {
-  const [page, setup, report] = await Promise.all([
+  const [page, setup, report, lab] = await Promise.all([
     readFile(new URL("app/page.tsx", projectRoot), "utf8"),
     readFile(
       new URL("app/components/InterviewSetupForm.tsx", projectRoot),
       "utf8",
     ),
     readFile(new URL("app/components/ReportView.tsx", projectRoot), "utf8"),
+    readFile(new URL("app/lab/page.tsx", projectRoot), "utf8"),
   ]);
 
   assert.match(page, /不凑题数/);
   assert.match(setup, /开始文本诊断/);
   assert.match(page, /不用于自动化招聘决策/);
   assert.match(report, /低可靠性回答不会直接改变能力状态/);
+  assert.match(lab, /离线合成实验，不是招聘效度证明/);
+  assert.match(lab, /均衡型岗位上三种策略差异很小/);
   assert.doesNotMatch(page, /Your site is taking shape|vinext-starter/i);
 });
 

@@ -11,12 +11,19 @@ import {
   type InterviewQuestion,
   type SkillKey,
 } from "./question-bank";
+import {
+  normalizeDifficulty,
+  parsePosterior,
+  scoreQuestionUtility,
+  summarizePosterior,
+  updatePosterior,
+} from "./rasch-policy";
 
 export type Reliability = "HIGH" | "MEDIUM" | "LOW";
 export type AgentAction = "ACCEPT" | "VERIFY" | "ABSTAIN";
 
-export type HeuristicEvaluation = {
-  evaluator: "STRUCTURE_HEURISTIC";
+export type AnswerEvaluation = {
+  evaluator: "STRUCTURE_HEURISTIC" | "RUBRIC_DOUBLE_PASS";
   totalScore: number;
   scoreOutOfFour: number;
   reliability: Reliability;
@@ -28,9 +35,29 @@ export type HeuristicEvaluation = {
     answerCharacters: number;
     domainKeywords: string[];
     reasoningSignals: string[];
+    evidenceCoverage?: number;
+    reviewDisagreement?: number;
   };
   disclaimer: string;
+  semantic?: {
+    model: string;
+    criteria: Array<{
+      criterion: string;
+      score: number;
+      evidence: string[];
+    }>;
+    primaryScore: number;
+    reviewScore: number;
+  };
+  telemetry?: {
+    model: string;
+    latencyMs: number;
+    inputTokens: number | null;
+    outputTokens: number | null;
+  };
 };
+
+export type HeuristicEvaluation = AnswerEvaluation;
 
 export type AbilityUpdate = {
   posteriorMean: number;
@@ -235,26 +262,21 @@ export function updateAbility(
   turnId: string,
 ): AbilityUpdate {
   const accepted = evaluation.action === "ACCEPT";
-  const difficulty = (question.difficulty - 3) * 0.75;
-  const prediction = sigmoid(previous.posteriorMean - difficulty);
-  const learningRate = evaluation.reliability === "HIGH" ? 0.9 : 0.65;
-  const posteriorMean = accepted
-    ? clamp(
-        previous.posteriorMean +
-          previous.uncertainty *
-            learningRate *
-            (evaluation.totalScore - prediction),
-        -3,
-        3,
+  const prior = parsePosterior(
+    previous.posterior,
+    previous.posteriorMean,
+    previous.uncertainty,
+  );
+  const posterior = accepted
+    ? updatePosterior(
+        prior,
+        normalizeDifficulty(question.difficulty),
+        evaluation.totalScore,
       )
-    : previous.posteriorMean;
-  const uncertainty = accepted
-    ? Math.max(
-        0.22,
-        previous.uncertainty *
-          (evaluation.reliability === "HIGH" ? 0.72 : 0.84),
-      )
-    : Math.max(0.22, previous.uncertainty * 0.98);
+    : prior;
+  const summary = summarizePosterior(posterior);
+  const posteriorMean = summary.mean;
+  const uncertainty = summary.standardDeviation;
 
   const priorEvidence = parseArray(previous.supportingEvidence);
   const priorErrors = parseArray(previous.commonErrors).filter(
@@ -279,7 +301,10 @@ export function updateAbility(
   return {
     posteriorMean: round(posteriorMean),
     uncertainty: round(uncertainty),
-    posterior: approximatePosterior(posteriorMean, uncertainty),
+    posterior: posterior.map((point) => ({
+      theta: point.theta,
+      probability: round(point.probability, 10),
+    })),
     supportingEvidence,
     commonErrors,
     sourceTurnCount: previous.sourceTurnCount + (accepted ? 1 : 0),
@@ -367,6 +392,14 @@ export function selectNextQuestion(input: {
   const stateBySkill = new Map(
     skillStates.map((state) => [state.skill, state]),
   );
+  const jobWeights = inferJobWeights(interview.jobDescription);
+  const maxJobWeight = Math.max(...Object.values(jobWeights), 1e-9);
+  const answeredBySkill = new Map<SkillKey, number>();
+  for (const turn of substantiveTurns) {
+    if (!(turn.skill in jobWeights)) continue;
+    const skill = turn.skill as SkillKey;
+    answeredBySkill.set(skill, (answeredBySkill.get(skill) ?? 0) + 1);
+  }
   const candidates = listQuestions().filter(
     (question) => !question.isAnchor && !askedSourceIds.has(question.id),
   );
@@ -377,7 +410,22 @@ export function selectNextQuestion(input: {
         question,
         stateBySkill.get(question.skill),
         interview.jobDescription,
-        interview.durationMinutes,
+        jobWeights,
+        maxJobWeight,
+        answeredBySkill.get(question.skill) ?? 0,
+        Math.max(
+          interview.durationMinutes * 60 -
+            substantiveTurns.reduce(
+              (total, turn) =>
+                total +
+                (turn.questionId
+                  ? (getInterviewQuestion(turn.questionId)?.expectedSeconds ??
+                    120)
+                  : 120),
+              0,
+            ),
+          1,
+        ),
       ),
     }))
     .sort(
@@ -413,40 +461,86 @@ function selectionUtility(
   question: BankQuestion,
   state: SkillState | undefined,
   jobDescription: string,
-  durationMinutes: number,
+  jobWeights: Record<SkillKey, number>,
+  maxJobWeight: number,
+  answeredCount: number,
+  remainingSeconds: number,
 ): number {
-  const mean = state?.posteriorMean ?? 0;
-  const uncertainty = state?.uncertainty ?? 1;
-  const difficulty = (question.difficulty - 3) * 0.75;
-  const difficultyMatch = 1 - Math.min(Math.abs(mean - difficulty) / 3, 1);
   const jd = jobDescription.toLowerCase();
   const tagHits = question.jobTags.filter((tag) =>
     jd.includes(tag.toLowerCase()),
   ).length;
-  const jdRelevance = Math.min(1, 0.35 + tagHits * 0.2);
-  const timeCost = Math.min(
-    1,
-    question.expectedSeconds / Math.max(durationMinutes * 60, 1),
+  const questionRelevance = Math.min(1, 0.35 + tagHits * 0.2);
+  const posterior = parsePosterior(
+    state?.posterior ?? "[]",
+    state?.posteriorMean ?? 0,
+    state?.uncertainty ?? 1,
   );
-  return (
-    uncertainty * 0.46 +
-    difficultyMatch * 0.28 +
-    jdRelevance * 0.2 -
-    timeCost * 0.06
-  );
+  return scoreQuestionUtility({
+    posterior,
+    difficulty: normalizeDifficulty(question.difficulty),
+    questionRelevance,
+    skillJobWeight: jobWeights[question.skill],
+    maxJobWeight,
+    answeredCount,
+    expectedSeconds: question.expectedSeconds,
+    remainingSeconds,
+  }).utility;
 }
 
-function approximatePosterior(mean: number, uncertainty: number) {
-  const grid = [-3, -2, -1, 0, 1, 2, 3];
-  const sigma = Math.max(uncertainty, 0.22);
-  const weights = grid.map((theta) =>
-    Math.exp(-((theta - mean) ** 2) / (2 * sigma ** 2)),
+const JOB_SKILL_TERMS: Record<SkillKey, string[]> = {
+  statistics_ml: [
+    "统计",
+    "机器学习",
+    "预测",
+    "分类",
+    "回归",
+    "模型",
+  ],
+  experiment_causal: [
+    "实验",
+    "a/b",
+    "ab测试",
+    "因果",
+    "策略",
+    "增长",
+  ],
+  sql_python: [
+    "sql",
+    "python",
+    "数据处理",
+    "etl",
+    "数仓",
+    "工程",
+  ],
+  business_analytics: [
+    "业务",
+    "指标",
+    "分析",
+    "运营",
+    "产品",
+    "商业",
+  ],
+};
+
+function inferJobWeights(jobDescription: string): Record<SkillKey, number> {
+  const normalized = jobDescription.toLowerCase();
+  const raw = Object.fromEntries(
+    Object.entries(JOB_SKILL_TERMS).map(([skill, terms]) => [
+      skill,
+      1 + terms.filter((term) => normalized.includes(term)).length,
+    ]),
+  ) as Record<SkillKey, number>;
+  const total = Object.values(raw).reduce(
+    (sum, weight) => sum + weight,
+    0,
   );
-  const total = weights.reduce((sum, weight) => sum + weight, 0);
-  return grid.map((theta, index) => ({
-    theta,
-    probability: round(weights[index] / total),
-  }));
+  return Object.fromEntries(
+    Object.entries(raw).map(([skill, weight]) => [
+      skill,
+      weight / total,
+    ]),
+  ) as Record<SkillKey, number>;
 }
 
 function parseArray(value: string): unknown[] {
@@ -467,14 +561,6 @@ function parseObject(value: string): Record<string, unknown> | undefined {
   } catch {
     return undefined;
   }
-}
-
-function sigmoid(value: number): number {
-  return 1 / (1 + Math.exp(-value));
-}
-
-function clamp(value: number, minimum: number, maximum: number): number {
-  return Math.min(maximum, Math.max(minimum, value));
 }
 
 function round(value: number, precision = 4): number {
