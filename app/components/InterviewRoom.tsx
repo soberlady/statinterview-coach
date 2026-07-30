@@ -1,7 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import {
+  FormEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useRouter } from "next/navigation";
 
 type PublicQuestion = {
@@ -54,6 +60,19 @@ type TurnResponse = NextQuestionResponse & {
   evaluation?: Evaluation;
 };
 
+type VoiceTokenResponse = ApiErrorBody & {
+  serverUrl?: string;
+  participantToken?: string;
+};
+
+type VoiceStatus =
+  | "idle"
+  | "connecting"
+  | "connected"
+  | "muted"
+  | "unavailable"
+  | "error";
+
 const flowLabels = [
   "统计与机器学习",
   "实验与因果",
@@ -80,6 +99,13 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   const [error, setError] = useState("");
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [startedAt, setStartedAt] = useState(() => new Date().toISOString());
+  const [inputChannel, setInputChannel] = useState<"text" | "voice">("text");
+  const [voiceStatus, setVoiceStatus] = useState<VoiceStatus>("idle");
+  const [voiceMessage, setVoiceMessage] = useState(
+    "连接后，原始最终转写会进入同一套选题、验证与报告流程。",
+  );
+  const voiceRoomRef = useRef<import("livekit-client").Room | null>(null);
+  const remoteAudioRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -131,6 +157,48 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     );
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    return () => {
+      void voiceRoomRef.current?.disconnect();
+      voiceRoomRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (inputChannel !== "voice" || voiceStatus === "idle") return;
+    let cancelled = false;
+    const timer = window.setInterval(async () => {
+      try {
+        const response = await fetch(
+          `/api/interviews/${interviewId}/next-question`,
+          { cache: "no-store" },
+        );
+        const result = (await response.json()) as NextQuestionResponse;
+        if (!response.ok || cancelled) return;
+        if (result.progress) setProgress(result.progress);
+        if (result.decision) setDecision(result.decision);
+        if (result.nextQuestion) {
+          setQuestion(result.nextQuestion);
+          setPhase(stageForQuestion(result.nextQuestion.questionType));
+        } else if (
+          (result.progress?.substantiveTurns ?? 0) >=
+          (result.progress?.targetSubstantiveTurns ?? 6)
+        ) {
+          setQuestion(null);
+          setPhase("COMPLETED");
+          await voiceRoomRef.current?.disconnect();
+          voiceRoomRef.current = null;
+        }
+      } catch {
+        // Realtime media can continue through transient polling failures.
+      }
+    }, 1_500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [inputChannel, interviewId, voiceStatus]);
 
   const elapsedLabel = useMemo(() => {
     const minutes = Math.floor(elapsedSeconds / 60)
@@ -208,6 +276,93 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     }
   }
 
+  async function startVoiceInterview() {
+    setError("");
+    setVoiceStatus("connecting");
+    setVoiceMessage("正在申请麦克风并连接实时面试官…");
+
+    try {
+      const response = await fetch(
+        `/api/interviews/${interviewId}/voice-token`,
+        { method: "POST" },
+      );
+      const credentials = (await response.json()) as VoiceTokenResponse;
+      if (
+        !response.ok ||
+        !credentials.serverUrl ||
+        !credentials.participantToken
+      ) {
+        const unavailable = response.status === 503;
+        setVoiceStatus(unavailable ? "unavailable" : "error");
+        throw new Error(
+          credentials.error?.message ??
+            "实时语音连接失败，请继续使用文本通道。",
+        );
+      }
+
+      const { Room, RoomEvent, Track } = await import("livekit-client");
+      const room = new Room({
+        adaptiveStream: true,
+        dynacast: true,
+      });
+      room.on(RoomEvent.TrackSubscribed, (track) => {
+        if (track.kind !== Track.Kind.Audio) return;
+        const element = track.attach();
+        element.dataset.livekitRemoteAudio = "true";
+        remoteAudioRef.current?.appendChild(element);
+      });
+      room.on(RoomEvent.TrackUnsubscribed, (track) => {
+        track.detach().forEach((element) => element.remove());
+      });
+      room.on(RoomEvent.Disconnected, () => {
+        setVoiceStatus("idle");
+        setInputChannel("text");
+        setVoiceMessage("语音连接已结束，可以继续使用文本通道。");
+      });
+
+      voiceRoomRef.current = room;
+      await room.connect(
+        credentials.serverUrl,
+        credentials.participantToken,
+      );
+      await room.startAudio();
+      await room.localParticipant.setMicrophoneEnabled(true);
+      setInputChannel("voice");
+      setVoiceStatus("connected");
+      setVoiceMessage("已连接。回答结束后停顿，Agent 会保存最终原始转写并选择下一题。");
+    } catch (voiceError) {
+      await voiceRoomRef.current?.disconnect();
+      voiceRoomRef.current = null;
+      setInputChannel("text");
+      setVoiceMessage(
+        voiceError instanceof Error
+          ? voiceError.message
+          : "实时语音连接失败，请继续使用文本通道。",
+      );
+    }
+  }
+
+  async function toggleMicrophone() {
+    const room = voiceRoomRef.current;
+    if (!room) return;
+    const shouldEnable = voiceStatus === "muted";
+    await room.localParticipant.setMicrophoneEnabled(shouldEnable);
+    setVoiceStatus(shouldEnable ? "connected" : "muted");
+    setVoiceMessage(
+      shouldEnable
+        ? "麦克风已开启，可以继续回答。"
+        : "麦克风已静音；本地不会继续发送声音。",
+    );
+  }
+
+  async function stopVoiceInterview() {
+    await voiceRoomRef.current?.disconnect();
+    voiceRoomRef.current = null;
+    setInputChannel("text");
+    setVoiceStatus("idle");
+    setVoiceMessage("语音连接已结束，可以继续使用文本通道。");
+  }
+
   if (isLoading) {
     return (
       <main className="completion-shell">
@@ -270,7 +425,8 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         </Link>
         <div className="room-session">
           <span className="live-dot" />
-          文本通道 · 自动检查点
+          {inputChannel === "voice" ? "LiveKit 实时语音" : "文本通道"} ·
+          自动检查点
           <strong>{elapsedLabel}</strong>
         </div>
         <button
@@ -344,25 +500,81 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
             </p>
           </div>
 
-          <form className="answer-composer" onSubmit={submitAnswer}>
-            <label htmlFor="answer">你的回答</label>
-            <textarea
-              id="answer"
-              value={answer}
-              onChange={(event) => setAnswer(event.target.value)}
-              placeholder="当前为可恢复的文本通道。建议按“假设—数据—判断标准—验证动作”组织答案。"
-              rows={7}
-              disabled={isSaving}
-            />
-            <div className="composer-footer">
-              <span>{answer.trim().length} 字</span>
-              {error ? <p role="alert">{error}</p> : null}
-              <button className="primary-button compact-button" disabled={isSaving}>
-                {isSaving ? "评估并选题中…" : "提交回答"}
-                <span>→</span>
-              </button>
-            </div>
-          </form>
+          {inputChannel === "text" ? (
+            <form className="answer-composer" onSubmit={submitAnswer}>
+              <div className="composer-heading">
+                <label htmlFor="answer">你的回答</label>
+                <button
+                  className="channel-switch"
+                  type="button"
+                  onClick={startVoiceInterview}
+                  disabled={voiceStatus === "connecting"}
+                >
+                  {voiceStatus === "connecting"
+                    ? "正在连接…"
+                    : "切换到实时语音"}
+                </button>
+              </div>
+              <textarea
+                id="answer"
+                value={answer}
+                onChange={(event) => setAnswer(event.target.value)}
+                placeholder="当前为可恢复的文本通道。建议按“假设—数据—判断标准—验证动作”组织答案。"
+                rows={7}
+                disabled={isSaving}
+              />
+              <div className="composer-footer">
+                <span>{answer.trim().length} 字</span>
+                {error ? <p role="alert">{error}</p> : null}
+                {voiceStatus === "unavailable" ||
+                voiceStatus === "error" ? (
+                  <p role="status">{voiceMessage}</p>
+                ) : null}
+                <button
+                  className="primary-button compact-button"
+                  disabled={isSaving}
+                >
+                  {isSaving ? "评估并选题中…" : "提交回答"}
+                  <span>→</span>
+                </button>
+              </div>
+            </form>
+          ) : (
+            <section className="voice-console" aria-live="polite">
+              <div className="voice-pulse" aria-hidden="true">
+                <i />
+                <i />
+                <i />
+                <i />
+              </div>
+              <div className="voice-copy">
+                <span>LIVEKIT VOICE CHANNEL</span>
+                <strong>
+                  {voiceStatus === "muted"
+                    ? "麦克风已静音"
+                    : "实时面试官已连接"}
+                </strong>
+                <p>{voiceMessage}</p>
+              </div>
+              <div className="voice-actions">
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={toggleMicrophone}
+                >
+                  {voiceStatus === "muted" ? "开启麦克风" : "静音"}
+                </button>
+                <button
+                  className="quiet-button"
+                  type="button"
+                  onClick={stopVoiceInterview}
+                >
+                  结束语音
+                </button>
+              </div>
+              <div className="remote-audio" ref={remoteAudioRef} />
+            </section>
+          )}
         </section>
 
         <aside className="signal-panel">

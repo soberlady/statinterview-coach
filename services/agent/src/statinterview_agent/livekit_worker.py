@@ -106,6 +106,7 @@ class StatInterviewVoiceAgent(Agent):
                 "sequenceNumber": runtime.sequence_number,
                 "questionId": question["id"],
                 "answerText": transcript,
+                "inputMode": "voice",
             }
             endpoint = (
                 f"{runtime.api_base_url}/api/interviews/"
@@ -124,6 +125,9 @@ class StatInterviewVoiceAgent(Agent):
             ) + 1
 
             if runtime.current_question is None:
+                await _complete_interview(
+                    runtime.api_base_url, runtime.interview_id
+                )
                 return json.dumps(
                     {
                         "status": "COMPLETE",
@@ -225,6 +229,22 @@ async def _load_next_question(
         response = await client.get(endpoint)
         response.raise_for_status()
         return response.json()
+
+
+async def _complete_interview(
+    api_base_url: str,
+    interview_id: str,
+) -> None:
+    endpoint = f"{api_base_url}/api/interviews/{interview_id}"
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        response = await client.patch(
+            endpoint,
+            json={
+                "status": "COMPLETED",
+                "currentStage": "COMPLETED",
+            },
+        )
+        response.raise_for_status()
 
 
 def _resolve_interview_id(room_name: str) -> str:

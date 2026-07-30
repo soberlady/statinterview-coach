@@ -7,10 +7,10 @@ import {
   skillStates,
 } from "@/db/schema";
 import {
-  evaluateAnswer,
   selectNextQuestion,
   updateAbility,
 } from "@/app/lib/agent-policy";
+import { evaluateAnswerWithFallback } from "@/app/lib/rubric-evaluator";
 import {
   getInterviewQuestion,
   toPublicQuestion,
@@ -21,6 +21,7 @@ import {
   jsonResponse,
   jsonString,
   optionalIsoDate,
+  optionalString,
   readJsonObject,
   requiredString,
   validationError,
@@ -69,6 +70,11 @@ export async function POST(request: Request, context: RouteContext) {
     const startedAt = optionalIsoDate(payload, "startedAt");
     const completedAt =
       optionalIsoDate(payload, "completedAt") ?? new Date().toISOString();
+    const inputMode =
+      optionalString(payload, "inputMode", { max: 16 }) ?? "text";
+    if (!["text", "voice"].includes(inputMode)) {
+      throw validationError("inputMode", "must be text or voice");
+    }
 
     const db = getDb();
     const [interview] = await db
@@ -142,7 +148,7 @@ export async function POST(request: Request, context: RouteContext) {
       );
     }
 
-    const evaluation = evaluateAnswer(question, answerText);
+    const evaluation = await evaluateAnswerWithFallback(question, answerText);
     const now = new Date().toISOString();
     const turnId = `turn_${crypto.randomUUID()}`;
     const [turn] = await db
@@ -156,7 +162,7 @@ export async function POST(request: Request, context: RouteContext) {
         skill: question.skill,
         questionType: question.questionType,
         answerText: answerText.trim(),
-        inputMode: "text",
+        inputMode,
         status: "completed",
         evidence: jsonString(evaluation.evidence, "evidence", 32 * 1024),
         evaluation: jsonString(evaluation, "evaluation", 32 * 1024),
@@ -268,6 +274,10 @@ export async function POST(request: Request, context: RouteContext) {
         },
         "eventPayload",
       ),
+      latencyMs: evaluation.telemetry?.latencyMs,
+      model: evaluation.telemetry?.model,
+      inputTokens: evaluation.telemetry?.inputTokens,
+      outputTokens: evaluation.telemetry?.outputTokens,
       createdAt: now,
     });
 
