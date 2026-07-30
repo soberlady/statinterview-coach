@@ -14,8 +14,11 @@ marketing language; be able to derive and modify the decisions below.
 > coverage and time cost. If answer evidence is unreliable, a bounded
 > verification policy asks an approved follow-up or abstains instead of
 > updating ability. The web flow, D1 checkpoints, evidence report and LiveKit
-> browser/worker boundary are implemented. I also wrote Python and TypeScript
-> parity fixtures and a reproducible 4,000-candidate simulation. Under the
+> browser/worker boundary are implemented. The final report deterministically
+> replays every decision, decomposes the top candidate utilities and generates
+> a SHA-256 policy fingerprint; a counterfactual test proves that a legal but
+> non-selected question is detected. I also wrote Python and TypeScript parity
+> fixtures and a reproducible 4,000-candidate simulation. Under the
 > stated assumptions, adaptive selection reduced job-weighted MAE by 2.29%
 > versus a fixed sequence; the effect was small for balanced roles, which is an
 > important limitation rather than something I hide.
@@ -83,9 +86,11 @@ main source of gain.
 5. Submit a short, weak answer; show `VERIFY`, then `ABSTAIN` if evidence
    remains weak.
 6. Open the report and trace a conclusion to the exact answer excerpt.
-7. Open `/lab`; explain the fixed/random ablation and the balanced-role
+7. Expand the decision audit; show 6/6 replay, then explain why the final two
+   questions outranked their alternatives.
+8. Open `/lab`; explain the fixed/random ablation and the balanced-role
    limitation.
-8. If LiveKit credentials and the worker are running, switch one turn to voice.
+9. If LiveKit credentials and the worker are running, switch one turn to voice.
    Otherwise explicitly say the media code is complete but the hosted
    credential-dependent call has not been measured.
 
@@ -99,6 +104,9 @@ main source of gain.
 > - Implemented a discrete Bayesian/Rasch ability state and a constrained
 >   expected-information-gain selector; added shared Python/TypeScript golden
 >   fixtures to prevent edge-policy drift.
+> - Built deterministic decision replay with five invariants, counterfactual
+>   candidate rankings and a SHA-256 fingerprint; added a tamper test that
+>   detects a bank-approved question not chosen by the policy.
 > - Ran a deterministic 4,000-candidate paired simulation under a six-question
 >   budget; adaptive selection reduced job-weighted MAE by 2.29% versus a fixed
 >   sequence, with gains concentrated in uneven job profiles.

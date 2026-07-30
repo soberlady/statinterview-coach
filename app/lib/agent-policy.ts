@@ -17,6 +17,7 @@ import {
   scoreQuestionUtility,
   summarizePosterior,
   updatePosterior,
+  type UtilitySignals,
 } from "./rasch-policy";
 
 export type Reliability = "HIGH" | "MEDIUM" | "LOW";
@@ -73,6 +74,23 @@ export type SelectionResult = {
   action: AgentAction | "COMPLETE";
   reason: string;
   utility: number | null;
+  ranking: SelectionCandidate[];
+  context: SelectionContext | null;
+};
+
+export type SelectionCandidate = {
+  questionId: string;
+  questionText: string;
+  skill: SkillKey;
+  difficulty: number;
+  expectedSeconds: number;
+  utility: number;
+  signals: UtilitySignals;
+};
+
+export type SelectionContext = {
+  remainingSeconds: number;
+  jobWeights: Record<SkillKey, number>;
 };
 
 const DOMAIN_KEYWORDS: Record<SkillKey, string[]> = {
@@ -347,6 +365,8 @@ export function selectNextQuestion(input: {
           action: "VERIFY",
           reason: "上一轮证据可靠性为 LOW，先用限定追问验证，再决定是否更新能力。",
           utility: null,
+          ranking: [],
+          context: null,
         };
       }
     }
@@ -374,6 +394,8 @@ export function selectNextQuestion(input: {
         ? "限定追问后证据仍不足，放弃上一题评分并继续下一个固定锚点。"
         : "固定锚点用于建立四个能力维度之间可比较的初始状态。",
       utility: null,
+      ranking: [],
+      context: null,
     };
   }
 
@@ -386,6 +408,8 @@ export function selectNextQuestion(input: {
       action: "COMPLETE",
       reason: "已完成四道锚点题和两道信息增益最高的自适应题。",
       utility: null,
+      ranking: [],
+      context: null,
     };
   }
 
@@ -403,34 +427,34 @@ export function selectNextQuestion(input: {
   const candidates = listQuestions().filter(
     (question) => !question.isAnchor && !askedSourceIds.has(question.id),
   );
+  const remainingSeconds = Math.max(
+    interview.durationMinutes * 60 -
+      substantiveTurns.reduce(
+        (total, turn) =>
+          total +
+          (turn.questionId
+            ? (getInterviewQuestion(turn.questionId)?.expectedSeconds ?? 120)
+            : 120),
+        0,
+      ),
+    1,
+  );
   const scored = candidates
     .map((question) => ({
       question,
-      utility: selectionUtility(
+      signals: selectionSignals(
         question,
         stateBySkill.get(question.skill),
         interview.jobDescription,
         jobWeights,
         maxJobWeight,
         answeredBySkill.get(question.skill) ?? 0,
-        Math.max(
-          interview.durationMinutes * 60 -
-            substantiveTurns.reduce(
-              (total, turn) =>
-                total +
-                (turn.questionId
-                  ? (getInterviewQuestion(turn.questionId)?.expectedSeconds ??
-                    120)
-                  : 120),
-              0,
-            ),
-          1,
-        ),
+        remainingSeconds,
       ),
     }))
     .sort(
       (left, right) =>
-        right.utility - left.utility ||
+        right.signals.utility - left.signals.utility ||
         left.question.id.localeCompare(right.question.id),
     );
   const winner = scored[0];
@@ -440,8 +464,23 @@ export function selectNextQuestion(input: {
       action: "ABSTAIN",
       reason: "题库中没有满足约束的未作答问题。",
       utility: null,
+      ranking: [],
+      context: {
+        remainingSeconds,
+        jobWeights: roundWeights(jobWeights),
+      },
     };
   }
+
+  const ranking = scored.slice(0, 5).map(({ question, signals }) => ({
+    questionId: question.id,
+    questionText: question.question,
+    skill: question.skill,
+    difficulty: question.difficulty,
+    expectedSeconds: question.expectedSeconds,
+    utility: round(signals.utility),
+    signals: roundUtilitySignals(signals),
+  }));
 
   return {
     nextQuestion: {
@@ -453,11 +492,16 @@ export function selectNextQuestion(input: {
     reason: shouldAbstainFromLastQuestion
       ? "上一题在追问后仍证据不足，Agent 拒绝评分；随后按信息价值选择新的能力题。"
       : "综合当前能力不确定性、题目难度匹配、岗位关键词和剩余时长后，该题的信息价值最高。",
-    utility: round(winner.utility),
+    utility: round(winner.signals.utility),
+    ranking,
+    context: {
+      remainingSeconds,
+      jobWeights: roundWeights(jobWeights),
+    },
   };
 }
 
-function selectionUtility(
+function selectionSignals(
   question: BankQuestion,
   state: SkillState | undefined,
   jobDescription: string,
@@ -465,7 +509,7 @@ function selectionUtility(
   maxJobWeight: number,
   answeredCount: number,
   remainingSeconds: number,
-): number {
+): UtilitySignals {
   const jd = jobDescription.toLowerCase();
   const tagHits = question.jobTags.filter((tag) =>
     jd.includes(tag.toLowerCase()),
@@ -485,7 +529,7 @@ function selectionUtility(
     answeredCount,
     expectedSeconds: question.expectedSeconds,
     remainingSeconds,
-  }).utility;
+  });
 }
 
 const JOB_SKILL_TERMS: Record<SkillKey, string[]> = {
@@ -561,6 +605,31 @@ function parseObject(value: string): Record<string, unknown> | undefined {
   } catch {
     return undefined;
   }
+}
+
+function roundUtilitySignals(signals: UtilitySignals): UtilitySignals {
+  return {
+    utility: round(signals.utility),
+    informationGain: round(signals.informationGain, 6),
+    normalizedInformationGain: round(
+      signals.normalizedInformationGain,
+      6,
+    ),
+    jdRelevance: round(signals.jdRelevance, 6),
+    coverageNeed: round(signals.coverageNeed, 6),
+    timeCost: round(signals.timeCost, 6),
+  };
+}
+
+function roundWeights(
+  weights: Record<SkillKey, number>,
+): Record<SkillKey, number> {
+  return Object.fromEntries(
+    Object.entries(weights).map(([skill, value]) => [
+      skill,
+      round(value, 6),
+    ]),
+  ) as Record<SkillKey, number>;
 }
 
 function round(value: number, precision = 4): number {

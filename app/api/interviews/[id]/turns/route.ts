@@ -271,6 +271,8 @@ export async function POST(request: Request, context: RouteContext) {
           action: decision.action,
           nextQuestionId: decision.nextQuestion?.id ?? null,
           evaluator: evaluation.evaluator,
+          selectionAudit: decision.ranking.slice(0, 3),
+          selectionContext: decision.context,
         },
         "eventPayload",
       ),

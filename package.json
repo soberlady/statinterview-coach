@@ -9,12 +9,13 @@
     "dev": "node scripts/run-vinext.mjs dev",
     "build": "node scripts/run-vinext.mjs build",
     "start": "node scripts/run-vinext.mjs start",
-    "test": "npm run build && node --test tests/rendered-html.test.mjs && tsx --test tests/policy-parity.test.ts tests/rubric-evaluator.test.ts tests/livekit-token.test.ts",
-    "test:policy": "tsx --test tests/policy-parity.test.ts tests/rubric-evaluator.test.ts tests/livekit-token.test.ts",
+    "test": "npm run build && node --test tests/rendered-html.test.mjs && tsx --test tests/policy-parity.test.ts tests/rubric-evaluator.test.ts tests/livekit-token.test.ts tests/decision-audit.test.ts",
+    "test:e2e": "npm run db:local && node tests/policy-audit-e2e.mjs",
+    "test:policy": "tsx --test tests/policy-parity.test.ts tests/rubric-evaluator.test.ts tests/livekit-token.test.ts tests/decision-audit.test.ts",
     "experiment": "python experiments/run_policy_benchmark.py",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
-    "db:local": "wrangler d1 migrations apply site-creator-d1 --local --config wrangler.local.jsonc"
+    "db:local": "node scripts/run-wrangler.mjs d1 migrations apply site-creator-d1 --local --config wrangler.local.jsonc"
   },
   "dependencies": {
     "@livekit/protocol": "^1.43.4",

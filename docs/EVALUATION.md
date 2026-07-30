@@ -12,7 +12,11 @@ maps to a measurable offline or online test.
   uncertainty, information gain and utility signals;
 - web production build;
 - local end-to-end API scenario: create interview, answer six turns, complete
-  session, persist a 61-point posterior and retrieve evidence report;
+  session, persist a 61-point posterior, retrieve the evidence report and
+  reproduce all six question decisions;
+- policy audit checks: deterministic 6/6 replay, stable SHA-256 fingerprint,
+  sorted candidate utilities and detection of an approved-but-counterfactual
+  replacement question;
 - missing-credential voice fallback: token endpoint returns an explicit 503
   while leaving text mode usable.
 

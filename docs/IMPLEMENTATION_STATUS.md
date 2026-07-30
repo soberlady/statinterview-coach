@@ -22,6 +22,11 @@ Updated: 2026-07-30
   explicit Agent dispatch;
 - deterministic 4,000-candidate adaptive/fixed/random benchmark;
 - public `/lab` experiment page with assumptions, ablation and claim boundary;
+- deterministic policy replay from persisted turns, SHA-256 decision
+  fingerprint, invariant checks and top-three candidate utility breakdowns;
+- counterfactual tamper test that replaces a selected question with another
+  approved question and verifies that the audit detects the mismatch;
+- self-contained local API end-to-end test for six turns and a 6/6 replay;
 - successful local six-turn end-to-end test using a 61-point posterior and
   production build.
 

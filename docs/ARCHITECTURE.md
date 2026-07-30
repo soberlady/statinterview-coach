@@ -53,6 +53,35 @@ hidden in prompts.
 
 JSON is validated by the API and stored as text for D1/SQLite portability.
 
+## Deterministic decision audit
+
+The report does not trust the stored `nextQuestionId` as proof that the policy
+ran correctly. It rebuilds the four initial skill states, replays every
+persisted evaluation in sequence and calls the selector again before each
+turn. The audit checks five invariants:
+
+1. sequence numbers are continuous;
+2. every question comes from the approved bank;
+3. every stored evaluation can be replayed;
+4. the expected and actual question ids match;
+5. the final replay reaches `COMPLETE`.
+
+For adaptive turns, the report stores the top three candidates and decomposes
+utility into normalized information gain, JD relevance, coverage need and time
+cost. A SHA-256 fingerprint makes two replays easy to compare. It is a
+reproducibility fingerprint, not a signed security attestation.
+
+```mermaid
+flowchart LR
+  T["Persisted turns"] --> R["Policy replay"]
+  S["Initial priors"] --> R
+  R --> I{"Invariant checks"}
+  I -->|"match"| A["Auditable trace"]
+  I -->|"mismatch"| X["Counterfactual alert"]
+  A --> C["Candidate ranking + signals"]
+  A --> H["SHA-256 decision fingerprint"]
+```
+
 ## Dual implementation
 
 `services/agent` contains the higher-fidelity Python policy kernel. The web API

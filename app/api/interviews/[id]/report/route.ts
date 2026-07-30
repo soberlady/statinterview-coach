@@ -7,6 +7,10 @@ import {
   skillStates,
   userFeedback,
 } from "@/db/schema";
+import {
+  fingerprintPolicyAudit,
+  replayInterviewPolicy,
+} from "@/app/lib/decision-audit";
 import { ApiError, errorResponse, jsonResponse, parseJsonText } from "../../../_lib/http";
 import {
   serializeInterview,
@@ -78,6 +82,12 @@ export async function GET(_request: Request, context: RouteContext) {
       (sum, event) => sum + (event.estimatedCostMicrousd ?? 0),
       0,
     );
+    const policyAudit = replayInterviewPolicy({
+      interview,
+      turns: turnRows,
+    });
+    const policyFingerprint =
+      await fingerprintPolicyAudit(policyAudit);
 
     return jsonResponse({
       report: {
@@ -112,6 +122,10 @@ export async function GET(_request: Request, context: RouteContext) {
               : null,
           eventCount: eventRows.length,
           estimatedCostUsd: round(totalCostMicrousd / 1_000_000, 6),
+        },
+        policyAudit: {
+          ...policyAudit,
+          fingerprint: policyFingerprint,
         },
         latestFeedback: feedbackRows[0] ?? null,
       },

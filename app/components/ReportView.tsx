@@ -42,6 +42,68 @@ type Turn = {
   evaluation: Evaluation;
 };
 
+type PolicyCandidate = {
+  questionId: string;
+  questionText: string;
+  skill: string;
+  difficulty: number;
+  expectedSeconds: number;
+  utility: number;
+  signals: {
+    normalizedInformationGain: number;
+    jdRelevance: number;
+    coverageNeed: number;
+    timeCost: number;
+  };
+};
+
+type PolicyAuditStep = {
+  sequenceNumber: number;
+  actualQuestionId: string | null;
+  actualQuestionText: string;
+  expectedQuestionId: string | null;
+  questionType: string;
+  skill: string;
+  reliability: string | null;
+  action: string;
+  reason: string;
+  utility: number | null;
+  matchesPolicy: boolean;
+  evaluationReplayable: boolean;
+  stateUpdated: boolean;
+  posteriorAfter: {
+    mean: number;
+    uncertainty: number;
+  } | null;
+  ranking: PolicyCandidate[];
+};
+
+type PolicyAudit = {
+  version: string;
+  generatedFrom: string;
+  fingerprint: string;
+  steps: PolicyAuditStep[];
+  finalDecision: {
+    action: string;
+    reason: string;
+    nextQuestionId: string | null;
+  };
+  invariants: {
+    sequenceContinuous: boolean;
+    allQuestionsApproved: boolean;
+    allEvaluationsReplayable: boolean;
+    deterministicSelection: boolean;
+    reachesTerminalPolicyState: boolean;
+  };
+  summary: {
+    replayedTurns: number;
+    matchingSelections: number;
+    adaptiveDecisions: number;
+    verificationDecisions: number;
+    abstentions: number;
+  };
+};
+
 type Report = {
   generatedAt: string;
   assessmentStatus: "INSUFFICIENT_EVIDENCE" | "AVAILABLE";
@@ -58,6 +120,7 @@ type Report = {
     eventCount: number;
     estimatedCostUsd: number;
   };
+  policyAudit: PolicyAudit;
 };
 
 type ReportResponse = {
@@ -72,6 +135,19 @@ const labels: Record<string, string> = {
   experiment_causal: "实验与因果",
   sql_python: "SQL 与 Python",
   business_analytics: "业务分析",
+};
+
+const actionLabels: Record<string, string> = {
+  ACCEPT: "接受证据",
+  VERIFY: "触发验证",
+  ABSTAIN: "拒绝评分",
+  COMPLETE: "完成诊断",
+};
+
+const questionTypeLabels: Record<string, string> = {
+  anchor: "固定锚点",
+  adaptive: "自适应题",
+  verification: "限定追问",
 };
 
 export function ReportView({ interviewId }: { interviewId: string }) {
@@ -217,6 +293,28 @@ export function ReportView({ interviewId }: { interviewId: string }) {
   const nextSkillGaps = report.turns
     .filter((turn) => turn.skill === nextSkillKey)
     .flatMap((turn) => turn.evaluation.gaps ?? []);
+  const auditChecks = [
+    {
+      label: "题号连续",
+      passed: report.policyAudit.invariants.sequenceContinuous,
+    },
+    {
+      label: "题库来源合法",
+      passed: report.policyAudit.invariants.allQuestionsApproved,
+    },
+    {
+      label: "评分可重放",
+      passed: report.policyAudit.invariants.allEvaluationsReplayable,
+    },
+    {
+      label: "选题轨迹一致",
+      passed: report.policyAudit.invariants.deterministicSelection,
+    },
+    {
+      label: "策略正常终止",
+      passed: report.policyAudit.invariants.reachesTerminalPolicyState,
+    },
+  ];
 
   return (
     <main className="report-shell">
@@ -344,6 +442,172 @@ export function ReportView({ interviewId }: { interviewId: string }) {
         </article>
       </section>
 
+      <section className="policy-audit-card">
+        <div className="policy-audit-heading">
+          <div>
+            <p className="card-index">AGENT DECISION AUDIT</p>
+            <h2>每一次选题都可以确定性重放</h2>
+            <p>
+              使用已持久化的回答、可靠性与能力后验重新执行策略，不调用模型、
+              不改写原始报告。候选题排名展示信息增益、岗位相关性、覆盖需要和时间成本。
+            </p>
+          </div>
+          <div className="audit-fingerprint">
+            <span>决策指纹 · SHA-256</span>
+            <strong>{report.policyAudit.fingerprint.slice(0, 16)}</strong>
+            <small>{report.policyAudit.version}</small>
+          </div>
+        </div>
+
+        <div className="audit-summary-grid">
+          <article>
+            <span>重放匹配</span>
+            <strong>
+              {report.policyAudit.summary.matchingSelections}/
+              {report.policyAudit.summary.replayedTurns}
+            </strong>
+            <small>实际题目与策略输出一致</small>
+          </article>
+          <article>
+            <span>自适应决策</span>
+            <strong>{report.policyAudit.summary.adaptiveDecisions}</strong>
+            <small>按效用排序后选择</small>
+          </article>
+          <article>
+            <span>可靠性追问</span>
+            <strong>{report.policyAudit.summary.verificationDecisions}</strong>
+            <small>低证据时优先补证</small>
+          </article>
+          <article>
+            <span>拒绝评分</span>
+            <strong>{report.policyAudit.summary.abstentions}</strong>
+            <small>预算耗尽仍不强行打分</small>
+          </article>
+        </div>
+
+        <div className="audit-invariants">
+          {auditChecks.map((check) => (
+            <span
+              className={check.passed ? "passed" : "failed"}
+              key={check.label}
+            >
+              {check.passed ? "✓" : "!"} {check.label}
+            </span>
+          ))}
+        </div>
+
+        <div className="audit-timeline">
+          {report.policyAudit.steps.map((step) => (
+            <article className="audit-step" key={step.sequenceNumber}>
+              <div className="audit-step-index">
+                <span>{String(step.sequenceNumber).padStart(2, "0")}</span>
+                <i />
+              </div>
+              <div className="audit-step-content">
+                <div className="audit-step-meta">
+                  <span>
+                    {questionTypeLabels[step.questionType] ??
+                      step.questionType}
+                  </span>
+                  <span>{labels[step.skill] ?? step.skill}</span>
+                  <span
+                    className={
+                      step.matchesPolicy
+                        ? "audit-match passed"
+                        : "audit-match failed"
+                    }
+                  >
+                    {step.matchesPolicy ? "重放一致" : "轨迹异常"}
+                  </span>
+                </div>
+                <h3>{step.actualQuestionText}</h3>
+                <p>{step.reason}</p>
+                <div className="audit-state-line">
+                  <strong>
+                    {actionLabels[step.action] ?? step.action}
+                  </strong>
+                  <span>
+                    {step.stateUpdated && step.posteriorAfter
+                      ? `能力状态已更新：μ ${step.posteriorAfter.mean.toFixed(2)} · σ ${step.posteriorAfter.uncertainty.toFixed(2)}`
+                      : "能力状态未更新，保留上一版后验"}
+                  </span>
+                </div>
+
+                {step.ranking.length > 0 ? (
+                  <div className="candidate-ranking">
+                    <div className="candidate-ranking-title">
+                      <strong>当时的前三名候选题</strong>
+                      <span>效用越高越优先</span>
+                    </div>
+                    {step.ranking.map((candidate, index) => (
+                      <div
+                        className="candidate-row"
+                        key={candidate.questionId}
+                      >
+                        <div className="candidate-copy">
+                          <span>#{index + 1}</span>
+                          <div>
+                            <strong>
+                              {labels[candidate.skill] ?? candidate.skill}
+                            </strong>
+                            <p>{candidate.questionText}</p>
+                          </div>
+                          <b>{candidate.utility.toFixed(3)}</b>
+                        </div>
+                        <div className="candidate-track">
+                          <span
+                            style={{
+                              width: `${Math.max(
+                                4,
+                                Math.min(100, candidate.utility * 100),
+                              )}%`,
+                            }}
+                          />
+                        </div>
+                        <div className="candidate-signals">
+                          <span>
+                            信息增益{" "}
+                            {formatPercent(
+                              candidate.signals
+                                .normalizedInformationGain,
+                            )}
+                          </span>
+                          <span>
+                            JD 相关{" "}
+                            {formatPercent(
+                              candidate.signals.jdRelevance,
+                            )}
+                          </span>
+                          <span>
+                            覆盖需要{" "}
+                            {formatPercent(
+                              candidate.signals.coverageNeed,
+                            )}
+                          </span>
+                          <span>
+                            时间惩罚{" "}
+                            {formatPercent(candidate.signals.timeCost)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            </article>
+          ))}
+        </div>
+
+        <div className="audit-final">
+          <span>重放后的最终策略状态</span>
+          <strong>
+            {actionLabels[report.policyAudit.finalDecision.action] ??
+              report.policyAudit.finalDecision.action}
+          </strong>
+          <p>{report.policyAudit.finalDecision.reason}</p>
+        </div>
+      </section>
+
       <section className="feedback-card">
         <div>
           <p className="card-index">HUMAN FEEDBACK</p>
@@ -366,4 +630,8 @@ export function ReportView({ interviewId }: { interviewId: string }) {
       </section>
     </main>
   );
+}
+
+function formatPercent(value: number): string {
+  return `${Math.round(value * 100)}%`;
 }

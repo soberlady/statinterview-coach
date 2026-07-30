@@ -19,6 +19,8 @@ test("keeps the production product copy and safety boundary", async () => {
   assert.match(setup, /开始文本诊断/);
   assert.match(page, /不用于自动化招聘决策/);
   assert.match(report, /低可靠性回答不会直接改变能力状态/);
+  assert.match(report, /每一次选题都可以确定性重放/);
+  assert.match(report, /当时的前三名候选题/);
   assert.match(lab, /离线合成实验，不是招聘效度证明/);
   assert.match(lab, /均衡型岗位上三种策略差异很小/);
   assert.doesNotMatch(page, /Your site is taking shape|vinext-starter/i);

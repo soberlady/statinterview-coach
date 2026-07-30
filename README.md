@@ -20,6 +20,8 @@ is weak, it verifies or abstains instead of inventing a confident score.
 - browser LiveKit token/room flow plus a LiveKit 1.6 voice worker that stores
   final transcripts verbatim;
 - shared Python/TypeScript golden fixtures for posterior and utility parity;
+- deterministic decision replay with a SHA-256 policy fingerprint, invariant
+  checks and top-three counterfactual question rankings;
 - reproducible fixed/random/adaptive policy benchmark and public experiment
   page;
 - deployable vinext/Cloudflare Sites web application.
@@ -43,7 +45,9 @@ decision policy inspectable:
 4. reliability is derived from observable evidence signals, not an LLM's
    self-reported confidence;
 5. every answer, transition, decision reason and checkpoint is persisted;
-6. reports link conclusions back to exact answer excerpts.
+6. reports link conclusions back to exact answer excerpts;
+7. the complete question path can be replayed from persisted turns to detect
+   a question that was approved by the bank but not selected by the policy.
 
 ## Architecture
 
@@ -125,6 +129,7 @@ node content\validate-question-bank.mjs
 npm run lint
 npm run build
 npm run test:policy
+npm run test:e2e
 python experiments\run_policy_benchmark.py
 ```
 
