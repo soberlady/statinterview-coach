@@ -29,7 +29,8 @@
 
 ## Resume wording rule
 
-Until the browser room and token endpoint are merged, describe the project as
-“integrating a LiveKit Agents voice worker” rather than “forked and shipped
-LiveKit Meet.” After the media frontend lands, include the upstream commit hash,
-changed modules, load-test results and a small diff map.
+The browser room and token endpoint are now implemented, but this remains an
+original integration rather than a LiveKit Meet fork. Describe it as
+“integrated LiveKit browser audio and an Agents worker with explicit dispatch.”
+Do not say “production voice system” until a real cloud project has been run
+and latency, transcript quality and reconnection results are published.

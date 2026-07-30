@@ -56,10 +56,37 @@ JSON is validated by the API and stored as text for D1/SQLite portability.
 ## Dual implementation
 
 `services/agent` contains the higher-fidelity Python policy kernel. The web API
-currently uses `app/lib/agent-policy.ts`, a compact edge-compatible mirror, so
-the demo runs without a separate container. Before reporting experimental
-results, golden fixtures must prove equivalent state transitions, ability
-updates, reliability actions and selected question ids.
+uses `app/lib/agent-policy.ts` plus `app/lib/rasch-policy.ts`, an edge-compatible
+mirror, so the text product runs without a separate container. Shared golden
+fixtures currently prove parity for posterior updates, uncertainty summaries,
+information gain and utility signals. State transitions, reliability actions
+and selected question ids remain covered by implementation-specific tests and
+should not yet be described as full cross-language parity.
+
+## LiveKit transport
+
+```mermaid
+sequenceDiagram
+  participant B as Browser
+  participant T as Token endpoint
+  participant R as LiveKit room
+  participant W as Python Agent worker
+  participant A as Interview API
+
+  B->>T: POST interview id
+  T-->>B: 20-minute room-scoped token + explicit dispatch
+  B->>R: Join and publish microphone
+  R->>W: Dispatch statinterview-coach
+  W->>A: Load approved next question
+  W-->>B: Speak question
+  B->>W: Realtime audio
+  W->>A: Final raw transcript + inputMode=voice
+  A-->>W: Policy action + approved next question
+```
+
+The browser token endpoint and client room flow are implemented. A deployed
+voice-quality claim requires real LiveKit credentials, a running worker and
+measured sessions.
 
 ## Security and privacy
 
