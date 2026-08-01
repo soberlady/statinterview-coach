@@ -57,6 +57,12 @@ export async function POST(request: Request, context: RouteContext) {
         "must contain only letters, numbers, dots, underscores, or hyphens",
       );
     }
+    if (eventType === "turn_evaluated") {
+      throw validationError(
+        "eventType",
+        "uses a server-reserved event type",
+      );
+    }
 
     const turnId = optionalString(payload, "turnId", {
       max: 80,
@@ -78,6 +84,12 @@ export async function POST(request: Request, context: RouteContext) {
       max: 160,
       nullable: true,
     });
+    if (idempotencyKey?.toLowerCase().startsWith("internal:")) {
+      throw validationError(
+        "idempotencyKey",
+        "uses a server-reserved namespace",
+      );
+    }
     const latencyMs = optionalInteger(payload, "latencyMs", {
       min: 0,
       max: 3_600_000,

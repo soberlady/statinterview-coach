@@ -11,6 +11,7 @@ import {
   fingerprintPolicyAudit,
   replayInterviewPolicy,
 } from "@/app/lib/decision-audit";
+import scoringBenchmark from "@/content/scoring-benchmark.json";
 import { ApiError, errorResponse, jsonResponse, parseJsonText } from "../../../_lib/http";
 import {
   serializeInterview,
@@ -66,10 +67,15 @@ export async function GET(_request: Request, context: RouteContext) {
     const completedTurns = turnRows.filter(
       (turn) => turn.status === "completed" && turn.answerText.trim().length > 0,
     );
-    const scoredTurns = completedTurns
+    const acceptedEvaluations = completedTurns
       .map((turn) =>
-        parseJsonText<{ totalScore?: unknown }>(turn.evaluation, {}),
+        parseJsonText<{
+          action?: unknown;
+          totalScore?: unknown;
+        }>(turn.evaluation, {}),
       )
+      .filter((evaluation) => evaluation.action === "ACCEPT");
+    const scoredTurns = acceptedEvaluations
       .map((evaluation) => evaluation.totalScore)
       .filter(
         (score): score is number =>
@@ -93,13 +99,16 @@ export async function GET(_request: Request, context: RouteContext) {
       report: {
         generatedAt: new Date().toISOString(),
         assessmentStatus:
-          completedTurns.length === 0 ? "INSUFFICIENT_EVIDENCE" : "AVAILABLE",
+          acceptedEvaluations.length === 0
+            ? "INSUFFICIENT_EVIDENCE"
+            : "AVAILABLE",
         interview: serializeInterview(interview),
         skillStates: stateRows.map(serializeSkillState),
         turns: turnRows.map(serializeTurn),
         metrics: {
           totalTurns: turnRows.length,
           completedTurns: completedTurns.length,
+          acceptedTurns: acceptedEvaluations.length,
           verificationTurns: turnRows.filter(
             (turn) => turn.questionType === "verification",
           ).length,
@@ -126,6 +135,10 @@ export async function GET(_request: Request, context: RouteContext) {
         policyAudit: {
           ...policyAudit,
           fingerprint: policyFingerprint,
+        },
+        scorerReleaseGate: {
+          status: scoringBenchmark.releaseGate.status,
+          claimBoundary: scoringBenchmark.releaseGate.claimBoundary,
         },
         latestFeedback: feedbackRows[0] ?? null,
       },

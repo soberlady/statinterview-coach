@@ -38,10 +38,14 @@ export type AnswerEvaluation = {
     reasoningSignals: string[];
     evidenceCoverage?: number;
     reviewDisagreement?: number;
+    structureConfidence?: Reliability;
   };
   disclaimer: string;
   semantic?: {
     model: string;
+    promptVersion?: string;
+    questionFingerprint?: string;
+    requestFingerprint?: string;
     criteria: Array<{
       criterion: string;
       score: number;
@@ -49,6 +53,18 @@ export type AnswerEvaluation = {
     }>;
     primaryScore: number;
     reviewScore: number;
+    passes?: {
+      primary: Array<{
+        criterionIndex: number;
+        score: number;
+        evidence: string[];
+      }>;
+      review: Array<{
+        criterionIndex: number;
+        score: number;
+        evidence: string[];
+      }>;
+    };
   };
   telemetry?: {
     model: string;
@@ -219,7 +235,7 @@ export function evaluateAnswer(
       0.15 * evidenceScore,
   );
 
-  const reliability: Reliability =
+  const structureConfidence: Reliability =
     normalized.length >= 180 &&
     domainKeywords.length >= 5 &&
     reasoningSignals.length >= 3
@@ -229,9 +245,6 @@ export function evaluateAnswer(
           reasoningSignals.length >= 1
         ? "MEDIUM"
         : "LOW";
-  const action: AgentAction =
-    reliability === "LOW" ? "VERIFY" : "ACCEPT";
-
   const strengths: string[] = [];
   if (domainKeywords.length >= 2) {
     strengths.push(`回答覆盖了 ${domainKeywords.slice(0, 4).join("、")} 等关键概念。`);
@@ -258,8 +271,8 @@ export function evaluateAnswer(
     evaluator: "STRUCTURE_HEURISTIC",
     totalScore,
     scoreOutOfFour: round(totalScore * 4),
-    reliability,
-    action,
+    reliability: "LOW",
+    action: "ABSTAIN",
     evidence,
     strengths,
     gaps,
@@ -267,9 +280,10 @@ export function evaluateAnswer(
       answerCharacters: normalized.length,
       domainKeywords,
       reasoningSignals,
+      structureConfidence,
     },
     disclaimer:
-      "当前为无模型密钥时的结构化降级评估，只衡量可观察的回答结构与术语覆盖，不替代语义评分。",
+      "当前为无模型密钥时的结构化降级评估，只衡量可观察的回答结构与术语覆盖，不替代语义评分，也不会写入能力后验。",
   };
 }
 
@@ -280,22 +294,6 @@ export function updateAbility(
   turnId: string,
 ): AbilityUpdate {
   const accepted = evaluation.action === "ACCEPT";
-  const prior = parsePosterior(
-    previous.posterior,
-    previous.posteriorMean,
-    previous.uncertainty,
-  );
-  const posterior = accepted
-    ? updatePosterior(
-        prior,
-        normalizeDifficulty(question.difficulty),
-        evaluation.totalScore,
-      )
-    : prior;
-  const summary = summarizePosterior(posterior);
-  const posteriorMean = summary.mean;
-  const uncertainty = summary.standardDeviation;
-
   const priorEvidence = parseArray(previous.supportingEvidence);
   const priorErrors = parseArray(previous.commonErrors).filter(
     (item): item is string => typeof item === "string",
@@ -315,17 +313,39 @@ export function updateAbility(
   const commonErrors = [...new Set([...priorErrors, ...evaluation.gaps])].slice(
     -12,
   );
+  if (!accepted) {
+    return {
+      posteriorMean: previous.posteriorMean,
+      uncertainty: previous.uncertainty,
+      posterior: parseStoredPosterior(previous.posterior),
+      supportingEvidence,
+      commonErrors,
+      sourceTurnCount: previous.sourceTurnCount,
+    };
+  }
+
+  const prior = parsePosterior(
+    previous.posterior,
+    previous.posteriorMean,
+    previous.uncertainty,
+  );
+  const posterior = updatePosterior(
+    prior,
+    normalizeDifficulty(question.difficulty),
+    evaluation.totalScore,
+  );
+  const summary = summarizePosterior(posterior);
 
   return {
-    posteriorMean: round(posteriorMean),
-    uncertainty: round(uncertainty),
+    posteriorMean: round(summary.mean),
+    uncertainty: round(summary.standardDeviation),
     posterior: posterior.map((point) => ({
       theta: point.theta,
       probability: round(point.probability, 10),
     })),
     supportingEvidence,
     commonErrors,
-    sourceTurnCount: previous.sourceTurnCount + (accepted ? 1 : 0),
+    sourceTurnCount: previous.sourceTurnCount + 1,
   };
 }
 
@@ -345,11 +365,12 @@ export function selectNextQuestion(input: {
   const lastEvaluation = lastTurn
     ? parseObject(lastTurn.evaluation)
     : undefined;
+  const lastAction = lastEvaluation?.action;
 
   if (
     lastTurn &&
     lastTurn.questionType !== "verification" &&
-    lastEvaluation?.reliability === "LOW" &&
+    lastAction === "VERIFY" &&
     interview.verificationCount < 2
   ) {
     const source = lastTurn.questionId
@@ -373,9 +394,14 @@ export function selectNextQuestion(input: {
   }
 
   const shouldAbstainFromLastQuestion =
-    lastEvaluation?.reliability === "LOW" &&
-    (lastTurn?.questionType === "verification" ||
-      interview.verificationCount >= 2);
+    lastAction === "ABSTAIN" ||
+    (lastAction === "VERIFY" &&
+      (lastTurn?.questionType === "verification" ||
+        interview.verificationCount >= 2));
+  const abstentionReason =
+    lastEvaluation?.evaluator === "STRUCTURE_HEURISTIC"
+      ? "当前仅有结构化反馈，未把它当作语义能力证据；保留先验并继续下一题。"
+      : "限定追问后证据仍不足，放弃上一题评分并继续下一题。";
 
   const askedSourceIds = new Set(
     completedTurns
@@ -391,7 +417,7 @@ export function selectNextQuestion(input: {
       nextQuestion: nextAnchor,
       action: shouldAbstainFromLastQuestion ? "ABSTAIN" : "ACCEPT",
       reason: shouldAbstainFromLastQuestion
-        ? "限定追问后证据仍不足，放弃上一题评分并继续下一个固定锚点。"
+        ? abstentionReason
         : "固定锚点用于建立四个能力维度之间可比较的初始状态。",
       utility: null,
       ranking: [],
@@ -490,7 +516,7 @@ export function selectNextQuestion(input: {
     },
     action: shouldAbstainFromLastQuestion ? "ABSTAIN" : "ACCEPT",
     reason: shouldAbstainFromLastQuestion
-      ? "上一题在追问后仍证据不足，Agent 拒绝评分；随后按信息价值选择新的能力题。"
+      ? `${abstentionReason}随后按信息价值选择新的能力题。`
       : "综合当前能力不确定性、题目难度匹配、岗位关键词和剩余时长后，该题的信息价值最高。",
     utility: round(winner.signals.utility),
     ranking,
@@ -596,6 +622,22 @@ function parseArray(value: string): unknown[] {
   }
 }
 
+function parseStoredPosterior(
+  value: string,
+): Array<{ theta: number; probability: number }> {
+  return parseArray(value).filter(
+    (point): point is { theta: number; probability: number } =>
+      Boolean(point) &&
+      typeof point === "object" &&
+      typeof (point as { theta?: unknown }).theta === "number" &&
+      Number.isFinite((point as { theta: number }).theta) &&
+      typeof (point as { probability?: unknown }).probability === "number" &&
+      Number.isFinite(
+        (point as { probability: number }).probability,
+      ),
+  );
+}
+
 function parseObject(value: string): Record<string, unknown> | undefined {
   try {
     const parsed = JSON.parse(value);
@@ -634,5 +676,6 @@ function roundWeights(
 
 function round(value: number, precision = 4): number {
   const scale = 10 ** precision;
-  return Math.round(value * scale) / scale;
+  const rounded = Math.round(value * scale) / scale;
+  return Object.is(rounded, -0) ? 0 : rounded;
 }

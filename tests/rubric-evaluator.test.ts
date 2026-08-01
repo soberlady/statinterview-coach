@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { combineRubricPasses } from "../app/lib/rubric-evaluator";
-import type { InterviewQuestion } from "../app/lib/question-bank";
+import {
+  evaluateAnswer,
+  updateAbility,
+} from "../app/lib/agent-policy";
+import {
+  getInterviewQuestion,
+  type InterviewQuestion,
+} from "../app/lib/question-bank";
+import type { SkillState } from "../db/schema";
 
 const question: InterviewQuestion = {
   id: "statistics_ml_test",
@@ -68,6 +76,9 @@ test("double-pass rubric keeps only verbatim evidence", () => {
     latencyMs: 120,
     inputTokens: 200,
     outputTokens: 80,
+    promptVersion: "rubric-double-pass-v1",
+    questionFingerprint: "question-fixture",
+    requestFingerprint: "request-fixture",
   });
 
   assert.equal(evaluation.evaluator, "RUBRIC_DOUBLE_PASS");
@@ -78,6 +89,12 @@ test("double-pass rubric keeps only verbatim evidence", () => {
   );
   assert.equal(evaluation.signals.evidenceCoverage, 1);
   assert.equal(evaluation.telemetry?.inputTokens, 200);
+  assert.equal(
+    evaluation.semantic?.promptVersion,
+    "rubric-double-pass-v1",
+  );
+  assert.equal(evaluation.semantic?.passes?.primary.length, 2);
+  assert.equal(evaluation.semantic?.passes?.review.length, 2);
 });
 
 test("large reviewer disagreement blocks ability updates", () => {
@@ -127,4 +144,56 @@ test("large reviewer disagreement blocks ability updates", () => {
   assert.equal(evaluation.reliability, "LOW");
   assert.equal(evaluation.action, "VERIFY");
   assert.equal(evaluation.signals.reviewDisagreement, 4);
+});
+
+test("verification questions use a bounded one-criterion rubric", () => {
+  const source = getInterviewQuestion("statistics_ml_002");
+  const verification = getInterviewQuestion(
+    "statistics_ml_002__verify_0",
+  );
+
+  assert.ok(source);
+  assert.ok(verification);
+  assert.equal(verification.questionType, "verification");
+  assert.equal(verification.sourceQuestionId, source.id);
+  assert.equal(verification.rubric.length, 1);
+  assert.equal(verification.rubric[0].weight, 1);
+  assert.match(
+    verification.rubric[0].criterion,
+    new RegExp(verification.question.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+  );
+  assert.ok(verification.expectedSeconds <= 90);
+});
+
+test("structure-only fallback never changes the ability posterior", () => {
+  const evaluation = evaluateAnswer(
+    question,
+    "首先比较训练集和验证集，再用交叉验证、学习曲线和独立测试集检查过拟合，最后根据偏差与方差定位问题并验证结论。",
+  );
+  const previous: SkillState = {
+    id: "skill_test",
+    interviewId: "interview_test",
+    skill: question.skill,
+    posteriorMean: 0,
+    uncertainty: 1,
+    posterior: "[]",
+    supportingEvidence: "[]",
+    commonErrors: "[]",
+    sourceTurnCount: 0,
+    createdAt: "2026-07-30T00:00:00.000Z",
+    updatedAt: "2026-07-30T00:00:00.000Z",
+  };
+  const updated = updateAbility(
+    previous,
+    question,
+    evaluation,
+    "turn_test",
+  );
+
+  assert.equal(evaluation.evaluator, "STRUCTURE_HEURISTIC");
+  assert.equal(evaluation.reliability, "LOW");
+  assert.equal(evaluation.action, "ABSTAIN");
+  assert.equal(updated.posteriorMean, previous.posteriorMean);
+  assert.equal(updated.uncertainty, previous.uncertainty);
+  assert.equal(updated.sourceTurnCount, 0);
 });

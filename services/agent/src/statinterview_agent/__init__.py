@@ -25,6 +25,13 @@ from .models import (
 )
 from .reliability import ReliabilityClassifier, build_verification_question
 from .scoring import score_rubric_answer
+from .scorer_evaluation import (
+    ScoringDatasetError,
+    evaluate_scoring_records,
+    mean_absolute_error,
+    quadratic_weighted_kappa,
+    spearman_correlation,
+)
 from .selection import QuestionSelector, SelectionWeights
 from .state_machine import (
     InvalidStateTransition,
@@ -54,6 +61,7 @@ __all__ = [
     "RubricCriterion",
     "STATE_POLICIES",
     "ScoredAnswer",
+    "ScoringDatasetError",
     "SelectionContext",
     "SelectionDecision",
     "SelectionWeights",
@@ -63,6 +71,9 @@ __all__ = [
     "VerificationBudget",
     "VerificationDecision",
     "build_verification_question",
+    "evaluate_scoring_records",
+    "mean_absolute_error",
+    "quadratic_weighted_kappa",
     "score_rubric_answer",
+    "spearman_correlation",
 ]
-

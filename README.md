@@ -7,31 +7,39 @@ is weak, it verifies or abstains instead of inventing a confident score.
 
 > This is a training product, not a hiring predictor. It evaluates answer
 > content only and does not score faces, voices, accents, emotions, or gender.
+> The deployed demo is owner-only; per-user authorization is required before
+> any future shared beta.
 
 ## What works now
 
-- complete text interview flow with refresh-safe checkpoints;
+- complete text interview flow with refresh-safe checkpoints and
+  pause/resume recovery, including the finalizing-to-report edge case;
 - 24-question Chinese data-analysis bank with weighted rubrics;
 - four comparable anchor questions plus deterministic adaptive selection;
 - bounded reliability verification and explicit `ABSTAIN`;
 - evidence-linked reports, uncertainty display, and user feedback collection;
 - D1 persistence for sessions, turns, skill states, Agent events and feedback;
-- standalone Python policy kernel with 20 tests;
+- standalone Python policy and scorer-evaluation kernels with 32 tests;
 - browser LiveKit token/room flow plus a LiveKit 1.6 voice worker that stores
   final transcripts verbatim;
 - shared Python/TypeScript golden fixtures for posterior and utility parity;
 - deterministic decision replay with a SHA-256 policy fingerprint, invariant
   checks and top-three counterfactual question rankings;
-- reproducible fixed/random/adaptive policy benchmark and public experiment
-  page;
+- strict semantic-scoring inference plus a frozen double-label evaluation
+  pipeline with grouped bootstrap and risk-coverage checks; the checked-in
+  12-answer fixture is synthetic and the formal scorer gate is `NOT_READY`;
+  release metrics are restricted to one frozen run on `locked_test`;
+- reproducible fixed/random/adaptive policy benchmark and in-product
+  experiment page;
 - deployable vinext/Cloudflare Sites web application.
 
 Without a semantic model key, the web app enters a transparent fallback mode:
 it measures observable answer structure and domain-term coverage, labels the
-result, and refuses to turn low-reliability evidence into a stable ability
-update. When an OpenAI-compatible scorer is configured, two independent passes
-score every weighted rubric criterion; only verbatim answer excerpts count as
-evidence, and reviewer disagreement lowers reliability.
+result, and never writes that structure-only score into the ability posterior.
+When an OpenAI-compatible scorer is configured, two role-separated passes from
+the configured model score every weighted rubric criterion; only verbatim
+answer excerpts count as evidence, and reviewer disagreement lowers
+reliability.
 
 ## Why this is not another “AI interviewer”
 
@@ -63,7 +71,7 @@ flowchart LR
 ```
 
 The Python kernel is the canonical algorithm implementation. The TypeScript
-edge mirror keeps the public demo deployable on Cloudflare. Shared golden
+edge mirror keeps the private web demo deployable on Cloudflare. Shared golden
 fixtures verify posterior updates, uncertainty summaries, information gain and
 utility signals in both implementations.
 
@@ -130,11 +138,13 @@ npm run lint
 npm run build
 npm run test:policy
 npm run test:e2e
-python experiments\run_policy_benchmark.py
+npm run experiment
+npm run eval:scorer:fixture
 ```
 
 See [architecture](docs/ARCHITECTURE.md),
-[evaluation plan](docs/EVALUATION.md), and
+[evaluation plan](docs/EVALUATION.md),
+[semantic scorer protocol](docs/SCORING_EVALUATION.md), and
 [implementation status](docs/IMPLEMENTATION_STATUS.md). For interview
 preparation, use [INTERVIEW_GUIDE.md](docs/INTERVIEW_GUIDE.md).
 

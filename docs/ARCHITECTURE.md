@@ -41,6 +41,11 @@ CREATED -> ANCHOR_INTERVIEW -> ADAPTIVE_INTERVIEW
 `CANCELLED` are explicit states so recovery logic is testable rather than
 hidden in prompts.
 
+The browser's exit action persists `PAUSED`. Reopening an active checkpoint
+enters `RECOVERING` before another turn is accepted. If all policy-selected
+questions were already persisted, a paused/finalizing checkpoint may move to
+`COMPLETED`; the server recomputes the policy and rejects premature completion.
+
 ## Persistence
 
 | Table | Purpose |
@@ -57,12 +62,14 @@ JSON is validated by the API and stored as text for D1/SQLite portability.
 
 The report does not trust the stored `nextQuestionId` as proof that the policy
 ran correctly. It rebuilds the four initial skill states, replays every
-persisted evaluation in sequence and calls the selector again before each
-turn. The audit checks five invariants:
+persisted evaluation record in sequence and calls the selector again before
+each turn. It replays policy and posterior updates; it does not call the
+non-deterministic semantic model again. The audit checks five invariants:
 
 1. sequence numbers are continuous;
 2. every question comes from the approved bank;
-3. every stored evaluation can be replayed;
+3. every stored evaluation record is parseable and its posterior update can
+   be recomputed;
 4. the expected and actual question ids match;
 5. the final replay reaches `COMPLETE`.
 
@@ -70,6 +77,21 @@ For adaptive turns, the report stores the top three candidates and decomposes
 utility into normalized information gain, JD relevance, coverage need and time
 cost. A SHA-256 fingerprint makes two replays easy to compare. It is a
 reproducibility fingerprint, not a signed security attestation.
+
+The turn API also runs the selector before persistence and rejects an
+out-of-order sequence or an approved question that was not selected by the
+current policy. The audit is therefore both a write-time invariant and a later
+forensic check.
+
+Turn persistence uses one D1 batch for the raw turn, skill-state update,
+interview checkpoint and Agent event. A failure in any statement rolls the
+whole turn back. The batch also compares the checkpoint version and lifecycle
+state read before semantic scoring; a concurrent pause or cancel makes the
+whole submission a no-op instead of being overwritten by a stale scorer
+response. The client-facing interview PATCH surface can only apply matching
+complete, pause, resume or cancel transitions; posterior and checkpoint writes
+remain server-authoritative. Client events cannot use the reserved internal
+idempotency namespace.
 
 ```mermaid
 flowchart LR
@@ -125,3 +147,8 @@ measured sessions.
   LLM summary.
 - The scoring surface excludes biometric and affective features.
 - Reports are explicitly training feedback, not automated employment decisions.
+- Structure-only fallback feedback never enters the ability posterior.
+- Private scorer-study answers and raw provider predictions are ignored by
+  source control; only consented aggregate results may be published.
+- The deployed demo remains owner-only. Per-user ownership is a release gate
+  for any future shared or public deployment.

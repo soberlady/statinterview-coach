@@ -7,6 +7,18 @@ const SITE_CREATOR_PLACEHOLDER_DATABASE_ID =
   "00000000-0000-4000-8000-000000000000";
 
 const { d1, r2 } = hostingConfig;
+const localRuntimeVariableNames = [
+  "STATINTERVIEW_SCORER_ENDPOINT",
+  "STATINTERVIEW_SCORER_API_KEY",
+  "STATINTERVIEW_SCORER_MODEL",
+  "STATINTERVIEW_SCORER_STRICT",
+] as const;
+const localRuntimeVariables = Object.fromEntries(
+  localRuntimeVariableNames.flatMap((name) => {
+    const value = process.env[name];
+    return value ? [[name, value]] : [];
+  }),
+);
 
 // macOS Seatbelt blocks FSEvents, so Codex previews need polling for HMR.
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === "seatbelt";
@@ -14,6 +26,7 @@ const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === "seatbelt";
 const localBindingConfig = {
   main: "./worker/index.ts",
   compatibility_flags: ["nodejs_compat"],
+  vars: localRuntimeVariables,
   d1_databases: d1
     ? [
         {

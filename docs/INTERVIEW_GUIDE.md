@@ -85,12 +85,16 @@ main source of gain.
 4. Show that follow-ups concentrate on the JD-relevant dimension.
 5. Submit a short, weak answer; show `VERIFY`, then `ABSTAIN` if evidence
    remains weak.
-6. Open the report and trace a conclusion to the exact answer excerpt.
-7. Expand the decision audit; show 6/6 replay, then explain why the final two
+6. Pause the session, reopen it and show that the persisted checkpoint enters
+   `RECOVERING` before the next answer is accepted.
+7. Open the report and trace a conclusion to the exact answer excerpt.
+8. Expand the decision audit; show 6/6 replay, then explain why the final two
    questions outranked their alternatives.
-8. Open `/lab`; explain the fixed/random ablation and the balanced-role
-   limitation.
-9. If LiveKit credentials and the worker are running, switch one turn to voice.
+9. Open `/lab`; explain the fixed/random ablation and the balanced-role
+   limitation, then show the scorer release gate and why 12 synthetic fixtures
+   remain `NOT_READY`; formal release metrics would use only a frozen
+   `locked_test` split.
+10. If LiveKit credentials and the worker are running, switch one turn to voice.
    Otherwise explicitly say the media code is complete but the hosted
    credential-dependent call has not been measured.
 

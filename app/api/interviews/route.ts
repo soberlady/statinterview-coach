@@ -102,37 +102,45 @@ export async function POST(request: Request) {
     const id = `int_${crypto.randomUUID()}`;
     const now = new Date().toISOString();
     const db = getDb();
-    const [interview] = await db
-      .insert(interviews)
-      .values({
-        id,
-        jobTitle,
-        jobDescription,
-        candidateBackground,
-        durationMinutes,
-        cameraEnabled,
-        recordingEnabled,
-        mode,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .returning();
-
-    await db.insert(skillStates).values(
-      SKILL_KEYS.map((skill) => ({
-        id: `skill_${crypto.randomUUID()}`,
-        interviewId: id,
-        skill,
-        posteriorMean: 0,
-        uncertainty: 1,
-        posterior: "[]",
-        supportingEvidence: "[]",
-        commonErrors: "[]",
-        sourceTurnCount: 0,
-        createdAt: now,
-        updatedAt: now,
-      })),
-    );
+    const [createdInterviews, createdSkillStates] = await db.batch([
+      db
+        .insert(interviews)
+        .values({
+          id,
+          jobTitle,
+          jobDescription,
+          candidateBackground,
+          durationMinutes,
+          cameraEnabled,
+          recordingEnabled,
+          mode,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .returning(),
+      db
+        .insert(skillStates)
+        .values(
+          SKILL_KEYS.map((skill) => ({
+            id: `skill_${crypto.randomUUID()}`,
+            interviewId: id,
+            skill,
+            posteriorMean: 0,
+            uncertainty: 1,
+            posterior: "[]",
+            supportingEvidence: "[]",
+            commonErrors: "[]",
+            sourceTurnCount: 0,
+            createdAt: now,
+            updatedAt: now,
+          })),
+        )
+        .returning({ id: skillStates.id }),
+    ]);
+    const interview = createdInterviews[0];
+    if (!interview || createdSkillStates.length !== SKILL_KEYS.length) {
+      throw new Error("atomic interview creation returned incomplete rows");
+    }
 
     return jsonResponse({ interview: serializeInterview(interview) }, 201);
   } catch (error) {

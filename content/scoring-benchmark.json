@@ -1,0 +1,191 @@
+{
+  "annotationAgreement": {
+    "criterionQuadraticWeightedKappa": 0.9065,
+    "totalScoreMae": 0.2417,
+    "totalScoreSpearman": 0.9965
+  },
+  "baselines": {
+    "doublePassRubric": {
+      "mae": 0.4417,
+      "spearman": 0.8531
+    },
+    "globalMean": {
+      "mae": 0.8333,
+      "scoreOutOfFour": 2.2083
+    },
+    "singlePassRubric": {
+      "mae": 0.475,
+      "spearman": 0.8161
+    }
+  },
+  "bySkill": {
+    "business_analytics": {
+      "mae": 0.525,
+      "sampleCount": 3,
+      "spearman": 1.0
+    },
+    "experiment_causal": {
+      "mae": 0.45,
+      "sampleCount": 3,
+      "spearman": 0.5
+    },
+    "sql_python": {
+      "mae": 0.3833,
+      "sampleCount": 3,
+      "spearman": 1.0
+    },
+    "statistics_ml": {
+      "mae": 0.4083,
+      "sampleCount": 3,
+      "spearman": 0.5
+    }
+  },
+  "design": {
+    "bootstrapReplicates": 500,
+    "bootstrapSeed": 20260730,
+    "criterionJudgmentPairs": 54,
+    "modelMetricSampleCount": 12,
+    "modelMetricScope": "all_records_smoke_only",
+    "participantGroupCount": 6,
+    "predictionModels": [
+      "fixture-model"
+    ],
+    "predictionPromptVersions": [
+      "rubric-double-pass-v1"
+    ],
+    "predictionRunIds": [
+      "synthetic-smoke-v1"
+    ],
+    "provenance": [
+      "synthetic_fixture"
+    ],
+    "questionBankSha256": "fccd53c1100f5c4b1543680c483a1a60af9d1e3e61c1d4277ac2ab99c512d3ec",
+    "sampleCount": 12,
+    "skillCounts": {
+      "business_analytics": 3,
+      "experiment_causal": 3,
+      "sql_python": 3,
+      "statistics_ml": 3
+    },
+    "splitCounts": {
+      "fixture": 12
+    }
+  },
+  "developmentMetrics": null,
+  "engineering": {
+    "latencyMsP50": null,
+    "latencyMsP95": null,
+    "meanInputTokens": null,
+    "meanOutputTokens": null,
+    "recordsWithTelemetry": 0,
+    "telemetryCoverage": 0.0
+  },
+  "evidence": {
+    "quotedSpanCount": 54,
+    "verbatimRate": 1.0,
+    "verbatimSpanCount": 54
+  },
+  "largestErrors": [
+    {
+      "absoluteError": 1.35,
+      "answerId": "synthetic_012",
+      "consensusScore": 0.3,
+      "modelScore": 1.65,
+      "questionId": "business_analytics_002",
+      "reliability": "LOW"
+    },
+    {
+      "absoluteError": 1.125,
+      "answerId": "synthetic_010",
+      "consensusScore": 1.325,
+      "modelScore": 2.45,
+      "questionId": "experiment_causal_002",
+      "reliability": "LOW"
+    },
+    {
+      "absoluteError": 1.125,
+      "answerId": "synthetic_009",
+      "consensusScore": 1.475,
+      "modelScore": 2.6,
+      "questionId": "statistics_ml_002",
+      "reliability": "LOW"
+    },
+    {
+      "absoluteError": 0.875,
+      "answerId": "synthetic_011",
+      "consensusScore": 0.875,
+      "modelScore": 0.0,
+      "questionId": "sql_python_002",
+      "reliability": "LOW"
+    },
+    {
+      "absoluteError": 0.275,
+      "answerId": "synthetic_007",
+      "consensusScore": 2.15,
+      "modelScore": 1.875,
+      "questionId": "sql_python_002",
+      "reliability": "MEDIUM"
+    }
+  ],
+  "modelAgreement": {
+    "criterionQuadraticWeightedKappa": 0.769,
+    "mae95pctClusterBootstrap": [
+      0.0747,
+      0.7917
+    ],
+    "severeErrorRate": 0.25,
+    "spearman95pctClusterBootstrap": [
+      0.2984,
+      1.0
+    ],
+    "totalScoreMae": 0.4417,
+    "totalScoreSpearman": 0.8531
+  },
+  "releaseGate": {
+    "checks": {
+      "allAnswersDoubleLabeled": true,
+      "allModelEvidenceVerbatim": true,
+      "annotationWeightedKappaAtLeast065": true,
+      "atLeast40AnswersPerSkill": false,
+      "blindHumanAnnotationsDeclared": false,
+      "consentAndAnonymizationConfirmed": false,
+      "consentedRealDataset": false,
+      "hasDevelopmentAndLockedTestSplits": false,
+      "modelWeightedKappaAtLeast065": true,
+      "participantGroupsStayInOneSplit": true,
+      "predictionRecordsVersioned": false,
+      "predictionTelemetryComplete": false,
+      "riskDoesNotIncreaseAsCoverageFalls": true,
+      "sampleCountAtLeast200": false,
+      "singleFrozenRun": true,
+      "singleModel": true,
+      "singlePromptVersion": true
+    },
+    "claimBoundary": "Synthetic fixtures validate the evaluation pipeline only; a performance claim requires 200 consented, anonymized, blind double-labeled answers with at least 40 per skill.",
+    "status": "NOT_READY"
+  },
+  "riskCoverage": [
+    {
+      "accepted": 4,
+      "coverage": 0.3333,
+      "mae": 0.0,
+      "severeErrorRate": 0.0,
+      "threshold": "HIGH"
+    },
+    {
+      "accepted": 8,
+      "coverage": 0.6667,
+      "mae": 0.1031,
+      "severeErrorRate": 0.0,
+      "threshold": "HIGH_MEDIUM"
+    },
+    {
+      "accepted": 12,
+      "coverage": 1.0,
+      "mae": 0.4417,
+      "severeErrorRate": 0.25,
+      "threshold": "ALL"
+    }
+  ],
+  "schemaVersion": "scoring-benchmark-v1"
+}

@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, exists, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import {
   agentEvents,
@@ -27,7 +27,7 @@ import {
   validationError,
 } from "../../../_lib/http";
 import {
-  isTerminalState,
+  isTurnAcceptingState,
   serializeInterview,
   serializeSkillState,
   serializeTurn,
@@ -89,7 +89,10 @@ export async function POST(request: Request, context: RouteContext) {
         "Interview was not found.",
       );
     }
-    if (isTerminalState(interview.status)) {
+    if (
+      !isTurnAcceptingState(interview.status) ||
+      !isTurnAcceptingState(interview.currentStage)
+    ) {
       throw new ApiError(
         409,
         "INTERVIEW_NOT_ACTIVE",
@@ -129,16 +132,68 @@ export async function POST(request: Request, context: RouteContext) {
       );
     }
 
-    const [previousSkillState] = await db
-      .select()
-      .from(skillStates)
-      .where(
-        and(
-          eq(skillStates.interviewId, interviewId),
-          eq(skillStates.skill, question.skill),
-        ),
-      )
-      .limit(1);
+    const [existingTurns, existingStates] = await Promise.all([
+      db
+        .select()
+        .from(interviewTurns)
+        .where(eq(interviewTurns.interviewId, interviewId))
+        .orderBy(interviewTurns.sequenceNumber),
+      db
+        .select()
+        .from(skillStates)
+        .where(eq(skillStates.interviewId, interviewId))
+        .orderBy(skillStates.skill),
+    ]);
+    const sequenceIsContinuous = existingTurns.every(
+      (turn, index) => turn.sequenceNumber === index + 1,
+    );
+    if (!sequenceIsContinuous) {
+      throw new ApiError(
+        409,
+        "INTERVIEW_SEQUENCE_CORRUPT",
+        "The persisted interview sequence is not continuous.",
+      );
+    }
+    const expectedSequenceNumber = existingTurns.length + 1;
+    if (sequenceNumber !== expectedSequenceNumber) {
+      throw new ApiError(
+        409,
+        "TURN_SEQUENCE_OUT_OF_ORDER",
+        "The turn does not match the next expected sequence number.",
+        {
+          expectedSequenceNumber,
+          receivedSequenceNumber: sequenceNumber,
+        },
+      );
+    }
+
+    const expectedDecision = selectNextQuestion({
+      interview,
+      turns: existingTurns,
+      skillStates: existingStates,
+    });
+    if (!expectedDecision.nextQuestion) {
+      throw new ApiError(
+        409,
+        "INTERVIEW_POLICY_COMPLETE",
+        "The interview policy has no remaining question.",
+      );
+    }
+    if (question.id !== expectedDecision.nextQuestion.id) {
+      throw new ApiError(
+        409,
+        "QUESTION_POLICY_CONFLICT",
+        "The submitted question does not match the policy-selected question.",
+        {
+          expectedQuestionId: expectedDecision.nextQuestion.id,
+          receivedQuestionId: question.id,
+        },
+      );
+    }
+
+    const previousSkillState = existingStates.find(
+      (state) => state.skill === question.skill,
+    );
     if (!previousSkillState) {
       throw new ApiError(
         409,
@@ -151,52 +206,69 @@ export async function POST(request: Request, context: RouteContext) {
     const evaluation = await evaluateAnswerWithFallback(question, answerText);
     const now = new Date().toISOString();
     const turnId = `turn_${crypto.randomUUID()}`;
-    const [turn] = await db
-      .insert(interviewTurns)
-      .values({
-        id: turnId,
-        interviewId,
-        sequenceNumber,
-        questionId: question.id,
-        questionText: question.question,
-        skill: question.skill,
-        questionType: question.questionType,
-        answerText: answerText.trim(),
-        inputMode,
-        status: "completed",
-        evidence: jsonString(evaluation.evidence, "evidence", 32 * 1024),
-        evaluation: jsonString(evaluation, "evaluation", 32 * 1024),
-        reliability: evaluation.reliability,
-        startedAt,
-        completedAt,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .returning();
-
+    const turnValues: typeof interviewTurns.$inferInsert = {
+      id: turnId,
+      interviewId,
+      sequenceNumber,
+      questionId: question.id,
+      questionText: question.question,
+      skill: question.skill,
+      questionType: question.questionType,
+      answerText: answerText.trim(),
+      inputMode,
+      status: "completed",
+      evidence: jsonString(evaluation.evidence, "evidence", 32 * 1024),
+      evaluation: jsonString(evaluation, "evaluation", 32 * 1024),
+      reliability: evaluation.reliability,
+      startedAt,
+      completedAt,
+      createdAt: now,
+      updatedAt: now,
+    };
     const abilityUpdate = updateAbility(
       previousSkillState,
       question,
       evaluation,
       turnId,
     );
-    const [updatedSkillState] = await db
-      .update(skillStates)
-      .set({
-        posteriorMean: abilityUpdate.posteriorMean,
-        uncertainty: abilityUpdate.uncertainty,
-        posterior: jsonString(abilityUpdate.posterior, "posterior"),
-        supportingEvidence: jsonString(
-          abilityUpdate.supportingEvidence,
-          "supportingEvidence",
-        ),
-        commonErrors: jsonString(abilityUpdate.commonErrors, "commonErrors"),
-        sourceTurnCount: abilityUpdate.sourceTurnCount,
-        updatedAt: now,
-      })
-      .where(eq(skillStates.id, previousSkillState.id))
-      .returning();
-
+    const skillStateValues: Partial<typeof skillStates.$inferInsert> = {
+      posteriorMean: abilityUpdate.posteriorMean,
+      uncertainty: abilityUpdate.uncertainty,
+      posterior: jsonString(abilityUpdate.posterior, "posterior"),
+      supportingEvidence: jsonString(
+        abilityUpdate.supportingEvidence,
+        "supportingEvidence",
+      ),
+      commonErrors: jsonString(abilityUpdate.commonErrors, "commonErrors"),
+      sourceTurnCount: abilityUpdate.sourceTurnCount,
+      updatedAt: now,
+    };
+    const turnForPolicy: typeof interviewTurns.$inferSelect = {
+      ...turnValues,
+      questionId: turnValues.questionId ?? null,
+      questionType: turnValues.questionType ?? "adaptive",
+      answerText: turnValues.answerText ?? "",
+      inputMode: turnValues.inputMode ?? "voice",
+      status: turnValues.status ?? "completed",
+      transcriptConfidence: null,
+      evidence: turnValues.evidence ?? "[]",
+      evaluation: turnValues.evaluation ?? "{}",
+      reliability: turnValues.reliability ?? null,
+      startedAt: turnValues.startedAt ?? null,
+      completedAt: turnValues.completedAt ?? null,
+      createdAt: turnValues.createdAt ?? now,
+      updatedAt: turnValues.updatedAt ?? now,
+    };
+    const updatedSkillStateForPolicy: typeof skillStates.$inferSelect = {
+      ...previousSkillState,
+      posteriorMean: abilityUpdate.posteriorMean,
+      uncertainty: abilityUpdate.uncertainty,
+      posterior: skillStateValues.posterior ?? "[]",
+      supportingEvidence: skillStateValues.supportingEvidence ?? "[]",
+      commonErrors: skillStateValues.commonErrors ?? "[]",
+      sourceTurnCount: abilityUpdate.sourceTurnCount,
+      updatedAt: now,
+    };
     const newVerificationCount =
       interview.verificationCount +
       (question.questionType === "verification" ? 1 : 0);
@@ -207,16 +279,12 @@ export async function POST(request: Request, context: RouteContext) {
       currentQuestionId: question.id,
       updatedAt: now,
     };
-    const allTurns = await db
-      .select()
-      .from(interviewTurns)
-      .where(eq(interviewTurns.interviewId, interviewId))
-      .orderBy(interviewTurns.sequenceNumber);
-    const allStates = await db
-      .select()
-      .from(skillStates)
-      .where(eq(skillStates.interviewId, interviewId))
-      .orderBy(skillStates.skill);
+    const allTurns = [...existingTurns, turnForPolicy];
+    const allStates = existingStates.map((state) =>
+      state.id === previousSkillState.id
+        ? updatedSkillStateForPolicy
+        : state,
+    );
     const decision = selectNextQuestion({
       interview: updatedInterviewBase,
       turns: allTurns,
@@ -225,37 +293,31 @@ export async function POST(request: Request, context: RouteContext) {
     const nextStage = decision.nextQuestion
       ? stageForQuestion(decision.nextQuestion.questionType)
       : "FINALIZING";
-
-    const [updatedInterview] = await db
-      .update(interviews)
-      .set({
-        turnCount: updatedInterviewBase.turnCount,
-        verificationCount: newVerificationCount,
-        currentQuestionId: decision.nextQuestion?.id ?? question.id,
-        status: nextStage,
-        currentStage: nextStage,
-        startedAt: interview.startedAt ?? startedAt ?? now,
-        checkpoint: jsonString(
-          {
-            lastCompletedTurn: sequenceNumber,
-            lastQuestionId: question.id,
-            nextQuestionId: decision.nextQuestion?.id ?? null,
-            decision: {
-              action: decision.action,
-              reason: decision.reason,
-              utility: decision.utility,
-            },
+    const interviewValues: Partial<typeof interviews.$inferInsert> = {
+      turnCount: updatedInterviewBase.turnCount,
+      verificationCount: newVerificationCount,
+      currentQuestionId: decision.nextQuestion?.id ?? question.id,
+      status: nextStage,
+      currentStage: nextStage,
+      startedAt: interview.startedAt ?? startedAt ?? now,
+      checkpoint: jsonString(
+        {
+          lastCompletedTurn: sequenceNumber,
+          lastQuestionId: question.id,
+          nextQuestionId: decision.nextQuestion?.id ?? null,
+          decision: {
+            action: decision.action,
+            reason: decision.reason,
+            utility: decision.utility,
           },
-          "checkpoint",
-        ),
-        checkpointVersion: interview.checkpointVersion + 1,
-        lastCheckpointAt: now,
-        updatedAt: now,
-      })
-      .where(eq(interviews.id, interviewId))
-      .returning();
-
-    await db.insert(agentEvents).values({
+        },
+        "checkpoint",
+      ),
+      checkpointVersion: interview.checkpointVersion + 1,
+      lastCheckpointAt: now,
+      updatedAt: now,
+    };
+    const eventValues: typeof agentEvents.$inferInsert = {
       id: `evt_${crypto.randomUUID()}`,
       interviewId,
       turnId,
@@ -280,8 +342,157 @@ export async function POST(request: Request, context: RouteContext) {
       model: evaluation.telemetry?.model,
       inputTokens: evaluation.telemetry?.inputTokens,
       outputTokens: evaluation.telemetry?.outputTokens,
+      idempotencyKey: `internal:turn:${interviewId}:${sequenceNumber}`,
       createdAt: now,
-    });
+    };
+    const expectedCheckpointVersion = interview.checkpointVersion;
+    const committedCheckpointVersion = expectedCheckpointVersion + 1;
+    const currentInterviewGuard = and(
+      eq(interviews.id, interviewId),
+      eq(interviews.status, interview.status),
+      eq(interviews.currentStage, interview.currentStage),
+      eq(interviews.checkpointVersion, expectedCheckpointVersion),
+    );
+    const committedInterviewGuard = and(
+      eq(interviews.id, interviewId),
+      eq(interviews.status, nextStage),
+      eq(interviews.currentStage, nextStage),
+      eq(interviews.checkpointVersion, committedCheckpointVersion),
+      eq(interviews.updatedAt, now),
+    );
+    const committedInterviewExists = exists(
+      db
+        .select({ id: interviews.id })
+        .from(interviews)
+        .where(committedInterviewGuard),
+    );
+    const [
+      updatedInterviews,
+      insertedTurns,
+      updatedSkillStates,
+      insertedEvents,
+    ] = await db.batch([
+      db
+        .update(interviews)
+        .set(interviewValues)
+        .where(currentInterviewGuard)
+        .returning(),
+      db
+        .insert(interviewTurns)
+        .select(
+          db
+            .select({
+              id: sql<string>`${turnValues.id}`.as("id"),
+              interviewId: sql<string>`${turnValues.interviewId}`.as(
+                "interview_id",
+              ),
+              sequenceNumber: sql<number>`${turnValues.sequenceNumber}`.as(
+                "sequence_number",
+              ),
+              questionId: sql<string | null>`${turnValues.questionId ?? null}`.as(
+                "question_id",
+              ),
+              questionText: sql<string>`${turnValues.questionText}`.as(
+                "question_text",
+              ),
+              skill: sql<string>`${turnValues.skill}`.as("skill"),
+              questionType: sql<string>`${turnValues.questionType}`.as(
+                "question_type",
+              ),
+              answerText: sql<string>`${turnValues.answerText}`.as(
+                "answer_text",
+              ),
+              inputMode: sql<string>`${turnValues.inputMode}`.as("input_mode"),
+              status: sql<string>`${turnValues.status}`.as("status"),
+              transcriptConfidence: sql<number | null>`${null}`.as(
+                "transcript_confidence",
+              ),
+              evidence: sql<string>`${turnValues.evidence}`.as("evidence"),
+              evaluation: sql<string>`${turnValues.evaluation}`.as(
+                "evaluation",
+              ),
+              reliability: sql<string | null>`${turnValues.reliability ?? null}`.as(
+                "reliability",
+              ),
+              startedAt: sql<string | null>`${turnValues.startedAt ?? null}`.as(
+                "started_at",
+              ),
+              completedAt: sql<string | null>`${turnValues.completedAt ?? null}`.as(
+                "completed_at",
+              ),
+              createdAt: sql<string>`${turnValues.createdAt}`.as("created_at"),
+              updatedAt: sql<string>`${turnValues.updatedAt}`.as("updated_at"),
+            })
+            .from(interviews)
+            .where(committedInterviewGuard),
+        )
+        .returning(),
+      db
+        .update(skillStates)
+        .set(skillStateValues)
+        .where(
+          and(
+            eq(skillStates.id, previousSkillState.id),
+            committedInterviewExists,
+          ),
+        )
+        .returning(),
+      db
+        .insert(agentEvents)
+        .select(
+          db
+            .select({
+              id: sql<string>`${eventValues.id}`.as("id"),
+              interviewId: sql<string>`${eventValues.interviewId}`.as(
+                "interview_id",
+              ),
+              turnId: sql<string | null>`${eventValues.turnId ?? null}`.as(
+                "turn_id",
+              ),
+              eventType: sql<string>`${eventValues.eventType}`.as("event_type"),
+              fromState: sql<string | null>`${eventValues.fromState ?? null}`.as(
+                "from_state",
+              ),
+              toState: sql<string | null>`${eventValues.toState ?? null}`.as(
+                "to_state",
+              ),
+              payload: sql<string>`${eventValues.payload}`.as("payload"),
+              latencyMs: sql<number | null>`${eventValues.latencyMs ?? null}`.as(
+                "latency_ms",
+              ),
+              model: sql<string | null>`${eventValues.model ?? null}`.as(
+                "model",
+              ),
+              inputTokens: sql<number | null>`${eventValues.inputTokens ?? null}`.as(
+                "input_tokens",
+              ),
+              outputTokens: sql<number | null>`${eventValues.outputTokens ?? null}`.as(
+                "output_tokens",
+              ),
+              estimatedCostMicrousd: sql<number | null>`${eventValues.estimatedCostMicrousd ?? null}`.as(
+                "estimated_cost_microusd",
+              ),
+              idempotencyKey: sql<string | null>`${eventValues.idempotencyKey ?? null}`.as(
+                "idempotency_key",
+              ),
+              createdAt: sql<string>`${eventValues.createdAt}`.as("created_at"),
+            })
+            .from(interviews)
+            .where(committedInterviewGuard),
+        )
+        .returning({ id: agentEvents.id }),
+    ]);
+    const turn = insertedTurns[0];
+    const updatedSkillState = updatedSkillStates[0];
+    const updatedInterview = updatedInterviews[0];
+    const insertedEvent = insertedEvents[0];
+    if (!turn || !updatedSkillState || !updatedInterview || !insertedEvent) {
+      throw new ApiError(
+        409,
+        "INTERVIEW_STATE_CONFLICT",
+        "The interview changed while this answer was being evaluated.",
+      );
+    }
 
     return jsonResponse(
       {

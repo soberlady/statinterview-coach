@@ -3,6 +3,7 @@
 import Link from "next/link";
 import {
   FormEvent,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -51,6 +52,10 @@ type ApiErrorBody = {
 };
 
 type NextQuestionResponse = ApiErrorBody & {
+  interview?: {
+    status: string;
+    currentStage: string;
+  };
   nextQuestion?: PublicQuestion | null;
   decision?: AgentDecision;
   progress?: Progress;
@@ -96,6 +101,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   const [lastEvaluation, setLastEvaluation] = useState<Evaluation | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isExiting, setIsExiting] = useState(false);
   const [error, setError] = useState("");
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [startedAt, setStartedAt] = useState(() => new Date().toISOString());
@@ -106,6 +112,23 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   );
   const voiceRoomRef = useRef<import("livekit-client").Room | null>(null);
   const remoteAudioRef = useRef<HTMLDivElement | null>(null);
+
+  const updateLifecycle = useCallback(
+    async (target: "PAUSED" | "RECOVERING" | "COMPLETED") => {
+      const response = await fetch(`/api/interviews/${interviewId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: target, currentStage: target }),
+      });
+      const result = (await response.json()) as ApiErrorBody;
+      if (!response.ok) {
+        throw new Error(
+          result.error?.message ?? "面试状态保存失败，请稍后重试。",
+        );
+      }
+    },
+    [interviewId],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -123,7 +146,38 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
           );
         }
         if (cancelled) return;
-        setQuestion(result.nextQuestion ?? null);
+        const restoredStatus = result.interview?.status;
+        if (restoredStatus === "CANCELLED") {
+          throw new Error("本次诊断已经取消，请返回首页重新创建。");
+        }
+        if (!result.nextQuestion) {
+          const finalizableStatuses = new Set([
+            "COMPLETED",
+            "FINALIZING",
+            "PAUSED",
+            "RECOVERING",
+          ]);
+          if (!restoredStatus || !finalizableStatuses.has(restoredStatus)) {
+            throw new Error(
+              "选题策略没有返回下一题，但当前诊断尚未完成，请刷新后重试。",
+            );
+          }
+          if (
+            restoredStatus === "FINALIZING" ||
+            restoredStatus === "PAUSED" ||
+            restoredStatus === "RECOVERING"
+          ) {
+            await updateLifecycle("COMPLETED");
+          }
+          setQuestion(null);
+          setPhase("COMPLETED");
+          return;
+        }
+        if (restoredStatus === "PAUSED") {
+          await updateLifecycle("RECOVERING");
+        }
+        if (cancelled) return;
+        setQuestion(result.nextQuestion);
         if (result.progress) setProgress(result.progress);
         setDecision(result.decision ?? null);
         setPhase(
@@ -148,7 +202,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [interviewId]);
+  }, [interviewId, updateLifecycle]);
 
   useEffect(() => {
     const timer = window.setInterval(
@@ -273,6 +327,24 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       );
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function exitAndPause() {
+    setError("");
+    setIsExiting(true);
+    try {
+      await updateLifecycle("PAUSED");
+      await voiceRoomRef.current?.disconnect();
+      voiceRoomRef.current = null;
+      router.push("/");
+    } catch (pauseError) {
+      setError(
+        pauseError instanceof Error
+          ? pauseError.message
+          : "进度暂停失败，请稍后重试。",
+      );
+      setIsExiting(false);
     }
   }
 
@@ -432,9 +504,10 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         <button
           className="quiet-button"
           type="button"
-          onClick={() => router.push("/")}
+          onClick={exitAndPause}
+          disabled={isSaving || isExiting}
         >
-          退出（进度已保存）
+          {isExiting ? "正在保存…" : "暂停并退出"}
         </button>
       </header>
 

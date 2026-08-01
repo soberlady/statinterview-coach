@@ -41,3 +41,8 @@ next-env.d.ts
 /.wrangler/
 /outputs/
 /work/
+
+# Private scoring-study records and provider outputs. Only synthetic fixtures
+# and aggregate reports belong in source control.
+/evaluation/scoring/private/
+/evaluation/scoring/predictions/

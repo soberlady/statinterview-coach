@@ -61,9 +61,16 @@ export function getInterviewQuestion(
       ...source,
       id: questionId,
       question: verificationText,
+      expectedSeconds: Math.min(source.expectedSeconds, 90),
       isAnchor: false,
       questionType: "verification",
       sourceQuestionId: source.id,
+      rubric: [
+        {
+          criterion: `直接回答限定追问，并给出可以核验的判断依据：${verificationText}`,
+          weight: 1,
+        },
+      ],
     };
   }
 

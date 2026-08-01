@@ -21,7 +21,7 @@ export default function Home() {
           <Link href="/lab">策略实验</Link>
           <span className="status-pill">
             <span aria-hidden="true" />
-            Public beta
+            Private research build
           </span>
         </nav>
       </header>

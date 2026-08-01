@@ -6,19 +6,36 @@ maps to a measurable offline or online test.
 ## Current automated checks
 
 - question-bank schema: 24 questions, four skills, one anchor per skill;
-- Python policy kernel: 20 tests covering state transitions, ability updates,
-  selection, reliability, verification budget and shared golden fixtures;
+- Python policy kernel and scoring evaluator: 32 tests covering state
+  transitions, ability updates, selection, reliability, verification budget,
+  agreement metrics, strict dataset validation and shared golden fixtures;
 - TypeScript policy: three shared golden parity fixtures for posterior update,
   uncertainty, information gain and utility signals;
 - web production build;
-- local end-to-end API scenario: create interview, answer six turns, complete
-  session, persist a 61-point posterior, retrieve the evidence report and
+- local end-to-end API scenario: create interview, reject an approved but
+  policy-inconsistent question before persistence, score six turns through a
+  deterministic semantic-scorer stub, retrieve the evidence report and
   reproduce all six question decisions;
+- D1 batch fault injection: force the final event write to violate a unique
+  key, then verify that turn, posterior and interview counters all remain
+  unchanged;
+- concurrent lifecycle fault injection: block semantic scoring, cancel the
+  interview, release the scorer, and verify that the stale turn is rejected
+  without changing the cancellation or posterior;
+- pause/resume lifecycle: a paused active interview rejects turns, resumes,
+  accepts the expected next answer, and a paused finalizing interview can only
+  complete when the deterministic policy has no remaining question;
 - policy audit checks: deterministic 6/6 replay, stable SHA-256 fingerprint,
   sorted candidate utilities and detection of an approved-but-counterfactual
   replacement question;
 - missing-credential voice fallback: token endpoint returns an explicit 503
   while leaving text mode usable.
+- semantic scorer fixture: 12 synthetic answers, two fixture annotations per
+  answer, strict no-fallback predictions, grouped bootstrap, baselines,
+  risk-coverage and a deliberate `NOT_READY` release status.
+- formal scorer gate tests: dev predictions cannot affect release metrics,
+  mixed run/model/prompt versions fail, and perturbation parents cannot cross
+  participant groups, questions or data splits.
 
 ## Completed synthetic policy benchmark
 
@@ -44,7 +61,7 @@ does not establish real interview validity.
 
 | Claim | Dataset / test | Metric | Initial gate |
 | --- | --- | --- | --- |
-| Rubric scoring agrees with experts | 200 anonymized answers, double labeled | weighted kappa, Spearman | κ ≥ 0.65 |
+| Rubric scoring agrees with experts | 200 consented, anonymized answers, blindly double labeled; ≥40 per skill | weighted kappa, Spearman, latency/tokens | κ ≥ 0.65 plus governance and telemetry checks |
 | Reliability policy detects unsafe scores | disagreement / transcript corruption set | risk-coverage curve | error falls as coverage falls |
 | Adaptive questions are useful to humans | blind expert pairwise review | preference rate | > 60% over random valid question |
 | Anchors remain comparable | repeated anchor responses | score drift | monitor by question/version |
@@ -63,8 +80,8 @@ does not establish real interview validity.
 ## Known limitations
 
 - question difficulty is expert-authored, not psychometrically calibrated;
-- current public fallback evaluator measures structure and terminology, not
-  semantic correctness;
+- the current fallback evaluator measures structure and terminology, not
+  semantic correctness, and is prohibited from changing the ability posterior;
 - no employment-validity claim is made;
 - ability posteriors become externally meaningful only after real-answer
   calibration; current parity tests establish implementation consistency, not

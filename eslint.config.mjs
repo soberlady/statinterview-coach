@@ -7,10 +7,15 @@ const eslintConfig = defineConfig([
   ...nextTs,
   // Override default ignores of eslint-config-next.
   globalIgnores([
-    // Default ignores of eslint-config-next:
+    // Generated framework, deployment, and local test artifacts:
     ".next/**",
+    ".vinext/**",
+    ".wrangler/**",
+    "dist/**",
     "out/**",
-    "build/**",
+    "outputs/**",
+    "work/**",
+    "coverage/**",
     "next-env.d.ts",
   ]),
 ]);

@@ -27,6 +27,14 @@ export const INTERVIEW_STATES = [
 export type InterviewState = (typeof INTERVIEW_STATES)[number];
 
 const TERMINAL_STATES = new Set<InterviewState>(["COMPLETED", "CANCELLED"]);
+const TURN_ACCEPTING_STATES = new Set<InterviewState>([
+  "CREATED",
+  "PREPARING",
+  "ANCHOR_INTERVIEW",
+  "ADAPTIVE_INTERVIEW",
+  "VERIFYING",
+  "RECOVERING",
+]);
 
 const ALLOWED_TRANSITIONS: Record<InterviewState, ReadonlySet<InterviewState>> = {
   CREATED: new Set([
@@ -67,13 +75,14 @@ const ALLOWED_TRANSITIONS: Record<InterviewState, ReadonlySet<InterviewState>> =
   ]),
   FINALIZING: new Set(["COMPLETED", "PAUSED", "FAILED", "CANCELLED"]),
   COMPLETED: new Set(),
-  PAUSED: new Set(["RECOVERING", "CANCELLED", "FAILED"]),
+  PAUSED: new Set(["RECOVERING", "COMPLETED", "CANCELLED", "FAILED"]),
   RECOVERING: new Set([
     "PREPARING",
     "ANCHOR_INTERVIEW",
     "ADAPTIVE_INTERVIEW",
     "VERIFYING",
     "FINALIZING",
+    "COMPLETED",
     "PAUSED",
     "FAILED",
     "CANCELLED",
@@ -128,6 +137,10 @@ export function assertStateTransition(
 
 export function isTerminalState(value: string): boolean {
   return TERMINAL_STATES.has(value.toUpperCase() as InterviewState);
+}
+
+export function isTurnAcceptingState(value: string): boolean {
+  return TURN_ACCEPTING_STATES.has(value.toUpperCase() as InterviewState);
 }
 
 export function serializeInterview(interview: Interview) {

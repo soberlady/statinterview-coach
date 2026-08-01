@@ -113,6 +113,7 @@ type Report = {
   metrics: {
     totalTurns: number;
     completedTurns: number;
+    acceptedTurns: number;
     verificationTurns: number;
     lowReliabilityTurns: number;
     averageScore: number | null;
@@ -121,6 +122,10 @@ type Report = {
     estimatedCostUsd: number;
   };
   policyAudit: PolicyAudit;
+  scorerReleaseGate: {
+    status: "NOT_READY" | "PASS" | "FAIL";
+    claimBoundary: string;
+  };
 };
 
 type ReportResponse = {
@@ -239,6 +244,9 @@ export function ReportView({ interviewId }: { interviewId: string }) {
     const usesFallback = report.turns.some(
       (turn) => turn.evaluation.evaluator === "STRUCTURE_HEURISTIC",
     );
+    const usesSemanticScorer = report.turns.some(
+      (turn) => turn.evaluation.evaluator === "RUBRIC_DOUBLE_PASS",
+    );
 
     return {
       skills,
@@ -246,6 +254,7 @@ export function ReportView({ interviewId }: { interviewId: string }) {
       gapItems,
       evidenceItems,
       usesFallback,
+      usesSemanticScorer,
     };
   }, [report]);
 
@@ -303,7 +312,7 @@ export function ReportView({ interviewId }: { interviewId: string }) {
       passed: report.policyAudit.invariants.allQuestionsApproved,
     },
     {
-      label: "评分可重放",
+      label: "评分记录可解析",
       passed: report.policyAudit.invariants.allEvaluationsReplayable,
     },
     {
@@ -330,10 +339,9 @@ export function ReportView({ interviewId }: { interviewId: string }) {
         <div>
           <p className="eyebrow">证据型能力诊断</p>
           <h1>
-            完成 {report.metrics.completedTurns} 轮回答，
-            {report.metrics.lowReliabilityTurns > 0
-              ? `其中 ${report.metrics.lowReliabilityTurns} 轮仍需验证。`
-              : "当前证据均已达到接受阈值。"}
+            {report.assessmentStatus === "INSUFFICIENT_EVIDENCE"
+              ? `已完成 ${report.metrics.completedTurns} 轮回答，语义能力证据尚未建立。`
+              : `完成 ${report.metrics.completedTurns} 轮回答，其中 ${report.metrics.acceptedTurns} 轮进入能力后验。`}
           </h1>
           <p>
             这不是录用预测。每项结论都来自已保存的回答证据；
@@ -361,7 +369,14 @@ export function ReportView({ interviewId }: { interviewId: string }) {
       {view.usesFallback ? (
         <aside className="evaluation-notice">
           当前站点未配置语义模型密钥，因此采用结构化降级评估：只测量回答长度、
-          领域术语和推理结构，并明确标记可靠性；接入模型适配器后再按题目量表逐项评分。
+          领域术语和推理结构。这些反馈不会写入能力后验。配置模型后可启用实验性量表评分；
+          正式离线门禁通过前，不会把它宣称为已验证评分器。
+        </aside>
+      ) : view.usesSemanticScorer ? (
+        <aside className="evaluation-notice">
+          当前使用实验性语义量表评分，正式门禁状态为{" "}
+          {report.scorerReleaseGate.status}。结果仅用于训练反馈；评分一致性门禁通过前，
+          不会把它宣称为已验证评分器或招聘效度证据。
         </aside>
       ) : null}
 

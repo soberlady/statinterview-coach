@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import benchmark from "@/content/policy-benchmark.json";
+import scoringBenchmark from "@/content/scoring-benchmark.json";
 
 export const metadata: Metadata = {
   title: "策略实验",
@@ -14,6 +15,21 @@ const PROFILE_LABELS: Record<string, string> = {
   data_engineering: "数据工程分析",
 };
 
+function formatMetric(
+  value: number | null | undefined,
+  digits = 3,
+) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? value.toFixed(digits)
+    : "N/A";
+}
+
+function formatPercent(value: number | null | undefined) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? `${(value * 100).toFixed(0)}%`
+    : "N/A";
+}
+
 export default function LabPage() {
   const adaptive = benchmark.adaptiveSelection.aggregate.adaptive;
   const fixed = benchmark.adaptiveSelection.aggregate.fixed;
@@ -24,6 +40,9 @@ export default function LabPage() {
   const profileEntries = Object.entries(
     benchmark.adaptiveSelection.by_profile,
   );
+  const scoringIsSynthetic =
+    scoringBenchmark.design.provenance.includes("synthetic_fixture");
+  const scoringReleaseStatus = scoringBenchmark.releaseGate.status;
 
   return (
     <main className="lab-shell">
@@ -220,13 +239,132 @@ export default function LabPage() {
         </article>
       </section>
 
+      <section className="lab-grid">
+        <article className="lab-card lab-card-wide">
+          <div className="section-heading">
+            <div>
+              <p className="card-index">04 / SCORER RELEASE GATE</p>
+              <h2>评分先经过双人标注和风险—覆盖率验收</h2>
+            </div>
+            <span className="legend">
+              {scoringIsSynthetic ? "工程烟雾测试" : "真实数据评测"} ·{" "}
+              {scoringBenchmark.design.sampleCount} 条记录
+            </span>
+          </div>
+
+          <div className="benchmark-table">
+            <div className="benchmark-row benchmark-head">
+              <span>检查项</span>
+              <span>当前结果</span>
+              <span>正式门槛</span>
+              <span>结论</span>
+            </div>
+            <div className="benchmark-row">
+              <strong>双标 criterion 一致性</strong>
+              <span>
+                κ {formatMetric(
+                  scoringBenchmark.annotationAgreement
+                    .criterionQuadraticWeightedKappa,
+                )}
+              </span>
+              <span>κ ≥ 0.65</span>
+              <span>
+                {scoringIsSynthetic ? "仅验证计算链路" : scoringReleaseStatus}
+              </span>
+            </div>
+            <div className="benchmark-row">
+              <strong>模型—共识一致性</strong>
+              <span>
+                κ {formatMetric(
+                  scoringBenchmark.modelAgreement
+                    .criterionQuadraticWeightedKappa,
+                )}
+              </span>
+              <span>200 条真实双标</span>
+              <span>{scoringBenchmark.releaseGate.status}</span>
+            </div>
+            <div className="benchmark-row">
+              <strong>逐字证据可定位率</strong>
+              <span>{formatPercent(scoringBenchmark.evidence.verbatimRate)}</span>
+              <span>100%</span>
+              <span>{scoringIsSynthetic ? "合成 fixture 通过" : scoringReleaseStatus}</span>
+            </div>
+          </div>
+
+          <div className="profile-bars">
+            {scoringBenchmark.riskCoverage.map((point) => (
+              <div className="profile-block" key={point.threshold}>
+                <div className="profile-title">
+                  <strong>{point.threshold}</strong>
+                  <span>coverage {formatPercent(point.coverage)}</span>
+                </div>
+                <div className="profile-bar">
+                  <span>MAE</span>
+                  <i>
+                    <b
+                      className="adaptive"
+                      style={{
+                        width: `${Math.min((point.mae ?? 0) * 100, 100)}%`,
+                      }}
+                    />
+                  </i>
+                  <strong>{formatMetric(point.mae)}</strong>
+                </div>
+                <div className="profile-bar">
+                  <span>严重错误</span>
+                  <i>
+                    <b
+                      className="random"
+                      style={{
+                        width: `${(point.severeErrorRate ?? 0) * 100}%`,
+                      }}
+                    />
+                  </i>
+                  <strong>{formatPercent(point.severeErrorRate)}</strong>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {scoringIsSynthetic ? (
+            <p className="lab-reading">
+              这 {scoringBenchmark.design.sampleCount} 条记录是刻意构造的合成
+              fixture，只证明数据校验、双标一致性、单遍/双遍消融、分组
+              Bootstrap 和可靠性门控能够确定性运行；它们不构成模型效果证据。
+              正式状态为 {scoringReleaseStatus}，直到完成 200
+              条经同意、匿名化、双人盲标的真实回答。
+            </p>
+          ) : (
+            <p className="lab-reading">
+              当前门禁状态为 {scoringReleaseStatus}。
+              {scoringBenchmark.releaseGate.claimBoundary}
+            </p>
+          )}
+        </article>
+      </section>
+
       <section className="lab-next">
         <p className="card-index">NEXT EVIDENCE</p>
-        <h2>下一步不是再加功能，而是引入真实答案。</h2>
-        <p>
-          计划招募 10–20 名同学，收集匿名回答，由两名标注者盲评“追问是否更有诊断价值”，
-          同时报告一致性、样本量和失败案例。上线前不把离线仿真写成真实用户收益。
-        </p>
+        <h2>
+          {scoringReleaseStatus === "NOT_READY"
+            ? "工具已经就绪，下一步是 48–72 条真实 Pilot。"
+            : `评分门禁状态：${scoringReleaseStatus}`}
+        </h2>
+        {scoringReleaseStatus === "NOT_READY" ? (
+          <p>
+            Pilot 只用于修订标注规范和失败案例，不发布性能结论；冻结协议后再扩展到
+            200 条双标回答，并只在锁定测试集上报告一致性、风险—覆盖率与成本。
+          </p>
+        ) : scoringReleaseStatus === "PASS" ? (
+          <p>
+            工程一致性门禁已经通过；仍需单独审计同意、匿名化和锁定测试只运行一次的流程，
+            且不得把评分一致性解释为招聘效度。
+          </p>
+        ) : (
+          <p>
+            正式数据尚未通过门禁。应优先检查失败项和最大误差案例，不发布评分器有效性结论。
+          </p>
+        )}
         <Link className="primary-button link-button" href="/">
           亲自跑一次文本诊断 <span>→</span>
         </Link>

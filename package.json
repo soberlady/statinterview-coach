@@ -12,7 +12,9 @@
     "test": "npm run build && node --test tests/rendered-html.test.mjs && tsx --test tests/policy-parity.test.ts tests/rubric-evaluator.test.ts tests/livekit-token.test.ts tests/decision-audit.test.ts",
     "test:e2e": "npm run db:local && node tests/policy-audit-e2e.mjs",
     "test:policy": "tsx --test tests/policy-parity.test.ts tests/rubric-evaluator.test.ts tests/livekit-token.test.ts tests/decision-audit.test.ts",
-    "experiment": "python experiments/run_policy_benchmark.py",
+    "experiment": "node scripts/run-python.mjs experiments/run_policy_benchmark.py",
+    "eval:scorer:predict": "tsx experiments/run_scoring_inference.ts",
+    "eval:scorer:fixture": "node scripts/run-python.mjs experiments/evaluate_scoring_benchmark.py --answers tests/fixtures/scoring-evaluation/answers.v1.jsonl --annotations tests/fixtures/scoring-evaluation/annotations.v1.jsonl --predictions tests/fixtures/scoring-evaluation/predictions.v1.jsonl --output content/scoring-benchmark.json --bootstrap-replicates 500",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
     "db:local": "node scripts/run-wrangler.mjs d1 migrations apply site-creator-d1 --local --config wrangler.local.jsonc"

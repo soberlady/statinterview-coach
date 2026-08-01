@@ -9,6 +9,7 @@ import {
   evaluateAnswer,
   selectNextQuestion,
   updateAbility,
+  type AnswerEvaluation,
 } from "../app/lib/agent-policy";
 import {
   fingerprintPolicyAudit,
@@ -74,7 +75,7 @@ test("policy audit flags an approved but counterfactual question", async () => {
 
   const tamperedTurns = session.turns.map((turn, index) => {
     if (index !== 4) return turn;
-    const evaluation = evaluateAnswer(replacement, richAnswer);
+    const evaluation = acceptedSemanticEvaluation(replacement, richAnswer);
     return {
       ...turn,
       questionId: replacement.id,
@@ -144,7 +145,7 @@ function buildCompleteSession(): {
     });
     const question = decision.nextQuestion;
     assert.ok(question, `question ${sequenceNumber} should exist`);
-    const evaluation = evaluateAnswer(question, richAnswer);
+    const evaluation = acceptedSemanticEvaluation(question, richAnswer);
     assert.equal(evaluation.action, "ACCEPT");
     const turnId = `turn_${sequenceNumber}`;
     const turn: InterviewTurn = {
@@ -199,6 +200,37 @@ function buildCompleteSession(): {
   }
 
   return { interview, turns };
+}
+
+function acceptedSemanticEvaluation(
+  question: NonNullable<ReturnType<typeof getInterviewQuestion>>,
+  answer: string,
+): AnswerEvaluation {
+  const structure = evaluateAnswer(question, answer);
+  return {
+    ...structure,
+    evaluator: "RUBRIC_DOUBLE_PASS",
+    totalScore: 0.8,
+    scoreOutOfFour: 3.2,
+    reliability: "HIGH",
+    action: "ACCEPT",
+    signals: {
+      ...structure.signals,
+      evidenceCoverage: 1,
+      reviewDisagreement: 0.2,
+    },
+    semantic: {
+      model: "deterministic-test-scorer",
+      criteria: question.rubric.map((criterion) => ({
+        criterion: criterion.criterion,
+        score: 3.2,
+        evidence: structure.evidence.slice(0, 1),
+      })),
+      primaryScore: 3.3,
+      reviewScore: 3.1,
+    },
+    disclaimer: "Deterministic semantic-scoring fixture for policy tests.",
+  };
 }
 
 function createInitialStates(
