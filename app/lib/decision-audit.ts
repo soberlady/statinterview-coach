@@ -283,7 +283,8 @@ function parseEvaluation(value: string): AnswerEvaluation | null {
     const candidate = parsed as Partial<AnswerEvaluation>;
     if (
       (candidate.evaluator !== "STRUCTURE_HEURISTIC" &&
-        candidate.evaluator !== "RUBRIC_DOUBLE_PASS") ||
+        candidate.evaluator !== "RUBRIC_DOUBLE_PASS" &&
+        candidate.evaluator !== "DEMO_FIXTURE") ||
       typeof candidate.totalScore !== "number" ||
       typeof candidate.scoreOutOfFour !== "number" ||
       !["HIGH", "MEDIUM", "LOW"].includes(candidate.reliability ?? "") ||

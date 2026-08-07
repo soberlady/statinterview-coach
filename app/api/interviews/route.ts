@@ -95,8 +95,11 @@ export async function POST(request: Request) {
     const mode =
       optionalString(normalizedPayload, "mode", { max: 32 }) ?? "diagnostic";
 
-    if (!["diagnostic", "training"].includes(mode)) {
-      throw validationError("mode", "must be diagnostic or training");
+    if (!["diagnostic", "training", "guided_demo"].includes(mode)) {
+      throw validationError(
+        "mode",
+        "must be diagnostic, training or guided_demo",
+      );
     }
 
     const id = `int_${crypto.randomUUID()}`;

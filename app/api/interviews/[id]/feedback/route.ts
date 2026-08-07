@@ -51,7 +51,14 @@ export async function POST(request: Request, context: RouteContext) {
     }
 
     const db = getDb();
-    await requireInterview(db, interviewId);
+    const interview = await requireInterview(db, interviewId);
+    if (interview.mode === "guided_demo") {
+      throw new ApiError(
+        409,
+        "DEMO_FEEDBACK_NOT_COLLECTED",
+        "Synthetic guided-demo sessions are excluded from user feedback data.",
+      );
+    }
     const [feedback] = await db
       .insert(userFeedback)
       .values({
@@ -73,9 +80,9 @@ export async function POST(request: Request, context: RouteContext) {
 async function requireInterview(
   db: ReturnType<typeof getDb>,
   id: string,
-): Promise<void> {
+): Promise<{ id: string; mode: string }> {
   const [interview] = await db
-    .select({ id: interviews.id })
+    .select({ id: interviews.id, mode: interviews.mode })
     .from(interviews)
     .where(eq(interviews.id, id))
     .limit(1);
@@ -86,4 +93,5 @@ async function requireInterview(
       "Interview was not found.",
     );
   }
+  return interview;
 }

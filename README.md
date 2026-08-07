@@ -14,6 +14,10 @@ is weak, it verifies or abstains instead of inventing a confident score.
 
 - complete text interview flow with refresh-safe checkpoints and
   pause/resume recovery, including the finalizing-to-report edge case;
+- one-click `guided_demo` path that deterministically demonstrates
+  `VERIFY -> ABSTAIN -> ACCEPT`, adaptive selection and report replay without
+  external model calls; every fixture score is visibly synthetic and demo
+  sessions cannot enter user-feedback data;
 - 24-question Chinese data-analysis bank with weighted rubrics;
 - four comparable anchor questions plus deterministic adaptive selection;
 - bounded reliability verification and explicit `ABSTAIN`;
@@ -101,6 +105,11 @@ npm run dev
 ```
 
 Open `http://localhost:3000`.
+
+For a repeatable interview demo, choose **进入引导演示** on the landing page
+and use the answer option marked **推荐步骤**. The first weak answer triggers a
+bounded verification, the verification remains insufficient and abstains, and
+the remaining fixture answers establish evidence before two adaptive turns.
 
 Agent kernel:
 

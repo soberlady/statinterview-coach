@@ -24,7 +24,7 @@ export type Reliability = "HIGH" | "MEDIUM" | "LOW";
 export type AgentAction = "ACCEPT" | "VERIFY" | "ABSTAIN";
 
 export type AnswerEvaluation = {
-  evaluator: "STRUCTURE_HEURISTIC" | "RUBRIC_DOUBLE_PASS";
+  evaluator: "STRUCTURE_HEURISTIC" | "RUBRIC_DOUBLE_PASS" | "DEMO_FIXTURE";
   totalScore: number;
   scoreOutOfFour: number;
   reliability: Reliability;
@@ -71,6 +71,10 @@ export type AnswerEvaluation = {
     latencyMs: number;
     inputTokens: number | null;
     outputTokens: number | null;
+  };
+  fixture?: {
+    scenarioVersion: string;
+    answerVariant: "strong" | "weak";
   };
 };
 

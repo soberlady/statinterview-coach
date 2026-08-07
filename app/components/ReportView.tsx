@@ -247,6 +247,11 @@ export function ReportView({ interviewId }: { interviewId: string }) {
     const usesSemanticScorer = report.turns.some(
       (turn) => turn.evaluation.evaluator === "RUBRIC_DOUBLE_PASS",
     );
+    const usesDemoFixture =
+      report.interview.mode === "guided_demo" ||
+      report.turns.some(
+        (turn) => turn.evaluation.evaluator === "DEMO_FIXTURE",
+      );
 
     return {
       skills,
@@ -255,6 +260,7 @@ export function ReportView({ interviewId }: { interviewId: string }) {
       evidenceItems,
       usesFallback,
       usesSemanticScorer,
+      usesDemoFixture,
     };
   }, [report]);
 
@@ -348,7 +354,13 @@ export function ReportView({ interviewId }: { interviewId: string }) {
             低可靠性回答不会直接改变能力状态。
           </p>
           <div className="report-status">
-            <span>{view.usesFallback ? "透明降级评估" : "语义量表评估"}</span>
+            <span>
+              {view.usesDemoFixture
+                ? "确定性演示夹具"
+                : view.usesFallback
+                  ? "透明降级评估"
+                  : "语义量表评估"}
+            </span>
             <span>{report.metrics.verificationTurns} 次可靠性追问</span>
             <span>{report.metrics.eventCount} 条 Agent 事件</span>
           </div>
@@ -366,7 +378,13 @@ export function ReportView({ interviewId }: { interviewId: string }) {
         </div>
       </section>
 
-      {view.usesFallback ? (
+      {view.usesDemoFixture ? (
+        <aside className="evaluation-notice demo-evaluation-notice">
+          这是可复现的引导演示报告。标记为 DEMO_FIXTURE 的评分和能力变化来自确定性合成夹具，
+          只用于展示 Agent 的 VERIFY、ABSTAIN、自适应选题、状态恢复与决策回放；
+          不代表大模型评分结果，也不会作为真实候选人评测证据。
+        </aside>
+      ) : view.usesFallback ? (
         <aside className="evaluation-notice">
           当前站点未配置语义模型密钥，因此采用结构化降级评估：只测量回答长度、
           领域术语和推理结构。这些反馈不会写入能力后验。配置模型后可启用实验性量表评分；
@@ -623,26 +641,36 @@ export function ReportView({ interviewId }: { interviewId: string }) {
         </div>
       </section>
 
-      <section className="feedback-card">
-        <div>
-          <p className="card-index">HUMAN FEEDBACK</p>
-          <h2>这份报告对你有帮助吗？</h2>
-          <p>反馈会作为离线评测数据保存，不会反向修改本次分数。</p>
-        </div>
-        <div className="rating-row" aria-label="报告评分">
-          {[1, 2, 3, 4, 5].map((rating) => (
-            <button
-              className={feedbackRating === rating ? "selected" : ""}
-              key={rating}
-              type="button"
-              onClick={() => void submitFeedback(rating)}
-            >
-              {rating}
-            </button>
-          ))}
-          <span>{feedbackStatus}</span>
-        </div>
-      </section>
+      {view.usesDemoFixture ? (
+        <section className="feedback-card demo-feedback-boundary">
+          <div>
+            <p className="card-index">DATA BOUNDARY</p>
+            <h2>演示会话不收集用户反馈</h2>
+            <p>该会话使用合成回答和固定评分，已从真实用户评测数据中排除。</p>
+          </div>
+        </section>
+      ) : (
+        <section className="feedback-card">
+          <div>
+            <p className="card-index">HUMAN FEEDBACK</p>
+            <h2>这份报告对你有帮助吗？</h2>
+            <p>反馈会作为离线评测数据保存，不会反向修改本次分数。</p>
+          </div>
+          <div className="rating-row" aria-label="报告评分">
+            {[1, 2, 3, 4, 5].map((rating) => (
+              <button
+                className={feedbackRating === rating ? "selected" : ""}
+                key={rating}
+                type="button"
+                onClick={() => void submitFeedback(rating)}
+              >
+                {rating}
+              </button>
+            ))}
+            <span>{feedbackStatus}</span>
+          </div>
+        </section>
+      )}
     </main>
   );
 }

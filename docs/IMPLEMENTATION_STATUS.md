@@ -1,6 +1,6 @@
 # Implementation status
 
-Updated: 2026-08-01
+Updated: 2026-08-07
 
 ## Complete
 
@@ -43,6 +43,12 @@ Updated: 2026-08-01
   recovery on return, and safely completes a paused finalizing checkpoint only
   when the policy has no remaining question;
 - structure-only fallback that provides feedback but cannot update ability;
+- isolated `guided_demo` mode with server-generated synthetic answer options,
+  a deterministic `DEMO_FIXTURE` evaluator, visible report disclaimers and a
+  server-side prohibition on saving demo feedback as user-study data;
+- guided-demo end-to-end proof: seven stored turns, one verification, five
+  accepted fixture turns, two adaptive decisions, 7/7 policy replay and zero
+  semantic-model calls;
 - bounded one-criterion rubrics for verification questions;
 - self-contained local API end-to-end test using a deterministic strict scorer
   for six accepted turns and a 6/6 replay;

@@ -79,24 +79,28 @@ main source of gain.
 
 ## Five-minute demo
 
-1. Open the landing page and state the narrow problem.
-2. Create a text interview with a JD emphasizing SQL/data engineering.
-3. Answer four anchors; show the state and decision reason.
-4. Show that follow-ups concentrate on the JD-relevant dimension.
-5. Submit a short, weak answer; show `VERIFY`, then `ABSTAIN` if evidence
-   remains weak.
+1. Open the landing page, state the narrow problem and choose **进入引导演示**.
+2. Explain the banner: all preloaded answers and `DEMO_FIXTURE` scores are
+   synthetic presentation data, not hidden model output.
+3. Load the recommended weak answer; show `VERIFY`, then load the still-weak
+   verification answer and show `ABSTAIN` without a posterior update.
+4. Use the remaining recommended complete answers and show that accepted
+   evidence changes the ability state.
+5. Show that the final two questions concentrate on the SQL-heavy JD and open
+   the decision reason.
 6. Pause the session, reopen it and show that the persisted checkpoint enters
    `RECOVERING` before the next answer is accepted.
 7. Open the report and trace a conclusion to the exact answer excerpt.
-8. Expand the decision audit; show 6/6 replay, then explain why the final two
+8. Expand the decision audit; show 7/7 replay, then explain why the final two
    questions outranked their alternatives.
 9. Open `/lab`; explain the fixed/random ablation and the balanced-role
    limitation, then show the scorer release gate and why 12 synthetic fixtures
    remain `NOT_READY`; formal release metrics would use only a frozen
    `locked_test` split.
-10. If LiveKit credentials and the worker are running, switch one turn to voice.
-   Otherwise explicitly say the media code is complete but the hosted
-   credential-dependent call has not been measured.
+10. If LiveKit credentials and the worker are running, return home, create a
+   normal diagnosis and switch one turn to voice. Otherwise explicitly say the
+   media code is complete but the hosted credential-dependent call has not
+   been measured.
 
 ## Honest resume wording
 

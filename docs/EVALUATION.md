@@ -25,6 +25,10 @@ maps to a measurable offline or online test.
 - pause/resume lifecycle: a paused active interview rejects turns, resumes,
   accepts the expected next answer, and a paused finalizing interview can only
   complete when the deterministic policy has no remaining question;
+- guided-demo isolation: the recommended deterministic path triggers
+  `VERIFY`, then `ABSTAIN`, completes five accepted fixture turns and two
+  adaptive turns, replays all 7/7 decisions, makes zero scorer calls and
+  rejects attempts to save demo feedback;
 - policy audit checks: deterministic 6/6 replay, stable SHA-256 fingerprint,
   sorted candidate utilities and detection of an approved-but-counterfactual
   replacement question;
@@ -86,3 +90,5 @@ does not establish real interview validity.
 - ability posteriors become externally meaningful only after real-answer
   calibration; current parity tests establish implementation consistency, not
   psychometric validity.
+- `DEMO_FIXTURE` posteriors are presentation fixtures and must never be mixed
+  with real-user calibration or scoring-validation claims.

@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import { useRouter } from "next/navigation";
+import type { GuidedDemoPayload } from "@/app/lib/guided-demo";
 
 type PublicQuestion = {
   id: string;
@@ -55,10 +56,12 @@ type NextQuestionResponse = ApiErrorBody & {
   interview?: {
     status: string;
     currentStage: string;
+    mode: string;
   };
   nextQuestion?: PublicQuestion | null;
   decision?: AgentDecision;
   progress?: Progress;
+  demo?: GuidedDemoPayload | null;
 };
 
 type TurnResponse = NextQuestionResponse & {
@@ -98,6 +101,8 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     targetSubstantiveTurns: 6,
   });
   const [decision, setDecision] = useState<AgentDecision | null>(null);
+  const [interviewMode, setInterviewMode] = useState("diagnostic");
+  const [demoGuide, setDemoGuide] = useState<GuidedDemoPayload | null>(null);
   const [lastEvaluation, setLastEvaluation] = useState<Evaluation | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -147,6 +152,8 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         }
         if (cancelled) return;
         const restoredStatus = result.interview?.status;
+        setInterviewMode(result.interview?.mode ?? "diagnostic");
+        setDemoGuide(result.demo ?? null);
         if (restoredStatus === "CANCELLED") {
           throw new Error("本次诊断已经取消，请返回首页重新创建。");
         }
@@ -291,6 +298,8 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
 
       if (result.evaluation) setLastEvaluation(result.evaluation);
       if (result.progress) setProgress(result.progress);
+      if (result.interview?.mode) setInterviewMode(result.interview.mode);
+      setDemoGuide(result.demo ?? null);
       setDecision(result.decision ?? null);
       setAnswer("");
       setStartedAt(new Date().toISOString());
@@ -448,18 +457,28 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   }
 
   if (phase === "COMPLETED") {
+    const isGuidedDemo = interviewMode === "guided_demo";
     return (
       <main className="completion-shell">
         <section className="completion-card">
           <span className="completion-mark" aria-hidden="true">
             ✓
           </span>
-          <p className="eyebrow">自适应诊断已完成</p>
-          <h1>回答、决策与能力状态都已保存。</h1>
-          <p>
-            报告将区分有效证据和待验证项。当前无模型密钥时使用透明的结构化降级评估，
-            不会把低可靠性回答写成稳定能力结论。
+          <p className="eyebrow">
+            {isGuidedDemo ? "引导演示已完成" : "自适应诊断已完成"}
           </p>
+          <h1>回答、决策与能力状态都已保存。</h1>
+          {isGuidedDemo ? (
+            <p>
+              本次全部评分均为明确标记的合成演示夹具，只用于复现
+              VERIFY、ABSTAIN、自适应选题与决策回放，不代表真实候选人能力。
+            </p>
+          ) : (
+            <p>
+              报告将区分有效证据和待验证项。当前无模型密钥时使用透明的结构化降级评估，
+              不会把低可靠性回答写成稳定能力结论。
+            </p>
+          )}
           <div className="completion-actions">
             <Link className="primary-button link-button" href={`/report/${interviewId}`}>
               查看诊断报告 <span>→</span>
@@ -488,6 +507,8 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     );
   }
 
+  const isGuidedDemo = interviewMode === "guided_demo";
+
   return (
     <main className="room-shell">
       <header className="room-header">
@@ -497,7 +518,11 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         </Link>
         <div className="room-session">
           <span className="live-dot" />
-          {inputChannel === "voice" ? "LiveKit 实时语音" : "文本通道"} ·
+          {isGuidedDemo
+            ? "合成引导演示"
+            : inputChannel === "voice"
+              ? "LiveKit 实时语音"
+              : "文本通道"} ·
           自动检查点
           <strong>{elapsedLabel}</strong>
         </div>
@@ -551,6 +576,17 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         </aside>
 
         <section className="question-stage">
+          {isGuidedDemo && demoGuide ? (
+            <section className="guided-demo-panel" aria-label="引导演示步骤">
+              <div>
+                <span>DETERMINISTIC DEMO · {demoGuide.version}</span>
+                <strong>{demoGuide.step}</strong>
+                <p>{demoGuide.instruction}</p>
+              </div>
+              <em>合成数据，不计入真实评测</em>
+            </section>
+          ) : null}
+
           <div className="agent-presence">
             <div className="agent-orb" aria-hidden="true">
               <span />
@@ -577,22 +613,49 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
             <form className="answer-composer" onSubmit={submitAnswer}>
               <div className="composer-heading">
                 <label htmlFor="answer">你的回答</label>
-                <button
-                  className="channel-switch"
-                  type="button"
-                  onClick={startVoiceInterview}
-                  disabled={voiceStatus === "connecting"}
-                >
-                  {voiceStatus === "connecting"
-                    ? "正在连接…"
-                    : "切换到实时语音"}
-                </button>
+                {isGuidedDemo ? (
+                  <span className="demo-channel-label">固定演示评分通道</span>
+                ) : (
+                  <button
+                    className="channel-switch"
+                    type="button"
+                    onClick={startVoiceInterview}
+                    disabled={voiceStatus === "connecting"}
+                  >
+                    {voiceStatus === "connecting"
+                      ? "正在连接…"
+                      : "切换到实时语音"}
+                  </button>
+                )}
               </div>
+              {isGuidedDemo && demoGuide ? (
+                <div className="demo-answer-options">
+                  {demoGuide.answerOptions.map((option) => (
+                    <button
+                      type="button"
+                      key={option.id}
+                      className={option.recommended ? "recommended" : ""}
+                      onClick={() => setAnswer(option.answer)}
+                      disabled={isSaving}
+                    >
+                      <span>
+                        {option.label}
+                        {option.recommended ? <b>推荐步骤</b> : null}
+                      </span>
+                      <small>{option.description}</small>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
               <textarea
                 id="answer"
                 value={answer}
                 onChange={(event) => setAnswer(event.target.value)}
-                placeholder="当前为可恢复的文本通道。建议按“假设—数据—判断标准—验证动作”组织答案。"
+                placeholder={
+                  isGuidedDemo
+                    ? "请从上方载入推荐演示回答；你也可以修改，但修改后只运行结构化降级反馈。"
+                    : "当前为可恢复的文本通道。建议按“假设—数据—判断标准—验证动作”组织答案。"
+                }
                 rows={7}
                 disabled={isSaving}
               />
@@ -663,6 +726,12 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
             <span>评分可靠性</span>
             <strong>{lastEvaluation?.reliability ?? "—"}</strong>
           </div>
+          {isGuidedDemo ? (
+            <div className="signal-item demo-signal-item">
+              <span>数据边界</span>
+              <strong>DEMO FIXTURE</strong>
+            </div>
+          ) : null}
           <div className="signal-item">
             <span>策略动作</span>
             <strong>{decision?.action ?? "建立锚点"}</strong>

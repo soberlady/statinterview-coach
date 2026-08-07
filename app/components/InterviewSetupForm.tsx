@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { GUIDED_DEMO_REQUEST } from "@/app/lib/guided-demo";
 
 type CreateInterviewResponse = {
   interview?: {
@@ -14,13 +15,13 @@ type CreateInterviewResponse = {
 
 export function InterviewSetupForm() {
   const router = useRouter();
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submittingKind, setSubmittingKind] = useState<
+    "diagnostic" | "demo" | null
+  >(null);
   const [error, setError] = useState("");
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setError("");
-    setIsSubmitting(true);
 
     const form = new FormData(event.currentTarget);
     const payload = {
@@ -30,7 +31,22 @@ export function InterviewSetupForm() {
       durationMinutes: Number(form.get("durationMinutes") ?? 15),
       cameraEnabled: form.get("cameraEnabled") === "on",
       recordingEnabled: false,
+      mode: "diagnostic",
     };
+
+    await createInterview(payload, "diagnostic");
+  }
+
+  async function startGuidedDemo() {
+    await createInterview(GUIDED_DEMO_REQUEST, "demo");
+  }
+
+  async function createInterview(
+    payload: Record<string, unknown>,
+    kind: "diagnostic" | "demo",
+  ) {
+    setError("");
+    setSubmittingKind(kind);
 
     try {
       const response = await fetch("/api/interviews", {
@@ -54,7 +70,7 @@ export function InterviewSetupForm() {
           : "暂时无法创建诊断，请稍后重试。",
       );
     } finally {
-      setIsSubmitting(false);
+      setSubmittingKind(null);
     }
   }
 
@@ -124,10 +140,29 @@ export function InterviewSetupForm() {
           </p>
         ) : null}
 
-        <button className="primary-button" type="submit" disabled={isSubmitting}>
-          {isSubmitting ? "正在创建…" : "开始文本诊断"}
+        <button
+          className="primary-button"
+          type="submit"
+          disabled={submittingKind !== null}
+        >
+          {submittingKind === "diagnostic" ? "正在创建…" : "开始文本诊断"}
           <span aria-hidden="true">→</span>
         </button>
+
+        <div className="guided-demo-launch">
+          <div>
+            <strong>面试现场稳定演示</strong>
+            <small>合成回答 · 固定评分 · 不调用外部模型</small>
+          </div>
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={startGuidedDemo}
+            disabled={submittingKind !== null}
+          >
+            {submittingKind === "demo" ? "正在准备…" : "进入引导演示"}
+          </button>
+        </div>
 
         <p className="form-note">
           继续即表示你同意本次练习使用回答文本生成诊断报告。默认不保存原始录音。

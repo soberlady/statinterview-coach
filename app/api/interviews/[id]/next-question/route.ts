@@ -2,6 +2,10 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { interviews, interviewTurns, skillStates } from "@/db/schema";
 import { selectNextQuestion } from "@/app/lib/agent-policy";
+import {
+  buildGuidedDemoPayload,
+  GUIDED_DEMO_MODE,
+} from "@/app/lib/guided-demo";
 import { toPublicQuestion } from "@/app/lib/question-bank";
 import {
   ApiError,
@@ -46,6 +50,13 @@ export async function GET(_request: Request, context: RouteContext) {
       turns,
       skillStates: states,
     });
+    const completedTurns = turns.filter(
+      (turn) => turn.status === "completed",
+    ).length;
+    const substantiveTurns = turns.filter(
+      (turn) =>
+        turn.status === "completed" && turn.questionType !== "verification",
+    ).length;
 
     return jsonResponse({
       interview: serializeInterview(interview),
@@ -57,14 +68,17 @@ export async function GET(_request: Request, context: RouteContext) {
         reason: decision.reason,
         utility: decision.utility,
       },
+      demo:
+        interview.mode === GUIDED_DEMO_MODE && decision.nextQuestion
+          ? buildGuidedDemoPayload({
+              question: decision.nextQuestion,
+              completedTurns,
+              substantiveTurns,
+            })
+          : null,
       progress: {
-        completedTurns: turns.filter((turn) => turn.status === "completed")
-          .length,
-        substantiveTurns: turns.filter(
-          (turn) =>
-            turn.status === "completed" &&
-            turn.questionType !== "verification",
-        ).length,
+        completedTurns,
+        substantiveTurns,
         targetSubstantiveTurns: 6,
       },
     });

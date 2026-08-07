@@ -58,6 +58,14 @@ questions were already persisted, a paused/finalizing checkpoint may move to
 
 JSON is validated by the API and stored as text for D1/SQLite portability.
 
+The existing `interviews.mode` field separates `guided_demo` sessions without
+adding a parallel schema. In that mode, the API returns versioned synthetic
+answer options and bypasses external scorers with an explicitly labeled
+`DEMO_FIXTURE` evaluator. Exact fixture answers can exercise deterministic
+state transitions; edited answers fall back to structure-only feedback.
+Reports retain the mode and evaluator label, and the feedback API rejects demo
+sessions so presentation records cannot enter the real-user feedback table.
+
 ## Deterministic decision audit
 
 The report does not trust the stored `nextQuestionId` as proof that the policy

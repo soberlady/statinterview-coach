@@ -20,8 +20,12 @@ test("keeps the production product copy and safety boundary", async () => {
   assert.match(page, /Private research build/);
   assert.doesNotMatch(page, /Public beta/);
   assert.match(setup, /开始文本诊断/);
+  assert.match(setup, /进入引导演示/);
+  assert.match(setup, /合成回答/);
   assert.match(interview, /暂停并退出/);
   assert.match(interview, /RECOVERING/);
+  assert.match(interview, /DETERMINISTIC DEMO/);
+  assert.match(report, /确定性合成夹具/);
   assert.match(page, /不用于自动化招聘决策/);
   assert.match(report, /低可靠性回答不会直接改变能力状态/);
   assert.match(report, /每一次选题都可以确定性重放/);

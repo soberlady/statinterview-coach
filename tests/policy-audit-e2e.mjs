@@ -9,6 +9,7 @@ const projectRoot = fileURLToPath(new URL("../", import.meta.url));
 const execFileAsync = promisify(execFile);
 const concurrentAnswerMarker = "STATINTERVIEW_CONCURRENCY_GUARD";
 let blockedScorerRequests = 0;
+let scorerRequestCount = 0;
 let releaseBlockedScorer;
 let resolveBlockedScorerReady;
 const blockedScorerReady = new Promise((resolve) => {
@@ -19,6 +20,7 @@ const blockedScorerRelease = new Promise((resolve) => {
 });
 const scorerServer = createServer(async (request, response) => {
   try {
+    scorerRequestCount += 1;
     const chunks = [];
     for await (const chunk of request) chunks.push(chunk);
     const payload = JSON.parse(Buffer.concat(chunks).toString("utf8"));
@@ -439,6 +441,128 @@ try {
   assert.equal(adaptiveSteps.length, 2);
   assert.ok(adaptiveSteps.every((step) => step.ranking.length === 3));
 
+  const scorerRequestsBeforeDemo = scorerRequestCount;
+  const demoCreated = await requestJson("/api/interviews", {
+    method: "POST",
+    body: JSON.stringify({
+      jobTitle: "增长数据分析实习生（引导演示）",
+      jobDescription:
+        "负责增长漏斗和留存分析，熟练使用 SQL 与 Python 完成数据提取、口径校验和异常排查；参与 A/B 测试设计、实验指标分析与业务复盘。",
+      candidateBackground: "合成演示候选人",
+      durationMinutes: 15,
+      cameraEnabled: false,
+      recordingEnabled: false,
+      mode: "guided_demo",
+    }),
+  });
+  const demoInterviewId = demoCreated.interview?.id;
+  assert.equal(typeof demoInterviewId, "string");
+  assert.equal(demoCreated.interview.mode, "guided_demo");
+
+  let demoSelection = await requestJson(
+    `/api/interviews/${demoInterviewId}/next-question`,
+  );
+  assert.equal(demoSelection.demo?.synthetic, true);
+  let recommendedDemoAnswer = demoSelection.demo.answerOptions.find(
+    (option) => option.recommended,
+  );
+  assert.equal(recommendedDemoAnswer?.id, "weak");
+  let demoSequence = 1;
+  demoSelection = await requestJson(
+    `/api/interviews/${demoInterviewId}/turns`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        sequenceNumber: demoSequence,
+        questionId: demoSelection.nextQuestion.id,
+        answerText: recommendedDemoAnswer.answer,
+        inputMode: "text",
+      }),
+    },
+  );
+  assert.equal(demoSelection.evaluation.action, "VERIFY");
+  assert.equal(demoSelection.nextQuestion.questionType, "verification");
+  assert.equal(demoSelection.evaluation.evaluator, "DEMO_FIXTURE");
+
+  demoSequence += 1;
+  recommendedDemoAnswer = demoSelection.demo.answerOptions.find(
+    (option) => option.recommended,
+  );
+  assert.equal(recommendedDemoAnswer?.id, "weak");
+  demoSelection = await requestJson(
+    `/api/interviews/${demoInterviewId}/turns`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        sequenceNumber: demoSequence,
+        questionId: demoSelection.nextQuestion.id,
+        answerText: recommendedDemoAnswer.answer,
+        inputMode: "text",
+      }),
+    },
+  );
+  assert.equal(demoSelection.evaluation.action, "ABSTAIN");
+
+  while (demoSelection.nextQuestion) {
+    demoSequence += 1;
+    assert.ok(demoSequence <= 8, "guided demo exceeded its bounded path");
+    recommendedDemoAnswer = demoSelection.demo.answerOptions.find(
+      (option) => option.recommended,
+    );
+    assert.equal(recommendedDemoAnswer?.id, "strong");
+    demoSelection = await requestJson(
+      `/api/interviews/${demoInterviewId}/turns`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          sequenceNumber: demoSequence,
+          questionId: demoSelection.nextQuestion.id,
+          answerText: recommendedDemoAnswer.answer,
+          inputMode: "text",
+        }),
+      },
+    );
+  }
+  await requestJson(`/api/interviews/${demoInterviewId}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      status: "COMPLETED",
+      currentStage: "COMPLETED",
+    }),
+  });
+  const demoReportResult = await requestJson(
+    `/api/interviews/${demoInterviewId}/report`,
+  );
+  const demoReport = demoReportResult.report;
+  assert.ok(demoReport);
+  assert.equal(demoReport.interview.mode, "guided_demo");
+  assert.equal(demoReport.metrics.completedTurns, 7);
+  assert.equal(demoReport.metrics.acceptedTurns, 5);
+  assert.equal(demoReport.metrics.verificationTurns, 1);
+  assert.equal(demoReport.policyAudit.summary.replayedTurns, 7);
+  assert.equal(demoReport.policyAudit.summary.matchingSelections, 7);
+  assert.equal(demoReport.policyAudit.summary.adaptiveDecisions, 2);
+  assert.ok(
+    demoReport.turns.every(
+      (turn) => turn.evaluation.evaluator === "DEMO_FIXTURE",
+    ),
+  );
+  const rejectedDemoFeedback = await fetch(
+    `${baseUrl}/api/interviews/${demoInterviewId}/feedback`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rating: 5, wouldUseAgain: true }),
+    },
+  );
+  assert.equal(rejectedDemoFeedback.status, 409);
+  const rejectedDemoFeedbackBody = await rejectedDemoFeedback.json();
+  assert.equal(
+    rejectedDemoFeedbackBody.error?.code,
+    "DEMO_FEEDBACK_NOT_COLLECTED",
+  );
+  assert.equal(scorerRequestCount, scorerRequestsBeforeDemo);
+
   console.log(
     JSON.stringify(
       {
@@ -450,6 +574,11 @@ try {
         adaptiveDecisions:
           report.policyAudit.summary.adaptiveDecisions,
         fingerprint: report.policyAudit.fingerprint.slice(0, 16),
+        guidedDemo: {
+          completedTurns: demoReport.metrics.completedTurns,
+          acceptedTurns: demoReport.metrics.acceptedTurns,
+          scorerCalls: scorerRequestCount - scorerRequestsBeforeDemo,
+        },
       },
       null,
       2,

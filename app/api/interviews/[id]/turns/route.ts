@@ -12,6 +12,11 @@ import {
 } from "@/app/lib/agent-policy";
 import { evaluateAnswerWithFallback } from "@/app/lib/rubric-evaluator";
 import {
+  buildGuidedDemoPayload,
+  evaluateGuidedDemoAnswer,
+  GUIDED_DEMO_MODE,
+} from "@/app/lib/guided-demo";
+import {
   getInterviewQuestion,
   toPublicQuestion,
 } from "@/app/lib/question-bank";
@@ -203,7 +208,10 @@ export async function POST(request: Request, context: RouteContext) {
       );
     }
 
-    const evaluation = await evaluateAnswerWithFallback(question, answerText);
+    const evaluation =
+      interview.mode === GUIDED_DEMO_MODE
+        ? evaluateGuidedDemoAnswer(question, answerText)
+        : await evaluateAnswerWithFallback(question, answerText);
     const now = new Date().toISOString();
     const turnId = `turn_${crypto.randomUUID()}`;
     const turnValues: typeof interviewTurns.$inferInsert = {
@@ -508,6 +516,20 @@ export async function POST(request: Request, context: RouteContext) {
           reason: decision.reason,
           utility: decision.utility,
         },
+        demo:
+          interview.mode === GUIDED_DEMO_MODE && decision.nextQuestion
+            ? buildGuidedDemoPayload({
+                question: decision.nextQuestion,
+                completedTurns: allTurns.filter(
+                  (turn) => turn.status === "completed",
+                ).length,
+                substantiveTurns: allTurns.filter(
+                  (turn) =>
+                    turn.status === "completed" &&
+                    turn.questionType !== "verification",
+                ).length,
+              })
+            : null,
         progress: buildProgress(allTurns, decision.nextQuestion !== null),
       },
       201,
@@ -538,6 +560,13 @@ async function loadSelection(
     turns,
     skillStates: states,
   });
+  const completedTurns = turns.filter(
+    (turn) => turn.status === "completed",
+  ).length;
+  const substantiveTurns = turns.filter(
+    (turn) =>
+      turn.status === "completed" && turn.questionType !== "verification",
+  ).length;
   return {
     nextQuestion: decision.nextQuestion
       ? toPublicQuestion(decision.nextQuestion)
@@ -547,6 +576,14 @@ async function loadSelection(
       reason: decision.reason,
       utility: decision.utility,
     },
+    demo:
+      interview.mode === GUIDED_DEMO_MODE && decision.nextQuestion
+        ? buildGuidedDemoPayload({
+            question: decision.nextQuestion,
+            completedTurns,
+            substantiveTurns,
+          })
+        : null,
     progress: buildProgress(turns, decision.nextQuestion !== null),
   };
 }
