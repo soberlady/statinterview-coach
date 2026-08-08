@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
 import { once } from "node:events";
+import { existsSync, mkdirSync, renameSync } from "node:fs";
 import { createServer } from "node:http";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
@@ -71,6 +73,30 @@ const port =
   Number(process.env.STATINTERVIEW_E2E_PORT) ||
   32_000 + Math.floor(Math.random() * 1_000);
 const baseUrl = `http://localhost:${port}`;
+const localEnvPath = join(projectRoot, ".env.local");
+const localEnvBackupDirectory = join(projectRoot, "work", "e2e");
+const localEnvBackupPath = join(
+  localEnvBackupDirectory,
+  ".env.local.backup",
+);
+mkdirSync(localEnvBackupDirectory, { recursive: true });
+if (existsSync(localEnvBackupPath) && !existsSync(localEnvPath)) {
+  renameSync(localEnvBackupPath, localEnvPath);
+}
+if (existsSync(localEnvBackupPath)) {
+  throw new Error("Refusing to overwrite a stale .env.local E2E backup.");
+}
+let localEnvMoved = false;
+if (existsSync(localEnvPath)) {
+  renameSync(localEnvPath, localEnvBackupPath);
+  localEnvMoved = true;
+}
+function restoreLocalEnvironment() {
+  if (!localEnvMoved || !existsSync(localEnvBackupPath)) return;
+  renameSync(localEnvBackupPath, localEnvPath);
+  localEnvMoved = false;
+}
+process.once("exit", restoreLocalEnvironment);
 const serverOutput = [];
 const server = spawn(
   process.execPath,
@@ -276,6 +302,18 @@ try {
   );
   await Promise.race([
     blockedScorerReady,
+    pendingConcurrentTurn.then(async (response) => {
+      const body = await response.clone().json();
+      throw new Error(
+        "semantic scorer returned before the concurrency gate: " +
+          JSON.stringify({
+            status: response.status,
+            evaluator: body.evaluation?.evaluator,
+            action: body.evaluation?.action,
+            scorerRequestCount,
+          }),
+      );
+    }),
     new Promise((_, reject) =>
       setTimeout(
         () => reject(new Error("semantic scorer did not enter blocked state")),
@@ -403,6 +441,54 @@ try {
       currentStage: "COMPLETED",
     }),
   });
+  const voiceSessionA = `voice-e2e-a-${crypto.randomUUID()}`;
+  const voiceSessionB = `voice-e2e-b-${crypto.randomUUID()}`;
+  await requestJson(`/api/interviews/${interviewId}/events`, {
+    method: "POST",
+    body: JSON.stringify({
+      eventType: "voice.connected",
+      latencyMs: 1_400,
+      idempotencyKey: `client:voice:${voiceSessionA}:connected`,
+      payload: { voiceSessionId: voiceSessionA },
+    }),
+  });
+  await requestJson(`/api/interviews/${interviewId}/events`, {
+    method: "POST",
+    body: JSON.stringify({
+      eventType: "voice.transcript_final",
+      idempotencyKey: `client:voice:${voiceSessionA}:transcript:one`,
+      payload: {
+        voiceSessionId: voiceSessionA,
+        transcriptCharacters: 80,
+      },
+    }),
+  });
+  await requestJson(`/api/interviews/${interviewId}/events`, {
+    method: "POST",
+    body: JSON.stringify({
+      eventType: "voice.turn_committed",
+      latencyMs: 1_200,
+      idempotencyKey: `client:voice:${voiceSessionA}:turn:6`,
+      payload: { voiceSessionId: voiceSessionA },
+    }),
+  });
+  await requestJson(`/api/interviews/${interviewId}/events`, {
+    method: "POST",
+    body: JSON.stringify({
+      eventType: "voice.connected",
+      latencyMs: 900,
+      idempotencyKey: `client:voice:${voiceSessionB}:connected`,
+      payload: { voiceSessionId: voiceSessionB },
+    }),
+  });
+  await requestJson(`/api/interviews/${interviewId}/events`, {
+    method: "POST",
+    body: JSON.stringify({
+      eventType: "voice.reconnected",
+      latencyMs: 300,
+      payload: { voiceSessionId: voiceSessionB },
+    }),
+  });
   const reportResult = await requestJson(
     `/api/interviews/${interviewId}/report`,
   );
@@ -410,6 +496,19 @@ try {
   assert.ok(report);
   assert.equal(report.metrics.completedTurns, 6);
   assert.equal(report.metrics.acceptedTurns, 6);
+  assert.deepEqual(report.metrics.voiceTelemetry, {
+    sessionCount: 2,
+    reconnectCount: 2,
+    failedConnectionCount: 0,
+    finalTranscriptSegmentCount: 1,
+    committedTurnCount: 1,
+    connectionLatency: { count: 2, p50Ms: 1_150, p95Ms: 1_375 },
+    transcriptToCommitLatency: {
+      count: 1,
+      p50Ms: 1_200,
+      p95Ms: 1_200,
+    },
+  });
   assert.ok(
     report.turns.every(
       (turn) =>
@@ -594,6 +693,7 @@ try {
   await stopServer();
   scorerServer.close();
   await once(scorerServer, "close");
+  restoreLocalEnvironment();
 }
 
 async function seedInternalEventConflict(interviewId, sequenceNumber) {

@@ -35,6 +35,8 @@ test("keeps the production product copy and safety boundary", async () => {
   assert.match(lab, /均衡型岗位上三种策略差异很小/);
   assert.match(lab, /刻意构造的合成/);
   assert.match(lab, /scoringReleaseStatus/);
+  assert.match(lab, /中文字符错误率/);
+  assert.match(lab, /NOT_MEASURED|voiceReleaseStatus/);
   assert.match(lab, /formatMetric/);
   assert.match(lab, /只在锁定测试集上报告/);
   assert.doesNotMatch(page, /Your site is taking shape|vinext-starter/i);

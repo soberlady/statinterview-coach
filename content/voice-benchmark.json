@@ -1,0 +1,105 @@
+{
+  "schemaVersion": "voice-benchmark-v1",
+  "dataset": {
+    "kind": "synthetic_fixture",
+    "sampleCount": 6,
+    "sha256": "1d9126cd8f8449fa6ff565f771ffc7a44fe0d55584b798508d91658d82e9217f"
+  },
+  "metrics": {
+    "referenceCharacters": 134,
+    "characterEdits": 4,
+    "characterErrorRate": 0.0299,
+    "exactMatchRate": 0.6667,
+    "domainTerms": 12,
+    "matchedDomainTerms": 12,
+    "domainTermAccuracy": 1.0,
+    "checkpointRestoreRate": 1.0,
+    "connectionP95Ms": 2025,
+    "transcriptToCommitP95Ms": 2475,
+    "duplicateCommittedTurns": 0
+  },
+  "releaseGate": {
+    "status": "NOT_MEASURED",
+    "thresholds": {
+      "minimumSamples": 30,
+      "maximumCharacterErrorRate": 0.15,
+      "minimumDomainTermAccuracy": 0.9,
+      "minimumCheckpointRestoreRate": 1.0,
+      "maximumConnectionP95Ms": 4000,
+      "maximumTranscriptToCommitP95Ms": 5000,
+      "maximumDuplicateCommittedTurns": 0
+    },
+    "checks": {
+      "sampleCount": false,
+      "characterErrorRate": true,
+      "domainTermAccuracy": true,
+      "checkpointRestoreRate": true,
+      "connectionP95Ms": true,
+      "transcriptToCommitP95Ms": true,
+      "duplicateCommittedTurns": true
+    },
+    "claimBoundary": "Synthetic fixtures validate the evaluation code only; they are not measured voice quality."
+  },
+  "samples": [
+    {
+      "sampleId": "voice_fixture_001",
+      "referenceCharacters": 27,
+      "characterEdits": 0,
+      "characterErrorRate": 0.0,
+      "keyterms": 2,
+      "matchedKeyterms": 2,
+      "checkpointRestored": true,
+      "duplicateCommittedTurns": 0
+    },
+    {
+      "sampleId": "voice_fixture_002",
+      "referenceCharacters": 17,
+      "characterEdits": 1,
+      "characterErrorRate": 0.0588,
+      "keyterms": 2,
+      "matchedKeyterms": 2,
+      "checkpointRestored": true,
+      "duplicateCommittedTurns": 0
+    },
+    {
+      "sampleId": "voice_fixture_003",
+      "referenceCharacters": 24,
+      "characterEdits": 0,
+      "characterErrorRate": 0.0,
+      "keyterms": 2,
+      "matchedKeyterms": 2,
+      "checkpointRestored": true,
+      "duplicateCommittedTurns": 0
+    },
+    {
+      "sampleId": "voice_fixture_004",
+      "referenceCharacters": 20,
+      "characterEdits": 0,
+      "characterErrorRate": 0.0,
+      "keyterms": 2,
+      "matchedKeyterms": 2,
+      "checkpointRestored": true,
+      "duplicateCommittedTurns": 0
+    },
+    {
+      "sampleId": "voice_fixture_005",
+      "referenceCharacters": 25,
+      "characterEdits": 0,
+      "characterErrorRate": 0.0,
+      "keyterms": 2,
+      "matchedKeyterms": 2,
+      "checkpointRestored": true,
+      "duplicateCommittedTurns": 0
+    },
+    {
+      "sampleId": "voice_fixture_006",
+      "referenceCharacters": 21,
+      "characterEdits": 3,
+      "characterErrorRate": 0.1429,
+      "keyterms": 2,
+      "matchedKeyterms": 2,
+      "checkpointRestored": true,
+      "duplicateCommittedTurns": 0
+    }
+  ]
+}

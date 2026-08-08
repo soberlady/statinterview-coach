@@ -7,12 +7,15 @@ export async function createLiveKitVoiceCredentials(input: {
   apiSecret: string;
   interviewId: string;
   participantIdentity?: string;
+  voiceSessionId?: string;
 }) {
-  const roomName = `statinterview--${input.interviewId}`;
+  const voiceSessionId = input.voiceSessionId ?? crypto.randomUUID();
+  const roomName = `statinterview--${input.interviewId}--${voiceSessionId}`;
   const participantIdentity =
     input.participantIdentity ?? `candidate-${crypto.randomUUID()}`;
   const metadata = JSON.stringify({
     interviewId: input.interviewId,
+    voiceSessionId,
     transport: "browser_voice",
   });
   const token = new AccessToken(input.apiKey, input.apiSecret, {
@@ -42,6 +45,7 @@ export async function createLiveKitVoiceCredentials(input: {
     participantToken: await token.toJwt(),
     roomName,
     participantIdentity,
+    voiceSessionId,
     expiresInSeconds: 1_200,
   };
 }

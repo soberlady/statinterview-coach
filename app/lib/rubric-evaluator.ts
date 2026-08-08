@@ -400,11 +400,13 @@ async function scorerEnvironment(): Promise<
   return Object.fromEntries(
     keys.map((key) => {
       const workerValue = workerEnvironment[key];
+      const normalizedWorkerValue =
+        typeof workerValue === "string" && workerValue.trim().length > 0
+          ? workerValue
+          : undefined;
       return [
         key,
-        typeof workerValue === "string"
-          ? workerValue
-          : process.env[key],
+        normalizedWorkerValue ?? process.env[key],
       ];
     }),
   );

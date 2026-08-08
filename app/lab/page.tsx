@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import benchmark from "@/content/policy-benchmark.json";
 import scoringBenchmark from "@/content/scoring-benchmark.json";
+import voiceBenchmark from "@/content/voice-benchmark.json";
 
 export const metadata: Metadata = {
   title: "策略实验",
@@ -43,6 +44,7 @@ export default function LabPage() {
   const scoringIsSynthetic =
     scoringBenchmark.design.provenance.includes("synthetic_fixture");
   const scoringReleaseStatus = scoringBenchmark.releaseGate.status;
+  const voiceReleaseStatus = voiceBenchmark.releaseGate.status;
 
   return (
     <main className="lab-shell">
@@ -343,17 +345,71 @@ export default function LabPage() {
         </article>
       </section>
 
+      <section className="lab-grid">
+        <article className="lab-card lab-card-wide">
+          <div className="section-heading">
+            <div>
+              <p className="card-index">05 / VOICE RELEASE GATE</p>
+              <h2>中文转写和恢复链路也要经过量化验收</h2>
+            </div>
+            <span className="legend">
+              合成评测器夹具 · {voiceBenchmark.dataset.sampleCount} 条记录
+            </span>
+          </div>
+
+          <div className="benchmark-table">
+            <div className="benchmark-row benchmark-head">
+              <span>检查项</span>
+              <span>夹具结果</span>
+              <span>真实门槛</span>
+              <span>当前状态</span>
+            </div>
+            <div className="benchmark-row">
+              <strong>中文字符错误率</strong>
+              <span>{formatPercent(voiceBenchmark.metrics.characterErrorRate)}</span>
+              <span>≤ 15%</span>
+              <span>{voiceReleaseStatus}</span>
+            </div>
+            <div className="benchmark-row">
+              <strong>专业术语准确率</strong>
+              <span>{formatPercent(voiceBenchmark.metrics.domainTermAccuracy)}</span>
+              <span>≥ 90%</span>
+              <span>仅验证计算链路</span>
+            </div>
+            <div className="benchmark-row">
+              <strong>检查点恢复正确率</strong>
+              <span>{formatPercent(voiceBenchmark.metrics.checkpointRestoreRate)}</span>
+              <span>100%</span>
+              <span>需 30 次真实会话</span>
+            </div>
+            <div className="benchmark-row">
+              <strong>连接 p95</strong>
+              <span>{(voiceBenchmark.metrics.connectionP95Ms / 1_000).toFixed(2)} s</span>
+              <span>≤ 4 s</span>
+              <span>合成时延</span>
+            </div>
+          </div>
+
+          <p className="lab-reading">
+            这里的数值来自刻意构造的合成转写，只证明字符编辑距离、术语匹配、
+            p95、恢复率和重复提交门禁能够确定性运行。状态固定为 {voiceReleaseStatus}；
+            完成 30 次经同意的中文会话前，不把这些数值描述成真实语音质量。
+          </p>
+        </article>
+      </section>
+
       <section className="lab-next">
         <p className="card-index">NEXT EVIDENCE</p>
         <h2>
           {scoringReleaseStatus === "NOT_READY"
-            ? "工具已经就绪，下一步是 48–72 条真实 Pilot。"
+            ? "工具已经就绪：评分 Pilot 与 30 次中文语音验收。"
             : `评分门禁状态：${scoringReleaseStatus}`}
         </h2>
         {scoringReleaseStatus === "NOT_READY" ? (
           <p>
-            Pilot 只用于修订标注规范和失败案例，不发布性能结论；冻结协议后再扩展到
-            200 条双标回答，并只在锁定测试集上报告一致性、风险—覆盖率与成本。
+            评分 Pilot 只用于修订标注规范；语音验收会报告字符错误率、术语准确率、
+            检查点恢复率和 p95 延迟。评分协议冻结后只在锁定测试集上报告；
+            两类实验都必须报告样本量，不能用合成夹具替代真实结论。
           </p>
         ) : scoringReleaseStatus === "PASS" ? (
           <p>

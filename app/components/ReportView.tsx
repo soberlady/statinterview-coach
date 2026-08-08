@@ -120,6 +120,23 @@ type Report = {
     averageRecordedLatencyMs: number | null;
     eventCount: number;
     estimatedCostUsd: number;
+    voiceTelemetry: {
+      sessionCount: number;
+      reconnectCount: number;
+      failedConnectionCount: number;
+      finalTranscriptSegmentCount: number;
+      committedTurnCount: number;
+      connectionLatency: {
+        count: number;
+        p50Ms: number | null;
+        p95Ms: number | null;
+      };
+      transcriptToCommitLatency: {
+        count: number;
+        p50Ms: number | null;
+        p95Ms: number | null;
+      };
+    };
   };
   policyAudit: PolicyAudit;
   scorerReleaseGate: {
@@ -399,6 +416,47 @@ export function ReportView({ interviewId }: { interviewId: string }) {
       ) : null}
 
       <section className="report-grid">
+        {report.metrics.voiceTelemetry.sessionCount > 0 ? (
+          <article className="report-card report-card-wide">
+            <div className="section-heading">
+              <div>
+                <p className="card-index">VOICE OBSERVABILITY</p>
+                <h2>语音链路实测</h2>
+              </div>
+              <span className="legend">客户端观测，不参与能力评分</span>
+            </div>
+            <div className="report-status">
+              <span>
+                {report.metrics.voiceTelemetry.sessionCount} 次成功连接
+              </span>
+              <span>
+                连接 p50 {formatLatency(
+                  report.metrics.voiceTelemetry.connectionLatency.p50Ms,
+                )}
+              </span>
+              <span>
+                连接 p95 {formatLatency(
+                  report.metrics.voiceTelemetry.connectionLatency.p95Ms,
+                )}
+              </span>
+              <span>
+                转写至保存 p95 {formatLatency(
+                  report.metrics.voiceTelemetry.transcriptToCommitLatency
+                    .p95Ms,
+                )}
+              </span>
+              <span>
+                {report.metrics.voiceTelemetry.reconnectCount} 次恢复连接
+              </span>
+            </div>
+            <p className="report-caption">
+              当前样本包含 {report.metrics.voiceTelemetry.committedTurnCount} 个已保存语音回答、
+              {report.metrics.voiceTelemetry.finalTranscriptSegmentCount} 个最终转写片段和
+              {report.metrics.voiceTelemetry.failedConnectionCount} 次连接失败。样本量不足时只展示原始观测，不做质量结论。
+            </p>
+          </article>
+        ) : null}
+
         <article className="report-card report-card-wide">
           <div className="section-heading">
             <div>
@@ -673,6 +731,12 @@ export function ReportView({ interviewId }: { interviewId: string }) {
       )}
     </main>
   );
+}
+
+function formatLatency(value: number | null): string {
+  if (value === null) return "—";
+  if (value < 1_000) return `${value} ms`;
+  return `${(value / 1_000).toFixed(2)} s`;
 }
 
 function formatPercent(value: number): string {

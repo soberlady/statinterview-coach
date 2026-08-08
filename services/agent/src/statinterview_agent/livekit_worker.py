@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 from dataclasses import dataclass, field
 from typing import Any
@@ -20,17 +21,52 @@ from livekit.agents import (
     Agent,
     AgentServer,
     AgentSession,
+    ChatMessage,
+    ConversationItemAddedEvent,
     JobContext,
     RunContext,
-    UserInputTranscribedEvent,
     cli,
     function_tool,
     inference,
 )
 from livekit.agents.llm.tool_context import ToolFlag
 
+from .voice_room import resolve_interview_id
+from .voice_speech import build_opening_prompt, prepare_question_for_speech
+from .voice_transcript import CommittedTranscriptBuffer
+
 load_dotenv(".env.local")
 load_dotenv()
+
+logger = logging.getLogger(__name__)
+
+STT_KEYTERMS = [
+    "SQL",
+    "Python",
+    "A/B 测试",
+    "点击率",
+    "转化率",
+    "留存率",
+    "显著性水平",
+    "统计功效",
+    "样本量",
+    "p 值",
+    "置信区间",
+    "假阳性",
+    "假阴性",
+    "多重比较",
+    "碰巧显著",
+    "主指标",
+    "Bonferroni 校正",
+    "Benjamini-Hochberg",
+    "FDR",
+    "错误发现率",
+    "窗口函数",
+    "ROW_NUMBER",
+    "RANK",
+    "DENSE_RANK",
+    "因果推断",
+]
 
 
 @dataclass
@@ -39,7 +75,9 @@ class VoiceRuntime:
     api_base_url: str
     sequence_number: int
     current_question: dict[str, Any] | None
-    last_final_transcript: str = ""
+    transcript_buffer: CommittedTranscriptBuffer = field(
+        default_factory=CommittedTranscriptBuffer
+    )
     submit_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
 
@@ -66,6 +104,9 @@ class StatInterviewVoiceAgent(Agent):
 五、工具返回 COMPLETE 时，告知诊断已完成并引导候选人查看网页报告。
 六、不要分析表情、音色、口音、情绪或性别，不做录用决策。
 七、不得自行创建题目，不得跳过可靠性追问。
+八、不要向候选人口播连接异常、HTTP 状态或系统内部错误。
+九、工具返回 RESYNCED 时，以 next_question 为唯一事实并逐字提问，不要重复提交旧回答。
+十、全程使用标准普通话语调。遇到 spoken_question 时必须原样朗读，不自行改写题目。
 """.strip(),
         )
 
@@ -83,13 +124,17 @@ class StatInterviewVoiceAgent(Agent):
 
         runtime = context.userdata
         async with runtime.submit_lock:
-            transcript = runtime.last_final_transcript.strip()
+            transcript = runtime.transcript_buffer.text
             question = runtime.current_question
-            if not transcript:
+            if len(transcript) < 10:
+                runtime.transcript_buffer.clear()
                 return json.dumps(
                     {
-                        "status": "NO_FINAL_TRANSCRIPT",
-                        "instruction": "请候选人再说一遍，暂时不要评分。",
+                        "status": "TRANSCRIPT_TOO_SHORT",
+                        "instruction": (
+                            "不要提及系统或连接问题。请说："
+                            "我没有完整收到这段回答，请再完整说一遍。"
+                        ),
                     },
                     ensure_ascii=False,
                 )
@@ -112,12 +157,87 @@ class StatInterviewVoiceAgent(Agent):
                 f"{runtime.api_base_url}/api/interviews/"
                 f"{runtime.interview_id}/turns"
             )
-            async with httpx.AsyncClient(timeout=15.0) as client:
-                response = await client.post(endpoint, json=payload)
-                response.raise_for_status()
-                result = response.json()
+            try:
+                async with httpx.AsyncClient(timeout=15.0) as client:
+                    response = await client.post(endpoint, json=payload)
+            except httpx.RequestError:
+                logger.warning(
+                    "turn submission transport failed",
+                    exc_info=True,
+                    extra={"interview_id": runtime.interview_id},
+                )
+                runtime.transcript_buffer.clear()
+                return json.dumps(
+                    {
+                        "status": "REPEAT_CURRENT_ANSWER",
+                        "instruction": (
+                            "不要提及系统或连接问题。请说："
+                            "我没有完整收到这段回答，请再完整说一遍。"
+                        ),
+                    },
+                    ensure_ascii=False,
+                )
 
-            runtime.last_final_transcript = ""
+            if response.status_code == 409:
+                try:
+                    await _resync_runtime(runtime)
+                except httpx.HTTPError:
+                    logger.warning(
+                        "turn conflict resync failed",
+                        exc_info=True,
+                        extra={"interview_id": runtime.interview_id},
+                    )
+                    runtime.transcript_buffer.clear()
+                    return json.dumps(
+                        {
+                            "status": "REPEAT_CURRENT_ANSWER",
+                            "instruction": (
+                                "不要提及系统或连接问题。请说："
+                                "我没有完整收到这段回答，请再完整说一遍。"
+                            ),
+                        },
+                        ensure_ascii=False,
+                    )
+
+                runtime.transcript_buffer.clear()
+                return json.dumps(
+                    {
+                        "status": "RESYNCED",
+                        "next_question": runtime.current_question,
+                        "spoken_question": prepare_question_for_speech(
+                            str(runtime.current_question.get("text", ""))
+                        )
+                        if runtime.current_question
+                        else None,
+                        "instruction": (
+                            "不要提及冲突、连接或系统错误。"
+                            "以 next_question 为准，原样朗读 spoken_question。"
+                        ),
+                    },
+                    ensure_ascii=False,
+                )
+
+            if response.is_error:
+                logger.warning(
+                    "turn submission rejected with status %s",
+                    response.status_code,
+                    extra={"interview_id": runtime.interview_id},
+                )
+                runtime.transcript_buffer.clear()
+                return json.dumps(
+                    {
+                        "status": "REPEAT_CURRENT_ANSWER",
+                        "instruction": (
+                            "不要提及系统或连接问题。请说："
+                            "我没有完整收到这段回答，请再完整说一遍。"
+                        ),
+                    },
+                    ensure_ascii=False,
+                )
+
+            result = response.json()
+
+            runtime.transcript_buffer.clear()
             runtime.current_question = result.get("nextQuestion")
             progress = result.get("progress") or {}
             runtime.sequence_number = int(
@@ -145,7 +265,10 @@ class StatInterviewVoiceAgent(Agent):
                         "reliability"
                     ),
                     "next_question": runtime.current_question,
-                    "instruction": "简短承接后，逐字询问 next_question.text。",
+                    "spoken_question": prepare_question_for_speech(
+                        str(runtime.current_question.get("text", ""))
+                    ),
+                    "instruction": "简短承接后，原样朗读 spoken_question。",
                 },
                 ensure_ascii=False,
             )
@@ -156,7 +279,13 @@ server = AgentServer()
 
 @server.rtc_session(agent_name="statinterview-coach")
 async def statinterview_session(ctx: JobContext) -> None:
-    interview_id = _resolve_interview_id(ctx.room.name)
+    interview_id = resolve_interview_id(
+        ctx.room.name,
+        job_metadata=ctx.job.metadata,
+        configured_interview_id=os.environ.get(
+            "STATINTERVIEW_INTERVIEW_ID", ""
+        ),
+    )
     api_base_url = os.environ.get(
         "STATINTERVIEW_API_BASE_URL", "http://localhost:3000"
     ).rstrip("/")
@@ -179,7 +308,10 @@ async def statinterview_session(ctx: JobContext) -> None:
             model=os.environ.get(
                 "STATINTERVIEW_STT_MODEL", "deepgram/nova-3"
             ),
-            language="multi",
+            language=os.environ.get(
+                "STATINTERVIEW_STT_LANGUAGE", "zh-CN"
+            ),
+            extra_kwargs={"keyterm": STT_KEYTERMS},
         ),
         llm=inference.LLM(
             model=os.environ.get(
@@ -188,19 +320,40 @@ async def statinterview_session(ctx: JobContext) -> None:
         ),
         tts=inference.TTS(
             model=os.environ.get(
-                "STATINTERVIEW_TTS_MODEL", "cartesia/sonic-3"
+                "STATINTERVIEW_TTS_MODEL", "cartesia/sonic-3.5"
             ),
             voice=os.environ.get(
                 "STATINTERVIEW_TTS_VOICE",
                 "9626c31c-bec5-4cca-baa8-f8ba9e84c8bc",
             ),
+            language=os.environ.get(
+                "STATINTERVIEW_TTS_LANGUAGE", "zh"
+            ),
+            extra_kwargs={
+                "speed": float(
+                    os.environ.get("STATINTERVIEW_TTS_SPEED", "0.92")
+                )
+            },
         ),
+        turn_handling={
+            "endpointing": {
+                "min_delay": 0.8,
+                "max_delay": 3.0,
+            }
+        },
     )
 
-    @session.on("user_input_transcribed")
-    def capture_final_transcript(event: UserInputTranscribedEvent) -> None:
-        if event.is_final and event.transcript.strip():
-            runtime.last_final_transcript = event.transcript
+    @session.on("conversation_item_added")
+    def capture_committed_user_turn(
+        event: ConversationItemAddedEvent,
+    ) -> None:
+        if not isinstance(event.item, ChatMessage):
+            return
+        if event.item.role != "user":
+            return
+        transcript = (event.item.text_content or "").strip()
+        if transcript:
+            runtime.transcript_buffer.add(event.item.id, transcript)
 
     await session.start(
         room=ctx.room,
@@ -210,9 +363,10 @@ async def statinterview_session(ctx: JobContext) -> None:
 
     if runtime.current_question:
         session.say(
-            "你好，我会根据你的回答动态选择问题。"
-            "评分只基于回答内容。第一题，"
-            + str(runtime.current_question["text"]),
+            build_opening_prompt(
+                runtime.sequence_number,
+                str(runtime.current_question["text"]),
+            ),
         )
     else:
         session.say("这次诊断已经完成，请回到网页查看报告。")
@@ -231,6 +385,16 @@ async def _load_next_question(
         return response.json()
 
 
+async def _resync_runtime(runtime: VoiceRuntime) -> None:
+    authoritative = await _load_next_question(
+        runtime.api_base_url,
+        runtime.interview_id,
+    )
+    progress = authoritative.get("progress") or {}
+    runtime.sequence_number = int(progress.get("completedTurns", 0)) + 1
+    runtime.current_question = authoritative.get("nextQuestion")
+
+
 async def _complete_interview(
     api_base_url: str,
     interview_id: str,
@@ -245,19 +409,6 @@ async def _complete_interview(
             },
         )
         response.raise_for_status()
-
-
-def _resolve_interview_id(room_name: str) -> str:
-    configured = os.environ.get("STATINTERVIEW_INTERVIEW_ID", "").strip()
-    if configured:
-        return configured
-    prefix = "statinterview--"
-    if room_name.startswith(prefix) and len(room_name) > len(prefix):
-        return room_name[len(prefix) :]
-    raise RuntimeError(
-        "Room name must be statinterview--<interview_id>, or set "
-        "STATINTERVIEW_INTERVIEW_ID for console development."
-    )
 
 
 if __name__ == "__main__":

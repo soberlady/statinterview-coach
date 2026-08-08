@@ -1,6 +1,6 @@
 # Implementation status
 
-Updated: 2026-08-07
+Updated: 2026-08-08
 
 ## Complete
 
@@ -13,7 +13,7 @@ Updated: 2026-08-07
 - fixed anchors, adaptive utility, bounded verification and abstention;
 - versioned per-turn checkpoints and resume endpoint;
 - evidence-linked report based on persisted data;
-- Python deterministic policy kernel and scorer evaluator with 32 passing
+- Python deterministic policy kernel, scorer evaluator and voice helpers with 48 passing
   tests;
 - shared Python/TypeScript golden parity fixtures for posterior and utility
   signals;
@@ -21,8 +21,16 @@ Updated: 2026-08-07
   validation, reviewer-disagreement gating, version fingerprints, strict
   offline mode and provider-failure fallback;
 - LiveKit 1.6 AgentServer worker using raw final transcripts;
+- reconnect-safe LiveKit rooms, lossless committed-transcript accumulation,
+  Mandarin-first TTS and mixed Chinese/English term normalization;
 - browser microphone/room connection and short-lived token endpoint with
   explicit Agent dispatch;
+- privacy-bounded voice observability for connection, final-transcript,
+  checkpoint, disconnect and recovery events, with separate p50/p95 report
+  metrics and end-to-end coverage;
+- deterministic Chinese transcript evaluator for character error rate,
+  domain-term accuracy, recovery correctness, duplicate commits and p95
+  latency; synthetic fixtures are hard-gated as `NOT_MEASURED`;
 - deterministic 4,000-candidate adaptive/fixed/random benchmark;
 - in-product `/lab` experiment page with assumptions, ablation and claim
   boundary;
@@ -62,8 +70,8 @@ Updated: 2026-08-07
 
 ## Next
 
-1. configure a real LiveKit Cloud project and record measured voice latency,
-   disconnect recovery and final-transcript quality;
+1. run the frozen 30-session voice protocol and publish measured latency,
+   disconnect recovery, Chinese character error rate and domain-term accuracy;
 2. run a 48–72 answer double-labeled scorer pilot, freeze the protocol, then
    collect 200 consented anonymous answers for the formal release gate;
 3. estimate model cost per completed interview;
@@ -81,9 +89,9 @@ The following values are intentionally not invented or committed:
 - `LIVEKIT_API_SECRET`
 
 The browser token endpoint, room connection and explicit dispatch are
-implemented. A real end-to-end voice call cannot be claimed until these values
-are configured and the worker is running. The browser remains fully usable
-through the text channel.
+implemented. A developer-local LiveKit project has produced audible calls, but
+formal aggregate voice-quality claims remain blocked on the 30-session
+protocol. The browser remains fully usable through the text channel.
 
 ## Access boundary
 

@@ -1123,14 +1123,51 @@ a {
 
 .voice-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
 .voice-actions .secondary-button,
+.voice-actions .primary-button,
 .voice-actions .quiet-button {
   min-height: 38px;
   padding: 0 12px;
   font-size: 10px;
+}
+
+.voice-transcript {
+  grid-column: 1 / -1;
+  padding: 16px 18px;
+  border: 1px solid rgba(11, 116, 91, 0.16);
+  border-radius: 14px;
+  background: rgba(236, 247, 240, 0.72);
+}
+
+.voice-transcript div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.voice-transcript span {
+  color: var(--teal);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.voice-transcript strong {
+  color: var(--ink);
+  font-size: 10px;
+}
+
+.voice-transcript p {
+  margin: 10px 0 0;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.7;
+  white-space: pre-wrap;
 }
 
 .remote-audio {

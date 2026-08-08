@@ -11,6 +11,7 @@ import {
   fingerprintPolicyAudit,
   replayInterviewPolicy,
 } from "@/app/lib/decision-audit";
+import { summarizeVoiceTelemetry } from "@/app/lib/voice-telemetry";
 import scoringBenchmark from "@/content/scoring-benchmark.json";
 import { ApiError, errorResponse, jsonResponse, parseJsonText } from "../../../_lib/http";
 import {
@@ -81,9 +82,17 @@ export async function GET(_request: Request, context: RouteContext) {
         (score): score is number =>
           typeof score === "number" && Number.isFinite(score),
       );
-    const latencies = eventRows
+    const scoringLatencies = eventRows
+      .filter((event) => event.eventType === "turn_evaluated")
       .map((event) => event.latencyMs)
       .filter((latency): latency is number => latency !== null);
+    const voiceTelemetry = summarizeVoiceTelemetry(
+      eventRows.map((event) => ({
+        eventType: event.eventType,
+        latencyMs: event.latencyMs,
+        payload: parseJsonText<Record<string, unknown>>(event.payload, {}),
+      })),
+    );
     const totalCostMicrousd = eventRows.reduce(
       (sum, event) => sum + (event.estimatedCostMicrousd ?? 0),
       0,
@@ -123,14 +132,17 @@ export async function GET(_request: Request, context: RouteContext) {
                 )
               : null,
           averageRecordedLatencyMs:
-            latencies.length > 0
+            scoringLatencies.length > 0
               ? Math.round(
-                  latencies.reduce((sum, latency) => sum + latency, 0) /
-                    latencies.length,
+                  scoringLatencies.reduce(
+                    (sum, latency) => sum + latency,
+                    0,
+                  ) / scoringLatencies.length,
                 )
               : null,
           eventCount: eventRows.length,
           estimatedCostUsd: round(totalCostMicrousd / 1_000_000, 6),
+          voiceTelemetry,
         },
         policyAudit: {
           ...policyAudit,

@@ -6,7 +6,7 @@ maps to a measurable offline or online test.
 ## Current automated checks
 
 - question-bank schema: 24 questions, four skills, one anchor per skill;
-- Python policy kernel and scoring evaluator: 32 tests covering state
+- Python policy kernel, scoring evaluator and voice helpers: 48 tests covering state
   transitions, ability updates, selection, reliability, verification budget,
   agreement metrics, strict dataset validation and shared golden fixtures;
 - TypeScript policy: three shared golden parity fixtures for posterior update,
@@ -34,6 +34,13 @@ maps to a measurable offline or online test.
   replacement question;
 - missing-credential voice fallback: token endpoint returns an explicit 503
   while leaving text mode usable.
+- voice observability: client events record connection, final transcript,
+  checkpoint commit and recovery timings without copying raw answers; unit
+  tests verify percentile aggregation and the API end-to-end scenario verifies
+  persisted report metrics.
+- voice-quality fixture: deterministic character error rate, domain-term,
+  checkpoint, duplicate-turn and latency calculations with a synthetic-only
+  `NOT_MEASURED` gate and a 30-sample consented-pilot minimum.
 - semantic scorer fixture: 12 synthetic answers, two fixture annotations per
   answer, strict no-fallback predictions, grouped bootstrap, baselines,
   risk-coverage and a deliberate `NOT_READY` release status.
@@ -70,7 +77,7 @@ does not establish real interview validity.
 | Adaptive questions are useful to humans | blind expert pairwise review | preference rate | > 60% over random valid question |
 | Anchors remain comparable | repeated anchor responses | score drift | monitor by question/version |
 | Recovery is real | forced refresh/network interruption | resumed turn accuracy | 100% checkpoint recovery |
-| Voice is usable | 30 Chinese sessions | final transcript WER, p95 turn latency | publish measured values only |
+| Voice is usable | 30 Chinese sessions | character error rate, domain-term accuracy, p95 turn latency | publish measured values only |
 | Users find reports actionable | beta feedback + interviews | ≥4/5 share, task completion | report raw sample size |
 
 ## Required ablations

@@ -12,6 +12,10 @@
 - The deterministic API—not the conversational LLM—selects the next approved
   question and applies verification/abstention.
 - When the final turn completes, the worker marks the interview complete.
+- Every fresh room resolves the authoritative API checkpoint, so re-entry does
+  not assume question one.
+- The browser records privacy-bounded connection, transcript-to-checkpoint and
+  recovery timing events; the report keeps them separate from scorer latency.
 
 ## Configure
 
@@ -57,3 +61,6 @@ services\agent\.venv\Scripts\python.exe `
 - Refreshing the browser restores the latest API checkpoint.
 - Record p50/p95 connection time, answer-to-next-question latency and at least
   30 final-transcript comparisons before making a voice-quality claim.
+
+The exact measurement definitions, 30-session sampling plan and initial
+engineering targets are frozen in `docs/VOICE_EVALUATION.md`.
