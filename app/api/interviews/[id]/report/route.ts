@@ -11,6 +11,7 @@ import {
   fingerprintPolicyAudit,
   replayInterviewPolicy,
 } from "@/app/lib/decision-audit";
+import { summarizeCostTelemetry } from "@/app/lib/cost-telemetry";
 import { summarizeVoiceTelemetry } from "@/app/lib/voice-telemetry";
 import scoringBenchmark from "@/content/scoring-benchmark.json";
 import { ApiError, errorResponse, jsonResponse, parseJsonText } from "../../../_lib/http";
@@ -93,9 +94,14 @@ export async function GET(_request: Request, context: RouteContext) {
         payload: parseJsonText<Record<string, unknown>>(event.payload, {}),
       })),
     );
-    const totalCostMicrousd = eventRows.reduce(
-      (sum, event) => sum + (event.estimatedCostMicrousd ?? 0),
-      0,
+    const costTelemetry = summarizeCostTelemetry(
+      eventRows.map((event) => ({
+        eventType: event.eventType,
+        estimatedCostMicrousd: event.estimatedCostMicrousd,
+        inputTokens: event.inputTokens,
+        outputTokens: event.outputTokens,
+        payload: parseJsonText<Record<string, unknown>>(event.payload, {}),
+      })),
     );
     const policyAudit = replayInterviewPolicy({
       interview,
@@ -141,7 +147,14 @@ export async function GET(_request: Request, context: RouteContext) {
                 )
               : null,
           eventCount: eventRows.length,
-          estimatedCostUsd: round(totalCostMicrousd / 1_000_000, 6),
+          estimatedCostUsd:
+            costTelemetry.estimatedCostMicrousd === null
+              ? null
+              : round(
+                  costTelemetry.estimatedCostMicrousd / 1_000_000,
+                  6,
+                ),
+          costTelemetry,
           voiceTelemetry,
         },
         policyAudit: {

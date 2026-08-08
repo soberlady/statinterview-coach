@@ -13,7 +13,7 @@ Updated: 2026-08-08
 - fixed anchors, adaptive utility, bounded verification and abstention;
 - versioned per-turn checkpoints and resume endpoint;
 - evidence-linked report based on persisted data;
-- Python deterministic policy kernel, scorer evaluator and voice helpers with 48 passing
+- Python deterministic policy kernel, scorer evaluator and voice helpers with 55 passing
   tests;
 - shared Python/TypeScript golden parity fixtures for posterior and utility
   signals;
@@ -31,6 +31,10 @@ Updated: 2026-08-08
 - deterministic Chinese transcript evaluator for character error rate,
   domain-term accuracy, recovery correctness, duplicate commits and p95
   latency; synthetic fixtures are hard-gated as `NOT_MEASURED`;
+- final LiveKit session-usage export with per-model token, audio-duration and
+  character counts; versioned Build/Ship or Scale list-price estimation,
+  optional semantic-scorer token pricing, idempotent persistence and explicit
+  partial/unavailable completed-interview cost coverage;
 - deterministic 4,000-candidate adaptive/fixed/random benchmark;
 - in-product `/lab` experiment page with assumptions, ablation and claim
   boundary;
@@ -74,10 +78,9 @@ Updated: 2026-08-08
    disconnect recovery, Chinese character error rate and domain-term accuracy;
 2. run a 48–72 answer double-labeled scorer pilot, freeze the protocol, then
    collect 200 consented anonymous answers for the formal release gate;
-3. estimate model cost per completed interview;
-4. recruit 10–20 beta users and run the blind follow-up usefulness study;
-5. calibrate question difficulties from real answers;
-6. add authenticated per-user history only after the core experiment is
+3. recruit 10–20 beta users and run the blind follow-up usefulness study;
+4. calibrate question difficulties from real answers;
+5. add authenticated per-user history only after the core experiment is
    complete.
 
 ## Credential-dependent work

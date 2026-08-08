@@ -12,6 +12,9 @@ const localRuntimeVariableNames = [
   "STATINTERVIEW_SCORER_API_KEY",
   "STATINTERVIEW_SCORER_MODEL",
   "STATINTERVIEW_SCORER_STRICT",
+  "STATINTERVIEW_SCORER_INPUT_USD_PER_MILLION_TOKENS",
+  "STATINTERVIEW_SCORER_OUTPUT_USD_PER_MILLION_TOKENS",
+  "STATINTERVIEW_SCORER_PRICING_VERSION",
 ] as const;
 const localRuntimeVariables = Object.fromEntries(
   localRuntimeVariableNames.flatMap((name) => {

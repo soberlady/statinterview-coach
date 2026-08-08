@@ -40,3 +40,16 @@ def resolve_interview_id(
         "[--<voice_session_id>], or the dispatch metadata must include "
         "interviewId."
     )
+
+
+def resolve_voice_session_id(room_name: str, *, job_id: str) -> str:
+    """Return the browser session id, with the LiveKit job as a fallback."""
+
+    prefix = "statinterview--"
+    if room_name.startswith(prefix):
+        _interview_id, separator, voice_session_id = room_name[
+            len(prefix) :
+        ].partition("--")
+        if separator and voice_session_id.strip():
+            return voice_session_id.strip()
+    return job_id.strip() or room_name

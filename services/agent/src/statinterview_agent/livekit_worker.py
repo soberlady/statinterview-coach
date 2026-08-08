@@ -31,7 +31,8 @@ from livekit.agents import (
 )
 from livekit.agents.llm.tool_context import ToolFlag
 
-from .voice_room import resolve_interview_id
+from .voice_cost import estimate_livekit_inference_cost
+from .voice_room import resolve_interview_id, resolve_voice_session_id
 from .voice_speech import build_opening_prompt, prepare_question_for_speech
 from .voice_transcript import CommittedTranscriptBuffer
 
@@ -289,6 +290,10 @@ async def statinterview_session(ctx: JobContext) -> None:
     api_base_url = os.environ.get(
         "STATINTERVIEW_API_BASE_URL", "http://localhost:3000"
     ).rstrip("/")
+    voice_session_id = resolve_voice_session_id(
+        ctx.room.name,
+        job_id=ctx.job.id,
+    )
     initial = await _load_next_question(api_base_url, interview_id)
     progress = initial.get("progress") or {}
     runtime = VoiceRuntime(
@@ -359,6 +364,21 @@ async def statinterview_session(ctx: JobContext) -> None:
         room=ctx.room,
         agent=StatInterviewVoiceAgent(runtime.current_question),
     )
+
+    async def export_final_usage(shutdown_reason: str) -> None:
+        # AgentSession also closes itself during job shutdown. Calling the
+        # public idempotent close method here guarantees that pending STT/TTS
+        # metrics are flushed before the final cumulative snapshot is read.
+        await session.aclose()
+        await _export_voice_usage(
+            session=session,
+            runtime=runtime,
+            voice_session_id=voice_session_id,
+            livekit_job_id=ctx.job.id,
+            shutdown_reason=shutdown_reason,
+        )
+
+    ctx.add_shutdown_callback(export_final_usage)
     await ctx.connect()
 
     if runtime.current_question:
@@ -409,6 +429,77 @@ async def _complete_interview(
             },
         )
         response.raise_for_status()
+
+
+async def _export_voice_usage(
+    *,
+    session: AgentSession[VoiceRuntime],
+    runtime: VoiceRuntime,
+    voice_session_id: str,
+    livekit_job_id: str,
+    shutdown_reason: str,
+) -> None:
+    """Persist one idempotent final inference-usage snapshot per agent job."""
+
+    try:
+        estimate = estimate_livekit_inference_cost(
+            session.usage.model_usage,
+            plan=os.environ.get(
+                "STATINTERVIEW_LIVEKIT_PRICING_PLAN", "build_ship"
+            ),
+        )
+    except (TypeError, ValueError):
+        logger.warning(
+            "voice usage could not be estimated",
+            exc_info=True,
+            extra={"interview_id": runtime.interview_id},
+        )
+        return
+
+    line_items = estimate["lineItems"]
+    if not line_items:
+        logger.info(
+            "voice session closed without model usage",
+            extra={"interview_id": runtime.interview_id},
+        )
+        return
+
+    totals = estimate["totals"]
+    event: dict[str, Any] = {
+        "eventType": "voice.usage",
+        "model": "livekit-inference",
+        "inputTokens": totals["inputTokens"],
+        "outputTokens": totals["outputTokens"],
+        "idempotencyKey": f"worker:voice:{livekit_job_id}:usage",
+        "payload": {
+            **estimate,
+            "voiceSessionId": voice_session_id,
+            "livekitJobId": livekit_job_id,
+            "shutdownReason": shutdown_reason,
+        },
+    }
+    if totals["pricedUsageCount"] > 0:
+        event["estimatedCostMicrousd"] = totals[
+            "estimatedCostMicrousd"
+        ]
+
+    endpoint = (
+        f"{runtime.api_base_url}/api/interviews/"
+        f"{runtime.interview_id}/events"
+    )
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(endpoint, json=event)
+            response.raise_for_status()
+    except httpx.HTTPError:
+        logger.warning(
+            "voice usage export failed",
+            exc_info=True,
+            extra={
+                "interview_id": runtime.interview_id,
+                "livekit_job_id": livekit_job_id,
+            },
+        )
 
 
 if __name__ == "__main__":

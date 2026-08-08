@@ -119,7 +119,18 @@ type Report = {
     averageScore: number | null;
     averageRecordedLatencyMs: number | null;
     eventCount: number;
-    estimatedCostUsd: number;
+    estimatedCostUsd: number | null;
+    costTelemetry: {
+      status: "NOT_MEASURED" | "AVAILABLE" | "PARTIAL" | "UNAVAILABLE";
+      estimatedCostMicrousd: number | null;
+      pricedEventCount: number;
+      voiceUsageEventCount: number;
+      scorerUsageEventCount: number;
+      pricedUsageCount: number;
+      unpricedUsageCount: number;
+      pricingVersions: string[];
+      allowancesApplied: false;
+    };
     voiceTelemetry: {
       sessionCount: number;
       reconnectCount: number;
@@ -448,11 +459,23 @@ export function ReportView({ interviewId }: { interviewId: string }) {
               <span>
                 {report.metrics.voiceTelemetry.reconnectCount} 次恢复连接
               </span>
+              <span>
+                推理费用 {formatInferenceCost(report.metrics.estimatedCostUsd)}
+              </span>
+              <span>
+                {formatCostStatus(report.metrics.costTelemetry.status)} · 计价覆盖{" "}
+                {report.metrics.costTelemetry.pricedUsageCount}/
+                {report.metrics.costTelemetry.pricedUsageCount +
+                  report.metrics.costTelemetry.unpricedUsageCount}
+              </span>
             </div>
             <p className="report-caption">
               当前样本包含 {report.metrics.voiceTelemetry.committedTurnCount} 个已保存语音回答、
               {report.metrics.voiceTelemetry.finalTranscriptSegmentCount} 个最终转写片段和
               {report.metrics.voiceTelemetry.failedConnectionCount} 次连接失败。样本量不足时只展示原始观测，不做质量结论。
+              推理费用按观测用量与版本化目录价估算，不扣除免费额度，
+              也不等同于最终账单；LiveKit 之外的评分模型需单独配置价格，
+              未知模型会标为未计价，不会按零成本处理。
             </p>
           </article>
         ) : null}
@@ -737,6 +760,22 @@ function formatLatency(value: number | null): string {
   if (value === null) return "—";
   if (value < 1_000) return `${value} ms`;
   return `${(value / 1_000).toFixed(2)} s`;
+}
+
+function formatInferenceCost(value: number | null): string {
+  if (value === null) return "未测量";
+  return `$${value.toFixed(6)}`;
+}
+
+function formatCostStatus(
+  status: Report["metrics"]["costTelemetry"]["status"],
+): string {
+  return {
+    NOT_MEASURED: "费用未测量",
+    AVAILABLE: "费用可估算",
+    PARTIAL: "费用部分估算",
+    UNAVAILABLE: "费用暂不可估算",
+  }[status];
 }
 
 function formatPercent(value: number): string {

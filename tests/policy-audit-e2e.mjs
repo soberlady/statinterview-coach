@@ -113,6 +113,9 @@ const server = spawn(
       STATINTERVIEW_SCORER_API_KEY: "e2e-only",
       STATINTERVIEW_SCORER_MODEL: "deterministic-e2e-scorer",
       STATINTERVIEW_SCORER_STRICT: "1",
+      STATINTERVIEW_SCORER_INPUT_USD_PER_MILLION_TOKENS: "1",
+      STATINTERVIEW_SCORER_OUTPUT_USD_PER_MILLION_TOKENS: "2",
+      STATINTERVIEW_SCORER_PRICING_VERSION: "e2e-scorer-v1",
     },
     stdio: ["ignore", "pipe", "pipe"],
   },
@@ -489,6 +492,30 @@ try {
       payload: { voiceSessionId: voiceSessionB },
     }),
   });
+  await requestJson(`/api/interviews/${interviewId}/events`, {
+    method: "POST",
+    body: JSON.stringify({
+      eventType: "voice.usage",
+      model: "livekit-inference",
+      inputTokens: 10_000,
+      outputTokens: 1_000,
+      estimatedCostMicrousd: 214_400,
+      idempotencyKey: `worker:voice:${interviewId}:test-job:usage`,
+      payload: {
+        voiceSessionId: voiceSessionB,
+        pricing: {
+          version: "livekit-list-2026-08-08",
+          plan: "build_ship",
+          status: "COMPLETE",
+          allowancesApplied: false,
+        },
+        totals: {
+          pricedUsageCount: 3,
+          unpricedUsageCount: 0,
+        },
+      },
+    }),
+  });
   const reportResult = await requestJson(
     `/api/interviews/${interviewId}/report`,
   );
@@ -508,6 +535,18 @@ try {
       p50Ms: 1_200,
       p95Ms: 1_200,
     },
+  });
+  assert.equal(report.metrics.estimatedCostUsd, 0.2168);
+  assert.deepEqual(report.metrics.costTelemetry, {
+    status: "AVAILABLE",
+    estimatedCostMicrousd: 216_800,
+    pricedEventCount: 7,
+    voiceUsageEventCount: 1,
+    scorerUsageEventCount: 6,
+    pricedUsageCount: 9,
+    unpricedUsageCount: 0,
+    pricingVersions: ["e2e-scorer-v1", "livekit-list-2026-08-08"],
+    allowancesApplied: false,
   });
   assert.ok(
     report.turns.every(

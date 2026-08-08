@@ -341,6 +341,12 @@ export async function POST(request: Request, context: RouteContext) {
           action: decision.action,
           nextQuestionId: decision.nextQuestion?.id ?? null,
           evaluator: evaluation.evaluator,
+          cost: evaluation.telemetry
+            ? {
+                status: evaluation.telemetry.pricingStatus,
+                version: evaluation.telemetry.pricingVersion,
+              }
+            : undefined,
           selectionAudit: decision.ranking.slice(0, 3),
           selectionContext: decision.context,
         },
@@ -350,6 +356,8 @@ export async function POST(request: Request, context: RouteContext) {
       model: evaluation.telemetry?.model,
       inputTokens: evaluation.telemetry?.inputTokens,
       outputTokens: evaluation.telemetry?.outputTokens,
+      estimatedCostMicrousd:
+        evaluation.telemetry?.estimatedCostMicrousd,
       idempotencyKey: `internal:turn:${interviewId}:${sequenceNumber}`,
       createdAt: now,
     };

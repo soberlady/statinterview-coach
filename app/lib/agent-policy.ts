@@ -71,6 +71,9 @@ export type AnswerEvaluation = {
     latencyMs: number;
     inputTokens: number | null;
     outputTokens: number | null;
+    estimatedCostMicrousd: number | null;
+    pricingStatus: "NOT_MEASURED" | "PRICED" | "UNPRICED";
+    pricingVersion: string | null;
   };
   fixture?: {
     scenarioVersion: string;

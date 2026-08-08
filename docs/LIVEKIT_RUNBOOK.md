@@ -16,6 +16,8 @@
   not assume question one.
 - The browser records privacy-bounded connection, transcript-to-checkpoint and
   recovery timing events; the report keeps them separate from scorer latency.
+- Job shutdown flushes LiveKit's cumulative per-model usage and writes one
+  idempotent cost snapshot for the report.
 
 ## Configure
 
@@ -26,6 +28,7 @@ LIVEKIT_URL=wss://your-project.livekit.cloud
 LIVEKIT_API_KEY=...
 LIVEKIT_API_SECRET=...
 STATINTERVIEW_API_BASE_URL=http://localhost:3000
+STATINTERVIEW_LIVEKIT_PRICING_PLAN=build_ship
 ```
 
 The same three LiveKit values must be available to the web process that issues
@@ -59,8 +62,12 @@ services\agent\.venv\Scripts\python.exe `
 - A weak transcript triggers an approved verification question.
 - After six substantive questions, the room completes and the report opens.
 - Refreshing the browser restores the latest API checkpoint.
+- Leaving voice mode saves one `voice.usage` event; the report shows a
+  versioned price, or clearly marks any unknown model as unpriced.
 - Record p50/p95 connection time, answer-to-next-question latency and at least
   30 final-transcript comparisons before making a voice-quality claim.
 
 The exact measurement definitions, 30-session sampling plan and initial
 engineering targets are frozen in `docs/VOICE_EVALUATION.md`.
+The list-price scope and scorer-price variables are defined in
+`docs/COST_OBSERVABILITY.md`.

@@ -3,6 +3,7 @@ import {
   type AnswerEvaluation,
   type Reliability,
 } from "./agent-policy";
+import { estimateTokenCost, type TokenCostEstimate } from "./model-cost";
 import type { InterviewQuestion } from "./question-bank";
 
 type CriterionResult = {
@@ -90,6 +91,17 @@ export async function evaluateAnswerStrict(
       reviewer: true,
     }),
   ]);
+  const inputTokens = sumNullable(primary.inputTokens, review.inputTokens);
+  const outputTokens = sumNullable(primary.outputTokens, review.outputTokens);
+  const costEstimate = estimateTokenCost({
+    inputTokens,
+    outputTokens,
+    inputUsdPerMillionTokens:
+      runtime.STATINTERVIEW_SCORER_INPUT_USD_PER_MILLION_TOKENS,
+    outputUsdPerMillionTokens:
+      runtime.STATINTERVIEW_SCORER_OUTPUT_USD_PER_MILLION_TOKENS,
+    pricingVersion: runtime.STATINTERVIEW_SCORER_PRICING_VERSION,
+  });
   return combineRubricPasses({
     question,
     answer,
@@ -97,8 +109,9 @@ export async function evaluateAnswerStrict(
     review: review.result,
     model,
     latencyMs: Date.now() - startedAt,
-    inputTokens: sumNullable(primary.inputTokens, review.inputTokens),
-    outputTokens: sumNullable(primary.outputTokens, review.outputTokens),
+    inputTokens,
+    outputTokens,
+    costEstimate,
     promptVersion: RUBRIC_PROMPT_VERSION,
     questionFingerprint,
     requestFingerprint,
@@ -114,11 +127,18 @@ export function combineRubricPasses(input: {
   latencyMs: number;
   inputTokens: number | null;
   outputTokens: number | null;
+  costEstimate?: TokenCostEstimate;
   promptVersion?: string;
   questionFingerprint?: string;
   requestFingerprint?: string;
 }): AnswerEvaluation {
   const { question, answer, primary, review } = input;
+  const costEstimate =
+    input.costEstimate ??
+    estimateTokenCost({
+      inputTokens: input.inputTokens,
+      outputTokens: input.outputTokens,
+    });
   validatePass(primary, question.rubric.length);
   validatePass(review, question.rubric.length);
 
@@ -240,6 +260,9 @@ export function combineRubricPasses(input: {
       latencyMs: input.latencyMs,
       inputTokens: input.inputTokens,
       outputTokens: input.outputTokens,
+      estimatedCostMicrousd: costEstimate.estimatedCostMicrousd,
+      pricingStatus: costEstimate.status,
+      pricingVersion: costEstimate.pricingVersion,
     },
     disclaimer:
       "本轮经过初评与角色分离的复核两遍量表评分；证据必须能在回答原文中精确定位。结果仅用于训练反馈。",
@@ -396,6 +419,9 @@ async function scorerEnvironment(): Promise<
     "STATINTERVIEW_SCORER_API_KEY",
     "STATINTERVIEW_SCORER_MODEL",
     "STATINTERVIEW_SCORER_STRICT",
+    "STATINTERVIEW_SCORER_INPUT_USD_PER_MILLION_TOKENS",
+    "STATINTERVIEW_SCORER_OUTPUT_USD_PER_MILLION_TOKENS",
+    "STATINTERVIEW_SCORER_PRICING_VERSION",
   ] as const;
   return Object.fromEntries(
     keys.map((key) => {

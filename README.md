@@ -23,12 +23,16 @@ is weak, it verifies or abstains instead of inventing a confident score.
 - bounded reliability verification and explicit `ABSTAIN`;
 - evidence-linked reports, uncertainty display, and user feedback collection;
 - D1 persistence for sessions, turns, skill states, Agent events and feedback;
-- standalone Python policy, scorer-evaluation and voice helpers with 48 tests;
+- standalone Python policy, scorer-evaluation and voice helpers with 55 tests;
 - browser LiveKit token/room flow plus a LiveKit 1.6 voice worker that stores
   committed transcript fragments verbatim, restores the authoritative current
   question on reconnect and uses Mandarin-first synthesis;
 - privacy-bounded voice observability with connection and
   transcript-to-checkpoint p50/p95 in the evidence report;
+- final per-session LiveKit Inference usage export with model-level token,
+  duration and character accounting, explicit pricing coverage and a
+  versioned marginal list-price estimate; independently configured semantic
+  scorer token costs join the same completed-interview total;
 - shared Python/TypeScript golden fixtures for posterior and utility parity;
 - deterministic decision replay with a SHA-256 policy fingerprint, invariant
   checks and top-three counterfactual question rankings;
@@ -158,7 +162,8 @@ npm run eval:voice:fixture
 See [architecture](docs/ARCHITECTURE.md),
 [evaluation plan](docs/EVALUATION.md),
 [semantic scorer protocol](docs/SCORING_EVALUATION.md),
-[voice evaluation protocol](docs/VOICE_EVALUATION.md), and
+[voice evaluation protocol](docs/VOICE_EVALUATION.md),
+[inference cost protocol](docs/COST_OBSERVABILITY.md), and
 [implementation status](docs/IMPLEMENTATION_STATUS.md). For interview
 preparation, use [INTERVIEW_GUIDE.md](docs/INTERVIEW_GUIDE.md).
 

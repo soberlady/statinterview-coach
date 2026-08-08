@@ -44,7 +44,11 @@ python -m statinterview_agent.livekit_worker console
 For a deployed room, use the name
 `statinterview--<interview_id>`. The worker reads the initial question from the
 web API, captures LiveKit's final transcript, and calls the turn API. It never
-allows the LLM to paraphrase stored candidate evidence.
+allows the LLM to paraphrase stored candidate evidence. On shutdown it also
+exports the final cumulative model usage and a versioned marginal list-price
+estimate; see the
+[cost observability protocol](../../docs/COST_OBSERVABILITY.md) for the
+accounting boundary.
 
 ## Public API
 

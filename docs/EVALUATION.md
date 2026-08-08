@@ -6,7 +6,7 @@ maps to a measurable offline or online test.
 ## Current automated checks
 
 - question-bank schema: 24 questions, four skills, one anchor per skill;
-- Python policy kernel, scoring evaluator and voice helpers: 48 tests covering state
+- Python policy kernel, scoring evaluator and voice helpers: 55 tests covering state
   transitions, ability updates, selection, reliability, verification budget,
   agreement metrics, strict dataset validation and shared golden fixtures;
 - TypeScript policy: three shared golden parity fixtures for posterior update,
@@ -41,6 +41,11 @@ maps to a measurable offline or online test.
 - voice-quality fixture: deterministic character error rate, domain-term,
   checkpoint, duplicate-turn and latency calculations with a synthetic-only
   `NOT_MEASURED` gate and a 30-sample consented-pilot minimum.
+- inference cost telemetry: final LiveKit session usage is priced by the
+  provider's actual billing unit, semantic-scorer calls use an explicit custom
+  token-price profile, unknown models stay unpriced, and unit plus API
+  end-to-end checks distinguish `NOT_MEASURED`, `PARTIAL`, `AVAILABLE` and
+  `UNAVAILABLE` instead of reporting missing data as zero cost.
 - semantic scorer fixture: 12 synthetic answers, two fixture annotations per
   answer, strict no-fallback predictions, grouped bootstrap, baselines,
   risk-coverage and a deliberate `NOT_READY` release status.
