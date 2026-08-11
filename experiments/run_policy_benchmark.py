@@ -19,7 +19,6 @@ import random
 import statistics
 import sys
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
@@ -512,7 +511,6 @@ def main() -> None:
 
     result = {
         "schemaVersion": "1.0.0",
-        "generatedAt": datetime.now(timezone.utc).isoformat(),
         "status": "synthetic_offline_benchmark",
         "claimBoundary": (
             "These results validate deterministic policy behavior under stated "

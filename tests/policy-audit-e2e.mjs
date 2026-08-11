@@ -129,6 +129,11 @@ const richAnswer =
 
 try {
   await waitForServer();
+  const health = await requestJson("/api/health");
+  assert.equal(health.status, "ok");
+  assert.equal(health.checks.database, "ready");
+  assert.equal(health.checks.questionBank.approvedQuestionCount, 24);
+  assert.equal(health.checks.policy, "ready");
   const interviewPayload = {
     jobTitle: "数据分析实习生",
     jobDescription:

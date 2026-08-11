@@ -121,6 +121,9 @@ main source of gain.
 > - Integrated a short-lived LiveKit room-token endpoint and Python Agent worker
 >   that stores final raw transcripts and delegates scoring/selection to the
 >   policy API.
+> - Added a secret-safe configuration preflight, deployment health endpoint and
+>   one-command CI gate; 66 Python tests plus TypeScript, rendered-output and
+>   local D1 end-to-end tests cover recovery and policy-tamper failure paths.
 
 Do not write “production-grade voice system,” “validated hiring predictor,” or
 “forked and shipped LiveKit Meet” until those statements become true.
@@ -128,6 +131,8 @@ Do not write “production-grade voice system,” “validated hiring predictor,
 ## Before applying
 
 - Run all tests and the benchmark from a clean checkout.
+- Run `npm run doctor` and `npm run verify`; be able to explain why a green CI
+  build still does not satisfy the real-user release gates.
 - Practice changing one selection weight and predicting the effect.
 - Practice adding one question and explaining its difficulty mapping.
 - Prepare one failure story: low evidence, interrupted session or policy

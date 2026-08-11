@@ -1,5 +1,7 @@
 # StatInterview Coach
 
+[![CI](https://github.com/soberlady/statinterview-coach/actions/workflows/ci.yml/badge.svg)](https://github.com/soberlady/statinterview-coach/actions/workflows/ci.yml)
+
 An uncertainty-aware, adaptive interview training agent for Chinese data
 analysis internships. It asks four fixed anchor questions, then selects two
 questions that reduce the largest remaining ability uncertainty. When evidence
@@ -151,23 +153,25 @@ automatically falls back to the labeled structure heuristic.
 ## Verification
 
 ```powershell
-npm run db:generate
-node content\validate-question-bank.mjs
-npm run lint
-npm run build
-npm run test:policy
-npm run test:e2e
-npm run experiment
-npm run eval:scorer:fixture
-npm run eval:voice:fixture
+npm run doctor
+npm run verify
 ```
+
+`doctor` validates configuration groups and deployment files without printing
+secret values. `verify` is the clean-checkout gate used by GitHub Actions: it
+validates content, builds the app, runs Python/TypeScript/rendered-output tests,
+exercises the local D1 API end to end and regenerates all frozen synthetic
+evidence. `/api/health` provides a non-secret database/question-bank/policy
+readiness check for a running deployment.
 
 See [architecture](docs/ARCHITECTURE.md),
 [evaluation plan](docs/EVALUATION.md),
 [semantic scorer protocol](docs/SCORING_EVALUATION.md),
 [voice evaluation protocol](docs/VOICE_EVALUATION.md),
 [inference cost protocol](docs/COST_OBSERVABILITY.md), and
-[implementation status](docs/IMPLEMENTATION_STATUS.md). For interview
+[implementation status](docs/IMPLEMENTATION_STATUS.md). The
+[release checklist](docs/RELEASE_CHECKLIST.md) keeps machine gates separate
+from human-study gates. For interview
 preparation, use [INTERVIEW_GUIDE.md](docs/INTERVIEW_GUIDE.md).
 
 ## Upstream and licenses

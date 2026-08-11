@@ -74,9 +74,17 @@ Updated: 2026-08-11
 - formal scoring metrics use only `locked_test`; the gate requires a separate
   dev split, one frozen run/model/prompt, and perturbation-parent split
   integrity;
-- successful production build.
+- successful production build;
+- secret-safe local configuration doctor with all-or-none credential checks,
+  URL/range validation and browser-secret detection;
+- non-secret `/api/health` readiness endpoint covered by the local D1
+  end-to-end test;
+- one-command clean-checkout verification and GitHub Actions CI across Node,
+  Python, build, local D1 and deterministic evidence regeneration;
+- public-repository hygiene: Apache-2.0 license, security boundary,
+  contribution rules, dependency updates and a release checklist.
 
-## Next
+## Human-dependent next steps
 
 1. run the frozen 30-session voice protocol and publish measured latency,
    disconnect recovery, Chinese character error rate and domain-term accuracy;
