@@ -64,6 +64,8 @@ services\agent\.venv\Scripts\python.exe `
 - Refreshing the browser restores the latest API checkpoint.
 - Leaving voice mode saves one `voice.usage` event; the report shows a
   versioned price, or clearly marks any unknown model as unpriced.
+- `services/agent` tests pass the complete offline voice-turn failure matrix;
+  no cloud credentials are needed for those checks.
 - Record p50/p95 connection time, answer-to-next-question latency and at least
   30 final-transcript comparisons before making a voice-quality claim.
 

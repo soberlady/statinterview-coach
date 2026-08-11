@@ -1,6 +1,6 @@
 # Implementation status
 
-Updated: 2026-08-08
+Updated: 2026-08-11
 
 ## Complete
 
@@ -13,7 +13,7 @@ Updated: 2026-08-08
 - fixed anchors, adaptive utility, bounded verification and abstention;
 - versioned per-turn checkpoints and resume endpoint;
 - evidence-linked report based on persisted data;
-- Python deterministic policy kernel, scorer evaluator and voice helpers with 55 passing
+- Python deterministic policy kernel, scorer evaluator and voice helpers with 66 passing
   tests;
 - shared Python/TypeScript golden parity fixtures for posterior and utility
   signals;
@@ -23,6 +23,10 @@ Updated: 2026-08-08
 - LiveKit 1.6 AgentServer worker using raw final transcripts;
 - reconnect-safe LiveKit rooms, lossless committed-transcript accumulation,
   Mandarin-first TTS and mixed Chinese/English term normalization;
+- transport-independent voice-turn controller with offline failure injection:
+  raw-evidence preservation, short transcript, timeout, rejected response,
+  409 checkpoint restore, malformed-success recovery and durable final-turn
+  behavior when lifecycle completion is temporarily unavailable;
 - browser microphone/room connection and short-lived token endpoint with
   explicit Agent dispatch;
 - privacy-bounded voice observability for connection, final-transcript,

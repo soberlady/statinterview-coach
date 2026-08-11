@@ -32,6 +32,25 @@ The report exposes:
 These are operational metrics only. They never update the ability posterior,
 score reliability or question-selection policy.
 
+## Offline controller failure matrix
+
+The media providers cannot be truthfully benchmarked without real audio, but
+the Worker decision boundary can be tested without LiveKit Cloud. The
+transport-independent controller has deterministic coverage for:
+
+| Injected condition | Required behavior |
+| --- | --- |
+| Transcript shorter than ten characters | Do not call the turn API; request a fresh complete answer. |
+| Turn request timeout | Keep the current question and sequence number. |
+| HTTP 409 stale checkpoint | Discard the old buffer and load the authoritative next question. |
+| Checkpoint reload failure | Do not guess a question or advance state. |
+| Non-409 server rejection | Keep the current question and request a fresh answer. |
+| Malformed successful response | Reload the checkpoint instead of falsely completing. |
+| Final lifecycle PATCH timeout | Keep the saved final answer and let browser recovery finish; never ask for duplicate evidence. |
+
+These tests establish orchestration behavior only. They do not measure
+recognition accuracy, speech naturalness or realtime network latency.
+
 ## Planned 30-session acceptance run
 
 Use at least two quiet-network conditions and one deliberately interrupted

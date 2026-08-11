@@ -33,8 +33,13 @@ from livekit.agents.llm.tool_context import ToolFlag
 
 from .voice_cost import estimate_livekit_inference_cost
 from .voice_room import resolve_interview_id, resolve_voice_session_id
-from .voice_speech import build_opening_prompt, prepare_question_for_speech
+from .voice_speech import build_opening_prompt
 from .voice_transcript import CommittedTranscriptBuffer
+from .voice_turn import (
+    VoiceApiResponse,
+    VoiceTurnTransportError,
+    process_voice_answer,
+)
 
 load_dotenv(".env.local")
 load_dotenv()
@@ -125,154 +130,24 @@ class StatInterviewVoiceAgent(Agent):
 
         runtime = context.userdata
         async with runtime.submit_lock:
-            transcript = runtime.transcript_buffer.text
-            question = runtime.current_question
-            if len(transcript) < 10:
-                runtime.transcript_buffer.clear()
-                return json.dumps(
-                    {
-                        "status": "TRANSCRIPT_TOO_SHORT",
-                        "instruction": (
-                            "不要提及系统或连接问题。请说："
-                            "我没有完整收到这段回答，请再完整说一遍。"
-                        ),
-                    },
-                    ensure_ascii=False,
-                )
-            if not question:
-                return json.dumps(
-                    {
-                        "status": "COMPLETE",
-                        "instruction": "诊断已完成，请查看网页报告。",
-                    },
-                    ensure_ascii=False,
-                )
-
-            payload = {
-                "sequenceNumber": runtime.sequence_number,
-                "questionId": question["id"],
-                "answerText": transcript,
-                "inputMode": "voice",
-            }
-            endpoint = (
-                f"{runtime.api_base_url}/api/interviews/"
-                f"{runtime.interview_id}/turns"
+            result = await process_voice_answer(
+                runtime,
+                post_turn=lambda payload: _post_voice_turn(
+                    runtime, payload
+                ),
+                load_authoritative_state=lambda: _load_authoritative_for_turn(
+                    runtime
+                ),
+                complete_interview=lambda: _complete_for_turn(runtime),
             )
-            try:
-                async with httpx.AsyncClient(timeout=15.0) as client:
-                    response = await client.post(endpoint, json=payload)
-            except httpx.RequestError:
+            internal_reason = result.pop("reason", None)
+            if internal_reason:
                 logger.warning(
-                    "turn submission transport failed",
-                    exc_info=True,
+                    "voice turn requested retry: %s",
+                    internal_reason,
                     extra={"interview_id": runtime.interview_id},
                 )
-                runtime.transcript_buffer.clear()
-                return json.dumps(
-                    {
-                        "status": "REPEAT_CURRENT_ANSWER",
-                        "instruction": (
-                            "不要提及系统或连接问题。请说："
-                            "我没有完整收到这段回答，请再完整说一遍。"
-                        ),
-                    },
-                    ensure_ascii=False,
-                )
-
-            if response.status_code == 409:
-                try:
-                    await _resync_runtime(runtime)
-                except httpx.HTTPError:
-                    logger.warning(
-                        "turn conflict resync failed",
-                        exc_info=True,
-                        extra={"interview_id": runtime.interview_id},
-                    )
-                    runtime.transcript_buffer.clear()
-                    return json.dumps(
-                        {
-                            "status": "REPEAT_CURRENT_ANSWER",
-                            "instruction": (
-                                "不要提及系统或连接问题。请说："
-                                "我没有完整收到这段回答，请再完整说一遍。"
-                            ),
-                        },
-                        ensure_ascii=False,
-                    )
-
-                runtime.transcript_buffer.clear()
-                return json.dumps(
-                    {
-                        "status": "RESYNCED",
-                        "next_question": runtime.current_question,
-                        "spoken_question": prepare_question_for_speech(
-                            str(runtime.current_question.get("text", ""))
-                        )
-                        if runtime.current_question
-                        else None,
-                        "instruction": (
-                            "不要提及冲突、连接或系统错误。"
-                            "以 next_question 为准，原样朗读 spoken_question。"
-                        ),
-                    },
-                    ensure_ascii=False,
-                )
-
-            if response.is_error:
-                logger.warning(
-                    "turn submission rejected with status %s",
-                    response.status_code,
-                    extra={"interview_id": runtime.interview_id},
-                )
-                runtime.transcript_buffer.clear()
-                return json.dumps(
-                    {
-                        "status": "REPEAT_CURRENT_ANSWER",
-                        "instruction": (
-                            "不要提及系统或连接问题。请说："
-                            "我没有完整收到这段回答，请再完整说一遍。"
-                        ),
-                    },
-                    ensure_ascii=False,
-                )
-
-            result = response.json()
-
-            runtime.transcript_buffer.clear()
-            runtime.current_question = result.get("nextQuestion")
-            progress = result.get("progress") or {}
-            runtime.sequence_number = int(
-                progress.get("completedTurns", runtime.sequence_number)
-            ) + 1
-
-            if runtime.current_question is None:
-                await _complete_interview(
-                    runtime.api_base_url, runtime.interview_id
-                )
-                return json.dumps(
-                    {
-                        "status": "COMPLETE",
-                        "decision": result.get("decision"),
-                        "instruction": "诊断已完成，请候选人查看网页报告。",
-                    },
-                    ensure_ascii=False,
-                )
-
-            return json.dumps(
-                {
-                    "status": "CONTINUE",
-                    "decision": result.get("decision"),
-                    "reliability": (result.get("evaluation") or {}).get(
-                        "reliability"
-                    ),
-                    "next_question": runtime.current_question,
-                    "spoken_question": prepare_question_for_speech(
-                        str(runtime.current_question.get("text", ""))
-                    ),
-                    "instruction": "简短承接后，原样朗读 spoken_question。",
-                },
-                ensure_ascii=False,
-            )
+            return json.dumps(result, ensure_ascii=False)
 
 
 server = AgentServer()
@@ -402,17 +277,69 @@ async def _load_next_question(
     async with httpx.AsyncClient(timeout=15.0) as client:
         response = await client.get(endpoint)
         response.raise_for_status()
-        return response.json()
+        payload = response.json()
+        if not isinstance(payload, dict):
+            raise ValueError("next-question response must be an object")
+        return payload
 
 
-async def _resync_runtime(runtime: VoiceRuntime) -> None:
-    authoritative = await _load_next_question(
-        runtime.api_base_url,
-        runtime.interview_id,
+async def _post_voice_turn(
+    runtime: VoiceRuntime,
+    payload: dict[str, Any],
+) -> VoiceApiResponse:
+    endpoint = (
+        f"{runtime.api_base_url}/api/interviews/"
+        f"{runtime.interview_id}/turns"
     )
-    progress = authoritative.get("progress") or {}
-    runtime.sequence_number = int(progress.get("completedTurns", 0)) + 1
-    runtime.current_question = authoritative.get("nextQuestion")
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.post(endpoint, json=payload)
+        body: dict[str, Any] = {}
+        if response.status_code < 400:
+            parsed = response.json()
+            if not isinstance(parsed, dict):
+                raise ValueError("turn response must be an object")
+            body = parsed
+        return VoiceApiResponse(response.status_code, body)
+    except (httpx.RequestError, ValueError) as error:
+        logger.warning(
+            "turn submission transport or response failed",
+            exc_info=True,
+            extra={"interview_id": runtime.interview_id},
+        )
+        raise VoiceTurnTransportError from error
+
+
+async def _load_authoritative_for_turn(
+    runtime: VoiceRuntime,
+) -> dict[str, Any]:
+    try:
+        return await _load_next_question(
+            runtime.api_base_url,
+            runtime.interview_id,
+        )
+    except (httpx.HTTPError, ValueError) as error:
+        logger.warning(
+            "turn conflict resync failed",
+            exc_info=True,
+            extra={"interview_id": runtime.interview_id},
+        )
+        raise VoiceTurnTransportError from error
+
+
+async def _complete_for_turn(runtime: VoiceRuntime) -> None:
+    try:
+        await _complete_interview(
+            runtime.api_base_url,
+            runtime.interview_id,
+        )
+    except httpx.HTTPError as error:
+        logger.warning(
+            "final turn saved but completion sync failed",
+            exc_info=True,
+            extra={"interview_id": runtime.interview_id},
+        )
+        raise VoiceTurnTransportError from error
 
 
 async def _complete_interview(

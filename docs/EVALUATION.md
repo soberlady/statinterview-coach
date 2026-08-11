@@ -6,7 +6,7 @@ maps to a measurable offline or online test.
 ## Current automated checks
 
 - question-bank schema: 24 questions, four skills, one anchor per skill;
-- Python policy kernel, scoring evaluator and voice helpers: 55 tests covering state
+- Python policy kernel, scoring evaluator and voice helpers: 66 tests covering state
   transitions, ability updates, selection, reliability, verification budget,
   agreement metrics, strict dataset validation and shared golden fixtures;
 - TypeScript policy: three shared golden parity fixtures for posterior update,
@@ -38,6 +38,11 @@ maps to a measurable offline or online test.
   checkpoint commit and recovery timings without copying raw answers; unit
   tests verify percentile aggregation and the API end-to-end scenario verifies
   persisted report metrics.
+- voice-turn fault injection: a transport-independent controller proves that
+  verbatim evidence crosses the API boundary, stale writes reload the
+  authoritative checkpoint, malformed 2xx responses cannot falsely complete
+  an interview, and a saved final answer is never requested again solely
+  because lifecycle finalization timed out.
 - voice-quality fixture: deterministic character error rate, domain-term,
   checkpoint, duplicate-turn and latency calculations with a synthetic-only
   `NOT_MEASURED` gate and a 30-sample consented-pilot minimum.

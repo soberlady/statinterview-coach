@@ -23,10 +23,13 @@ is weak, it verifies or abstains instead of inventing a confident score.
 - bounded reliability verification and explicit `ABSTAIN`;
 - evidence-linked reports, uncertainty display, and user feedback collection;
 - D1 persistence for sessions, turns, skill states, Agent events and feedback;
-- standalone Python policy, scorer-evaluation and voice helpers with 55 tests;
+- standalone Python policy, scorer-evaluation and voice helpers with 66 tests;
 - browser LiveKit token/room flow plus a LiveKit 1.6 voice worker that stores
   committed transcript fragments verbatim, restores the authoritative current
   question on reconnect and uses Mandarin-first synthesis;
+- transport-independent voice-turn controller with deterministic fault
+  injection for short transcripts, timeouts, rejected writes, stale
+  checkpoints, malformed success responses and finalization failures;
 - privacy-bounded voice observability with connection and
   transcript-to-checkpoint p50/p95 in the evidence report;
 - final per-session LiveKit Inference usage export with model-level token,
