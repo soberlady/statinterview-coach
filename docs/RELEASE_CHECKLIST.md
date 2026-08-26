@@ -29,6 +29,16 @@ that generation leaves the repository unchanged.
 - One credential-dependent voice smoke test is performed after deployment.
 - No real candidate data is used in the demo account.
 
+## Public portfolio demo gate
+
+- Set `STATINTERVIEW_PUBLIC_SHOWCASE=1` in the public Sites deployment.
+- Confirm `/` redirects to `/showcase`.
+- Confirm `/api/interviews` and `/api/interviews/:id/voice-token` return
+  `403 PUBLIC_SHOWCASE_READ_ONLY`.
+- Confirm `/showcase` uses only fixed synthetic browser state and writes no
+  interview, transcript or feedback records.
+- Keep the full data-bearing deployment owner-only.
+
 ## Public beta gate — not complete
 
 - Add authenticated per-user ownership to every interview, turn, event,

@@ -9,8 +9,20 @@ is weak, it verifies or abstains instead of inventing a confident score.
 
 > This is a training product, not a hiring predictor. It evaluates answer
 > content only and does not score faces, voices, accents, emotions, or gender.
-> The deployed demo is owner-only; per-user authorization is required before
-> any future shared beta.
+> The public portfolio demo is a read-only deterministic replay with synthetic
+> data. The full data-bearing deployment remains owner-only; per-user
+> authorization is required before any future shared beta.
+
+## Live demo
+
+**[Open the 3-minute interactive demo](https://statinterview-coach-cn.keen-grass-7274.chatgpt.site/showcase)**
+
+The public route demonstrates `VERIFY -> ABSTAIN -> ACCEPT`, posterior updates,
+adaptive question ranking and deterministic policy replay. It runs entirely on
+fixed synthetic fixtures: no login, model call, database write, microphone or
+candidate data is involved. The deployment Worker redirects data-bearing pages
+and rejects every operational interview API. Clone the repository to run the
+complete text/voice system locally.
 
 ## What works now
 
@@ -48,6 +60,8 @@ is weak, it verifies or abstains instead of inventing a confident score.
 - reproducible fixed/random/adaptive policy benchmark and in-product
   experiment page;
 - deployable vinext/Cloudflare Sites web application.
+- isolated public portfolio mode with a browser-only interactive replay and a
+  Worker-level deny boundary around interview, report, history and voice APIs;
 
 Without a semantic model key, the web app enters a transparent fallback mode:
 it measures observable answer structure and domain-term coverage, labels the

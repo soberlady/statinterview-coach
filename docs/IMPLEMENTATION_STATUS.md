@@ -83,6 +83,11 @@ Updated: 2026-08-11
   Python, build, local D1 and deterministic evidence regeneration;
 - public-repository hygiene: Apache-2.0 license, security boundary,
   contribution rules, dependency updates and a release checklist.
+- read-only public portfolio route that interactively replays
+  `VERIFY -> ABSTAIN -> ACCEPT`, adaptive ranking and policy fingerprints with
+  fixed synthetic data; a Worker-level showcase switch blocks operational
+  APIs and redirects interview/report pages without changing the owner-only
+  full deployment behavior.
 
 ## Human-dependent next steps
 

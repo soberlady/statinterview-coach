@@ -67,6 +67,17 @@ export function inspectConfiguration(
     add("error", "LIVEKIT_URL_INVALID", "LIVEKIT_URL must use ws:// or wss://.");
   }
 
+  if (
+    configured("STATINTERVIEW_PUBLIC_SHOWCASE") &&
+    !["0", "1"].includes(env.STATINTERVIEW_PUBLIC_SHOWCASE)
+  ) {
+    add(
+      "error",
+      "PUBLIC_SHOWCASE_INVALID",
+      "STATINTERVIEW_PUBLIC_SHOWCASE must be 0 or 1.",
+    );
+  }
+
   if (configured("STATINTERVIEW_API_BASE_URL") && !isUrl(env.STATINTERVIEW_API_BASE_URL, ["http:", "https:"])) {
     add("error", "API_BASE_URL_INVALID", "STATINTERVIEW_API_BASE_URL must use http:// or https://.");
   }

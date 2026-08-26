@@ -55,6 +55,25 @@ test("ships dynamic Open Graph metadata and its image asset", async () => {
   await access(new URL("public/og.png", projectRoot));
 });
 
+test("ships a read-only synthetic portfolio demo", async () => {
+  const [showcase, guard, worker] = await Promise.all([
+    readFile(
+      new URL("app/components/PublicShowcase.tsx", projectRoot),
+      "utf8",
+    ),
+    readFile(new URL("app/lib/public-showcase.ts", projectRoot), "utf8"),
+    readFile(new URL("worker/index.ts", projectRoot), "utf8"),
+  ]);
+
+  assert.match(showcase, /只读 · 合成数据 · 不保存/);
+  assert.match(showcase, /VERIFY/);
+  assert.match(showcase, /ABSTAIN/);
+  assert.match(showcase, /7 \/ 7 决策一致/);
+  assert.match(guard, /block-api/);
+  assert.match(worker, /PUBLIC_SHOWCASE_READ_ONLY/);
+  assert.match(worker, /STATINTERVIEW_PUBLIC_SHOWCASE/);
+});
+
 test("packages Sites metadata and the generated D1 migration", async () => {
   await Promise.all([
     access(new URL("dist/server/index.js", projectRoot)),

@@ -1,10 +1,12 @@
 /** Cloudflare Worker entry point for the vinext-starter template. */
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
+import { publicShowcaseAction } from "../app/lib/public-showcase";
 
 interface Env {
   ASSETS: Fetcher;
   DB: D1Database;
+  STATINTERVIEW_PUBLIC_SHOWCASE?: string;
   IMAGES: {
     input(stream: ReadableStream): {
       transform(options: Record<string, unknown>): {
@@ -28,6 +30,29 @@ interface ExecutionContext {
 const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+
+    const showcaseAction = publicShowcaseAction(
+      url.pathname,
+      env.STATINTERVIEW_PUBLIC_SHOWCASE === "1",
+    );
+    if (showcaseAction.kind === "redirect") {
+      return Response.redirect(
+        new URL(showcaseAction.location, request.url),
+        307,
+      );
+    }
+    if (showcaseAction.kind === "block-api") {
+      return Response.json(
+        {
+          error: {
+            code: "PUBLIC_SHOWCASE_READ_ONLY",
+            message:
+              "The public portfolio demo is read-only. Clone the repository to run the full interview system.",
+          },
+        },
+        { status: 403, headers: { "cache-control": "no-store" } },
+      );
+    }
 
     if (url.pathname === "/_vinext/image") {
       const allowedWidths = [...DEFAULT_DEVICE_SIZES, ...DEFAULT_IMAGE_SIZES];

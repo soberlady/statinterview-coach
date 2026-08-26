@@ -7,6 +7,11 @@ is currently an owner-only research/demo system, not a public multi-tenant
 service. Per-user authorization is a required release gate before a shared
 beta.
 
+The public portfolio deployment is a separate read-only mode. With
+`STATINTERVIEW_PUBLIC_SHOWCASE=1`, the Worker redirects data-bearing pages and
+returns `403 PUBLIC_SHOWCASE_READ_ONLY` for operational APIs. It displays only
+fixed synthetic fixtures and is not a public beta of the full system.
+
 ## Reporting a vulnerability
 
 Use GitHub's private security-advisory reporting for this repository. Do not

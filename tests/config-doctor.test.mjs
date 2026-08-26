@@ -60,6 +60,17 @@ test("browser-visible secret-like variables fail", () => {
   assert.equal(report.ok, false);
 });
 
+test("public showcase switch accepts only zero or one", () => {
+  const report = inspectConfiguration(
+    { STATINTERVIEW_PUBLIC_SHOWCASE: "yes" },
+    options,
+  );
+  assert.ok(
+    report.checks.some((check) => check.code === "PUBLIC_SHOWCASE_INVALID"),
+  );
+  assert.equal(report.ok, false);
+});
+
 test("unsupported Node.js versions fail", () => {
   const report = inspectConfiguration({}, { ...options, nodeVersion: "20.19.0" });
   assert.ok(report.checks.some((check) => check.code === "NODE_VERSION_UNSUPPORTED"));
