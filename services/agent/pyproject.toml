@@ -18,7 +18,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-  "pytest>=8,<9"
+  "pytest>=8,<10"
 ]
 voice = [
   "httpx>=0.28,<1",
