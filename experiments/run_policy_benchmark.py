@@ -301,6 +301,27 @@ def _mean(values: Iterable[float]) -> float:
     return math.fsum(values) / len(values)
 
 
+def _canonicalize_numbers(value):
+    """Remove meaningless interpreter-specific binary float tails.
+
+    Twelve decimal places are substantially finer than any reported claim or
+    confidence interval while remaining byte-stable across supported Python
+    versions and operating systems.
+    """
+
+    if isinstance(value, float):
+        return round(value, 12)
+    if isinstance(value, dict):
+        return {
+            key: _canonicalize_numbers(item) for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_canonicalize_numbers(item) for item in value]
+    if isinstance(value, tuple):
+        return [_canonicalize_numbers(item) for item in value]
+    return value
+
+
 def _paired_interval(
     left: list[CandidateResult],
     right: list[CandidateResult],
@@ -512,7 +533,7 @@ def main() -> None:
     if args.candidates_per_profile < 100 or args.fault_samples < 100:
         raise SystemExit("sample sizes must both be at least 100")
 
-    result = {
+    result = _canonicalize_numbers({
         "schemaVersion": "1.0.0",
         "status": "synthetic_offline_benchmark",
         "claimBoundary": (
@@ -528,7 +549,7 @@ def main() -> None:
             samples=args.fault_samples,
             seed=args.seed,
         ),
-    }
+    })
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(
         json.dumps(result, ensure_ascii=False, indent=2) + "\n",
