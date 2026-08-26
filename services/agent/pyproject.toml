@@ -22,7 +22,7 @@ dev = [
 ]
 voice = [
   "httpx>=0.28,<1",
-  "livekit-agents>=1.6.1,<1.7",
+  "livekit-agents>=1.6.1,<1.8",
   "python-dotenv>=1.1,<2"
 ]
 
