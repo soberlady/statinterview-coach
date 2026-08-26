@@ -962,7 +962,10 @@ def _weighted_total(
     scores: Sequence[float],
     weights: Sequence[float],
 ) -> float:
-    return sum(
+    # Stable totals matter because exact ties feed the rank calculation.
+    # Built-in float summation changed in Python 3.12; fsum makes frozen
+    # evaluation artifacts reproducible on every supported interpreter.
+    return math.fsum(
         score * weight
         for score, weight in zip(scores, weights, strict=True)
     )
@@ -990,15 +993,15 @@ def _average_ranks(values: Sequence[float]) -> list[float]:
 def _pearson(left: Sequence[float], right: Sequence[float]) -> float | None:
     left_mean = fmean(left)
     right_mean = fmean(right)
-    numerator = sum(
+    numerator = math.fsum(
         (left_value - left_mean) * (right_value - right_mean)
         for left_value, right_value in zip(left, right, strict=True)
     )
     left_scale = math.sqrt(
-        sum((value - left_mean) ** 2 for value in left),
+        math.fsum((value - left_mean) ** 2 for value in left),
     )
     right_scale = math.sqrt(
-        sum((value - right_mean) ** 2 for value in right),
+        math.fsum((value - right_mean) ** 2 for value in right),
     )
     if left_scale == 0 or right_scale == 0:
         return None

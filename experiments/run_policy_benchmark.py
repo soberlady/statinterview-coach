@@ -295,7 +295,10 @@ def _run_candidate(
 
 def _mean(values: Iterable[float]) -> float:
     values = list(values)
-    return sum(values) / len(values)
+    # Python 3.12 changed built-in float summation. math.fsum keeps the
+    # checked-in benchmark byte-stable across supported Python versions and
+    # operating systems instead of encoding interpreter-specific rounding.
+    return math.fsum(values) / len(values)
 
 
 def _paired_interval(
