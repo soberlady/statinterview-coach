@@ -1,0 +1,838 @@
+{
+  "schemaVersion": "1.0.0",
+  "locale": "zh-CN",
+  "targetRole": "data_analyst_intern",
+  "scoringScale": {
+    "criterionScoreMin": 0,
+    "criterionScoreMax": 4,
+    "description": "每条 rubric 按 0-4 分判断回答原文中的证据强度，再按 weight 加权。"
+  },
+  "skills": [
+    {
+      "id": "statistics_ml",
+      "name": "统计与机器学习基础"
+    },
+    {
+      "id": "experiment_causal",
+      "name": "实验设计与因果分析"
+    },
+    {
+      "id": "sql_python",
+      "name": "SQL、Python 与数据工程"
+    },
+    {
+      "id": "business_analytics",
+      "name": "业务分析与指标设计"
+    }
+  ],
+  "questions": [
+    {
+      "id": "statistics_ml_001",
+      "skill": "statistics_ml",
+      "difficulty": 1,
+      "jobTags": ["数据分析", "描述统计", "异常值"],
+      "question": "某电商用户月消费金额呈明显右偏，且存在少量大额用户。你会用均值还是中位数描述典型用户？还会补充哪些统计量？",
+      "expectedSeconds": 90,
+      "isAnchor": false,
+      "rubric": [
+        {
+          "criterion": "指出右偏和极端大额会显著抬高均值，因此中位数更能描述典型用户",
+          "weight": 0.35
+        },
+        {
+          "criterion": "同时说明均值仍能反映总体金额或收入贡献，不能在所有业务问题中直接舍弃",
+          "weight": 0.2
+        },
+        {
+          "criterion": "提出至少一种稳健的离散程度指标，如四分位距或分位数",
+          "weight": 0.25
+        },
+        {
+          "criterion": "说明会检查异常值来源并区分真实高价值用户与数据错误",
+          "weight": 0.2
+        }
+      ],
+      "verificationQuestions": [
+        "如果老板关心下个月总收入预测，为什么此时均值可能比中位数更重要？",
+        "如果发现一个用户消费额是普通用户的100倍，你会如何判断它能否删除？"
+      ]
+    },
+    {
+      "id": "statistics_ml_002",
+      "skill": "statistics_ml",
+      "difficulty": 2,
+      "jobTags": ["数据分析", "统计推断", "置信区间"],
+      "question": "一次抽样得到新用户次日留存率为30%，95%置信区间为[27%，33%]。请解释这个区间，并说明样本量增加后通常会发生什么。",
+      "expectedSeconds": 120,
+      "isAnchor": true,
+      "rubric": [
+        {
+          "criterion": "用重复抽样覆盖率解释95%置信区间，而不是说真实留存率有95%概率落在该固定区间",
+          "weight": 0.35
+        },
+        {
+          "criterion": "指出区间表达抽样不确定性，点估计30%并非精确真值",
+          "weight": 0.2
+        },
+        {
+          "criterion": "指出在其他条件相近时样本量增加会降低标准误并使区间变窄",
+          "weight": 0.25
+        },
+        {
+          "criterion": "提到该解释依赖随机抽样、独立性或所用区间方法的适用条件",
+          "weight": 0.2
+        }
+      ],
+      "verificationQuestions": [
+        "如果样本量翻四倍，标准误大约如何变化？",
+        "如果样本只来自高活跃用户，这个置信区间还能代表全部新用户吗？为什么？"
+      ]
+    },
+    {
+      "id": "statistics_ml_003",
+      "skill": "statistics_ml",
+      "difficulty": 2,
+      "jobTags": ["数据分析", "线性回归", "模型解释"],
+      "question": "在线性回归中，广告曝光次数的系数为0.8。你会如何解释这个系数？在向业务方汇报前还要检查什么？",
+      "expectedSeconds": 120,
+      "isAnchor": false,
+      "rubric": [
+        {
+          "criterion": "说明在其他模型变量保持不变时，曝光次数每增加一个单位，目标变量的条件均值预计变化0.8个单位",
+          "weight": 0.3
+        },
+        {
+          "criterion": "明确相关或回归系数本身不能直接推出广告曝光的因果效果",
+          "weight": 0.25
+        },
+        {
+          "criterion": "提出检查系数不确定性或显著性，如置信区间、标准误或p值",
+          "weight": 0.2
+        },
+        {
+          "criterion": "提出至少一项诊断，如残差、非线性、异方差、多重共线性或异常点",
+          "weight": 0.25
+        }
+      ],
+      "verificationQuestions": [
+        "如果曝光次数与用户原本的购买意愿高度相关，系数会受到什么影响？",
+        "如果残差随拟合值增大而明显变散，你会如何处理？"
+      ]
+    },
+    {
+      "id": "statistics_ml_004",
+      "skill": "statistics_ml",
+      "difficulty": 3,
+      "jobTags": ["机器学习", "分类模型", "类别不平衡"],
+      "question": "欺诈识别中正样本只占0.5%，一个模型准确率达到99.5%。你如何判断这个模型是否有用，并选择评价指标？",
+      "expectedSeconds": 150,
+      "isAnchor": false,
+      "rubric": [
+        {
+          "criterion": "指出全部预测为非欺诈即可得到99.5%准确率，因此准确率在该不平衡场景具有误导性",
+          "weight": 0.25
+        },
+        {
+          "criterion": "结合漏判和误判解释召回率、精确率及混淆矩阵",
+          "weight": 0.25
+        },
+        {
+          "criterion": "提出PR-AUC、F1或不同阈值下的精确率召回率作为更合适的比较依据",
+          "weight": 0.2
+        },
+        {
+          "criterion": "把阈值选择与人工审核容量、欺诈损失或误伤成本联系起来",
+          "weight": 0.2
+        },
+        {
+          "criterion": "说明评估集需保持真实分布并避免训练测试泄漏",
+          "weight": 0.1
+        }
+      ],
+      "verificationQuestions": [
+        "如果人工团队每天最多复核1000笔交易，你会怎样选择决策阈值？",
+        "为什么ROC-AUC在极度不平衡数据上可能显得过于乐观？"
+      ]
+    },
+    {
+      "id": "statistics_ml_005",
+      "skill": "statistics_ml",
+      "difficulty": 4,
+      "jobTags": ["机器学习", "模型验证", "数据泄漏", "时间序列"],
+      "question": "你要预测用户未来7天是否流失。数据包含过去一年的用户行为，你会如何划分训练、验证和测试集，并避免数据泄漏？",
+      "expectedSeconds": 180,
+      "isAnchor": false,
+      "rubric": [
+        {
+          "criterion": "按时间先后划分训练、验证和测试窗口，而不是对所有行随机切分",
+          "weight": 0.25
+        },
+        {
+          "criterion": "明确每条样本特征截止时间必须早于预测起点，标签来自之后7天",
+          "weight": 0.25
+        },
+        {
+          "criterion": "识别同一用户跨集合、未来聚合特征、全量归一化或标签派生字段等泄漏风险",
+          "weight": 0.25
+        },
+        {
+          "criterion": "提出滚动时间验证或多个时间窗口，以检验模型随时间漂移的稳定性",
+          "weight": 0.15
+        },
+        {
+          "criterion": "说明阈值和超参数只能在验证集确定，测试集应留作最终一次评估",
+          "weight": 0.1
+        }
+      ],
+      "verificationQuestions": [
+        "如果同一用户在训练集和测试集都有多天记录，一定属于泄漏吗？如何判断？",
+        "一个特征叫“最近一次注销原因”，你会怎样确认它在预测时刻是否可用？"
+      ]
+    },
+    {
+      "id": "statistics_ml_006",
+      "skill": "statistics_ml",
+      "difficulty": 5,
+      "jobTags": ["机器学习", "概率校准", "决策分析"],
+      "question": "两个流失模型的AUC几乎相同，但业务需要按预测概率决定不同挽回成本。你会怎样比较并校准这两个模型？",
+      "expectedSeconds": 210,
+      "isAnchor": false,
+      "rubric": [
+        {
+          "criterion": "指出AUC衡量排序能力但不能保证预测概率与真实发生率一致",
+          "weight": 0.25
+        },
+        {
+          "criterion": "提出可靠性图、分箱实际发生率、Brier分数或对数损失评估概率质量",
+          "weight": 0.25
+        },
+        {
+          "criterion": "提出在独立校准集上使用Platt scaling或保序回归等方法，并避免在测试集拟合",
+          "weight": 0.2
+        },
+        {
+          "criterion": "基于挽回成本、成功收益和容量约束构造期望价值或决策阈值",
+          "weight": 0.2
+        },
+        {
+          "criterion": "提出按时间或关键人群检查校准漂移与分组校准",
+          "weight": 0.1
+        }
+      ],
+      "verificationQuestions": [
+        "保序回归和Platt scaling各有什么数据量与形状假设上的取舍？",
+        "如果整体校准良好，但新用户群体严重高估风险，你会怎么发现并处理？"
+      ]
+    },
+    {
+      "id": "experiment_causal_001",
+      "skill": "experiment_causal",
+      "difficulty": 1,
+      "jobTags": ["A/B测试", "实验设计", "随机化"],
+      "question": "产品准备测试一个新的首页按钮。请说明一个最基本的A/B测试应该怎样分组、选指标并得出结论。",
+      "expectedSeconds": 120,
+      "isAnchor": false,
+      "rubric": [
+        {
+          "criterion": "说明将符合条件的实验单位随机分配到对照组和实验组，并保持除按钮外的条件一致",
+          "weight": 0.3
+        },
+        {
+          "criterion": "明确一个与按钮目标直接相关的主指标，并说明指标口径和观察窗口",
+          "weight": 0.25
+        },
+        {
+          "criterion": "提出实验前确定样本量、运行周期或最小可检测效应，而不是看到显著就随时停止",
+          "weight": 0.25
+        },
+        {
+          "criterion": "说明要同时结合效应大小、置信区间和业务价值，而不只看p值",
+          "weight": 0.2
+        }
+      ],
+      "verificationQuestions": [
+        "为什么不能让奇数日期看旧按钮、偶数日期看新按钮？",
+        "如果点击率显著提升0.01个百分点，你会直接全量上线吗？还需看什么？"
+      ]
+    },
+    {
+      "id": "experiment_causal_002",
+      "skill": "experiment_causal",
+      "difficulty": 2,
+      "jobTags": ["A/B测试", "样本量", "统计功效"],
+      "question": "你要检验推荐页改版能否提升点击率。实验前需要哪些信息来估算样本量？样本量不足会带来什么后果？",
+      "expectedSeconds": 150,
+      "isAnchor": true,
+      "rubric": [
+        {
+          "criterion": "列出基线点击率和期望检测的最小业务效应",
+          "weight": 0.25
+        },
+        {
+          "criterion": "列出显著性水平、统计功效以及单双侧检验等关键设定",
+          "weight": 0.25
+        },
+        {
+          "criterion": "考虑分流比例、分析单位、重复观测或方差等对有效样本量的影响",
+          "weight": 0.2
+        },
+        {
+          "criterion": "指出样本不足会降低功效、扩大区间并提高漏掉真实效应的风险",
+          "weight": 0.2
+        },
+        {
+          "criterion": "说明不能把未显著直接解释为两版本完全相同",
+          "weight": 0.1
+        }
+      ],
+      "verificationQuestions": [
+        "如果希望检测的最小效应减半，所需样本量通常会怎样变化？",
+        "同一个用户一天会点击多次，为什么不能把每次点击都当作独立样本？"
+      ]
+    },
+    {
+      "id": "experiment_causal_003",
+      "skill": "experiment_causal",
+      "difficulty": 2,
+      "jobTags": ["A/B测试", "SRM", "实验诊断"],
+      "question": "一个计划50:50分流的实验最终两组人数为45:55。你会如何排查，实验结果还能直接使用吗？",
+      "expectedSeconds": 150,
+      "isAnchor": false,
+      "rubric": [
+        {
+          "criterion": "识别该现象可能是样本比例失配，并提出用分流比例检验判断是否超出随机波动",
+          "weight": 0.25
+        },
+        {
+          "criterion": "排查随机化代码、曝光日志、资格过滤、跨端身份和机器人流量等实现问题",
+          "weight": 0.3
+        },
+        {
+          "criterion": "比较分组前特征、进入实验漏斗和时间趋势，以定位失配发生环节",
+          "weight": 0.2
+        },
+        {
+          "criterion": "指出在原因未查清且可能与处理或结果相关时，不应直接相信效果估计",
+          "weight": 0.25
+        }
+      ],
+      "verificationQuestions": [
+        "如果样本量非常大，50.2:49.8也可能统计显著，你会如何结合工程和业务判断？",
+        "若失配只发生在安卓旧版本用户，你会怎样处理并报告结果？"
+      ]
+    },
+    {
+      "id": "experiment_causal_004",
+      "skill": "experiment_causal",
+      "difficulty": 3,
+      "jobTags": ["A/B测试", "多重检验", "指标体系"],
+      "question": "一次实验同时观察20个指标，其中只有一个指标p值小于0.05。你会如何解释并控制误判风险？",
+      "expectedSeconds": 180,
+      "isAnchor": false,
+      "rubric": [
+        {
+          "criterion": "指出同时检验多个指标会提高至少出现一个假阳性的概率",
+          "weight": 0.25
+        },
+        {
+          "criterion": "区分实验前定义的主指标、护栏指标和探索性指标",
+          "weight": 0.25
+        },
+        {
+          "criterion": "提出Bonferroni、Holm或FDR等校正方法，并能说明其控制目标",
+          "weight": 0.2
+        },
+        {
+          "criterion": "结合效应大小、置信区间、机制合理性和复现实验判断该显著结果",
+          "weight": 0.2
+        },
+        {
+          "criterion": "指出不能在看到数据后只挑显著指标包装成预设结论",
+          "weight": 0.1
+        }
+      ],
+      "verificationQuestions": [
+        "Bonferroni和FDR分别更适合什么类型的分析目标？",
+        "如果唯一显著的是预先确定的主指标，结论与探索性指标显著有何不同？"
+      ]
+    },
+    {
+      "id": "experiment_causal_005",
+      "skill": "experiment_causal",
+      "difficulty": 4,
+      "jobTags": ["因果推断", "观察性研究", "混杂"],
+      "question": "运营发现领取优惠券的用户复购率更高，想据此证明优惠券有效。为什么这个结论可能有偏？如果不能随机实验，你会怎样分析？",
+      "expectedSeconds": 210,
+      "isAnchor": false,
+      "rubric": [
+        {
+          "criterion": "指出领取行为不是随机的，高意愿或高活跃用户更可能领取并复购，存在选择偏差或混杂",
+          "weight": 0.25
+        },
+        {
+          "criterion": "明确因果问题的处理、结果、目标人群和时间顺序",
+          "weight": 0.15
+        },
+        {
+          "criterion": "提出基于可观测混杂的回归调整、倾向得分匹配或加权等可执行方案",
+          "weight": 0.25
+        },
+        {
+          "criterion": "说明需要检查组间重叠、协变量平衡以及模型设定",
+          "weight": 0.2
+        },
+        {
+          "criterion": "承认未观测混杂仍可能存在，并提出敏感性分析或寻找准实验设计",
+          "weight": 0.15
+        }
+      ],
+      "verificationQuestions": [
+        "如果高活跃用户几乎都会领券，低活跃用户几乎都不领，倾向得分方法会遇到什么问题？",
+        "你会用哪些优惠券发放规则寻找回归不连续或工具变量机会？"
+      ]
+    },
+    {
+      "id": "experiment_causal_006",
+      "skill": "experiment_causal",
+      "difficulty": 5,
+      "jobTags": ["实验设计", "干扰效应", "聚类随机化"],
+      "question": "社交产品测试新的好友推荐算法，实验组用户的行为会影响对照组好友，违反个体独立性。你会怎样设计和分析实验？",
+      "expectedSeconds": 240,
+      "isAnchor": false,
+      "rubric": [
+        {
+          "criterion": "识别用户之间存在干扰或溢出效应，个体随机化下SUTVA/无干扰假设不成立",
+          "weight": 0.25
+        },
+        {
+          "criterion": "提出按社交群组、地域或网络簇进行聚类随机化以减少跨组连接",
+          "weight": 0.25
+        },
+        {
+          "criterion": "说明聚类设计需按簇内相关性调整有效样本量和标准误",
+          "weight": 0.2
+        },
+        {
+          "criterion": "提出衡量跨组边、暴露程度或直接与间接效应，以检查残余干扰",
+          "weight": 0.2
+        },
+        {
+          "criterion": "讨论随机化单位、分析单位和产品上线范围之间的权衡",
+          "weight": 0.1
+        }
+      ],
+      "verificationQuestions": [
+        "如果少数超级节点连接了很多不同群组，聚类随机化仍会有什么风险？",
+        "为什么不能在聚类随机化后仍按普通用户级独立样本计算显著性？"
+      ]
+    },
+    {
+      "id": "sql_python_001",
+      "skill": "sql_python",
+      "difficulty": 1,
+      "jobTags": ["SQL", "数据质量", "JOIN"],
+      "question": "订单表按user_id连接用户标签表后，订单行数突然翻倍。最可能的原因是什么？你会怎样定位并修复？",
+      "expectedSeconds": 120,
+      "isAnchor": false,
+      "rubric": [
+        {
+          "criterion": "指出右表user_id不唯一导致一对多或多对多连接，从而重复订单",
+          "weight": 0.35
+        },
+        {
+          "criterion": "提出分别检查连接键唯一性、空值、重复分布和连接前后行数",
+          "weight": 0.25
+        },
+        {
+          "criterion": "根据业务语义选择去重、聚合、限定标签版本或补充复合连接键，而不是盲目SELECT DISTINCT",
+          "weight": 0.25
+        },
+        {
+          "criterion": "提出为关键表增加唯一性或行数守恒的数据质量检查",
+          "weight": 0.15
+        }
+      ],
+      "verificationQuestions": [
+        "为什么直接在最终结果上使用DISTINCT可能掩盖问题？",
+        "如果标签表保存用户每天的标签快照，正确连接键应该如何设计？"
+      ]
+    },
+    {
+      "id": "sql_python_002",
+      "skill": "sql_python",
+      "difficulty": 2,
+      "jobTags": ["SQL", "窗口函数", "TopN"],
+      "question": "有一张销售明细表sales(category, product_id, revenue)。请描述如何用SQL找出每个品类销售额最高的前3个商品，并说明并列第三名如何处理。",
+      "expectedSeconds": 150,
+      "isAnchor": true,
+      "rubric": [
+        {
+          "criterion": "先按category和product_id聚合得到商品销售额",
+          "weight": 0.25
+        },
+        {
+          "criterion": "使用窗口函数按category分区并按聚合销售额降序排名",
+          "weight": 0.3
+        },
+        {
+          "criterion": "区分ROW_NUMBER、RANK和DENSE_RANK对并列值的处理，并明确选择",
+          "weight": 0.25
+        },
+        {
+          "criterion": "在外层查询筛选排名不大于3，并给出稳定排序或业务并列规则",
+          "weight": 0.2
+        }
+      ],
+      "verificationQuestions": [
+        "如果要求每个品类严格只返回3行，你会选择哪个窗口函数？",
+        "为什么通常不能在同一层查询的WHERE中直接引用窗口函数别名？"
+      ]
+    },
+    {
+      "id": "sql_python_003",
+      "skill": "sql_python",
+      "difficulty": 2,
+      "jobTags": ["SQL", "留存分析", "日期处理"],
+      "question": "给定登录表login_log(user_id, login_date)，你会如何计算每天新增用户的次日留存率？请说明口径和SQL思路。",
+      "expectedSeconds": 180,
+      "isAnchor": false,
+      "rubric": [
+        {
+          "criterion": "用每个用户最早登录日期定义新增日期，并处理同日重复登录",
+          "weight": 0.3
+        },
+        {
+          "criterion": "将新增用户与其新增日期后一天的登录记录匹配",
+          "weight": 0.25
+        },
+        {
+          "criterion": "以次日登录的去重新增用户数除以当日新增用户数",
+          "weight": 0.25
+        },
+        {
+          "criterion": "明确自然日、时区、测试账号及数据未完结日期等口径问题",
+          "weight": 0.2
+        }
+      ],
+      "verificationQuestions": [
+        "如果用户次日登录了5次，分子应该计几次？如何保证？",
+        "为什么不能直接把某日登录用户与次日登录用户取交集当成新增用户次留？"
+      ]
+    },
+    {
+      "id": "sql_python_004",
+      "skill": "sql_python",
+      "difficulty": 3,
+      "jobTags": ["SQL", "漏斗分析", "事件数据"],
+      "question": "事件表events(user_id, event_name, event_time)记录浏览、加购、支付。你会如何计算24小时内按顺序完成这三步的用户漏斗？",
+      "expectedSeconds": 210,
+      "isAnchor": false,
+      "rubric": [
+        {
+          "criterion": "明确漏斗起点、分析单位、观察窗口以及同一用户多次行为的归属规则",
+          "weight": 0.2
+        },
+        {
+          "criterion": "为每个用户或会话确定首次有效浏览时间，并只寻找其后的加购与支付",
+          "weight": 0.25
+        },
+        {
+          "criterion": "保证browse_time小于add_time小于pay_time且pay_time不晚于起点24小时",
+          "weight": 0.25
+        },
+        {
+          "criterion": "使用条件聚合、自连接或窗口函数实现各阶段去重人数统计",
+          "weight": 0.2
+        },
+        {
+          "criterion": "识别跨设备身份、重复事件、退款或迟到日志等数据问题",
+          "weight": 0.1
+        }
+      ],
+      "verificationQuestions": [
+        "用户先加购、后浏览、再支付，应如何计入漏斗？",
+        "如果一个用户一天发起三次浏览，你会如何避免把不同购买旅程错误拼接？"
+      ]
+    },
+    {
+      "id": "sql_python_005",
+      "skill": "sql_python",
+      "difficulty": 4,
+      "jobTags": ["Python", "Pandas", "性能优化"],
+      "question": "一个20GB CSV无法直接装入本机内存，但你需要按用户聚合交易金额并输出Top 1000用户。你会如何用Python完成？",
+      "expectedSeconds": 180,
+      "isAnchor": false,
+      "rubric": [
+        {
+          "criterion": "提出分块读取，只加载user_id与amount等必要列并指定紧凑数据类型",
+          "weight": 0.25
+        },
+        {
+          "criterion": "在每个数据块内按用户聚合，再把分块结果做第二次全局聚合",
+          "weight": 0.3
+        },
+        {
+          "criterion": "说明Top 1000必须在全局聚合完成后计算，不能简单拼接每块Top 1000作为最终答案",
+          "weight": 0.2
+        },
+        {
+          "criterion": "提出处理坏行、缺失金额、编码和数值精度并记录数据质量统计",
+          "weight": 0.15
+        },
+        {
+          "criterion": "说明数据继续扩大时可改用数据库、DuckDB、Polars或分布式引擎，并给出选择依据",
+          "weight": 0.1
+        }
+      ],
+      "verificationQuestions": [
+        "为什么将每个分块的Top 1000直接合并可能漏掉最终Top用户？",
+        "如果金额要求精确到分，你会使用浮点数还是整数/Decimal，为什么？"
+      ]
+    },
+    {
+      "id": "sql_python_006",
+      "skill": "sql_python",
+      "difficulty": 5,
+      "jobTags": ["数据工程", "幂等性", "增量任务", "数据质量"],
+      "question": "每天凌晨的增量指标任务偶尔失败并重跑，导致结果表重复计数。请设计一个可重试、可追溯且不会重复写入的处理方案。",
+      "expectedSeconds": 240,
+      "isAnchor": false,
+      "rubric": [
+        {
+          "criterion": "以业务日期、任务版本或分区构造稳定幂等键，并为目标粒度设置唯一约束",
+          "weight": 0.2
+        },
+        {
+          "criterion": "采用覆盖分区、MERGE/UPSERT或临时表原子替换，使相同输入重复执行得到相同结果",
+          "weight": 0.25
+        },
+        {
+          "criterion": "记录输入水位、代码版本、运行ID、状态和行数等审计信息",
+          "weight": 0.2
+        },
+        {
+          "criterion": "处理迟到数据与回补窗口，并说明水位推进只能发生在成功提交之后",
+          "weight": 0.2
+        },
+        {
+          "criterion": "设置行数、唯一性、空值和上下游对账检查，失败时不发布不完整结果",
+          "weight": 0.15
+        }
+      ],
+      "verificationQuestions": [
+        "如果写入目标表成功但任务状态更新失败，重跑时如何避免重复？",
+        "迟到三天的数据到达后，你会怎样回补而不重算全部历史？"
+      ]
+    },
+    {
+      "id": "business_analytics_001",
+      "skill": "business_analytics",
+      "difficulty": 1,
+      "jobTags": ["业务分析", "指标定义", "北极星指标"],
+      "question": "如果让你为一款在线学习App选择一个北极星指标，你会选什么？为什么不能只看注册用户数？",
+      "expectedSeconds": 120,
+      "isAnchor": false,
+      "rubric": [
+        {
+          "criterion": "提出能够反映用户获得核心学习价值的指标，如有效学习用户数或完成有效学习时长的用户数",
+          "weight": 0.3
+        },
+        {
+          "criterion": "给出指标的用户范围、行为条件、时间窗口和去重口径",
+          "weight": 0.25
+        },
+        {
+          "criterion": "说明注册数只反映获客或一次动作，不能代表持续学习价值",
+          "weight": 0.2
+        },
+        {
+          "criterion": "补充至少一个增长、留存、收入或学习质量护栏指标",
+          "weight": 0.15
+        },
+        {
+          "criterion": "说明指标应能被产品行动影响且不易被低质量行为刷高",
+          "weight": 0.1
+        }
+      ],
+      "verificationQuestions": [
+        "如果团队通过自动播放把学习时长提高了，为什么北极星指标可能失真？",
+        "你会如何定义“有效学习”，避免不同团队使用不同口径？"
+      ]
+    },
+    {
+      "id": "business_analytics_002",
+      "skill": "business_analytics",
+      "difficulty": 2,
+      "jobTags": ["业务分析", "异动分析", "DAU"],
+      "question": "某内容产品昨天DAU环比下降15%。你会按什么顺序排查原因？",
+      "expectedSeconds": 180,
+      "isAnchor": true,
+      "rubric": [
+        {
+          "criterion": "先核对指标口径、数据链路、埋点和任务状态，排除数据异常",
+          "weight": 0.25
+        },
+        {
+          "criterion": "选择合理同比基线并考虑工作日、节假日、季节性和突发事件",
+          "weight": 0.2
+        },
+        {
+          "criterion": "将DAU拆为新增、留存或回访等来源，并按端、版本、渠道、地区等维度定位贡献",
+          "weight": 0.25
+        },
+        {
+          "criterion": "结合登录、内容供给、推荐、通知等用户路径指标提出可验证假设",
+          "weight": 0.2
+        },
+        {
+          "criterion": "说明用贡献量和影响范围确定排查优先级，并输出结论与下一步验证",
+          "weight": 0.1
+        }
+      ],
+      "verificationQuestions": [
+        "如果下降几乎全部来自安卓新版本，你下一步会查哪些证据？",
+        "为什么只看各渠道的下降百分比可能误判主要原因？"
+      ]
+    },
+    {
+      "id": "business_analytics_003",
+      "skill": "business_analytics",
+      "difficulty": 2,
+      "jobTags": ["业务分析", "漏斗分析", "转化率"],
+      "question": "电商支付转化率突然下降，但订单量基本不变。你会如何解释这个看似矛盾的现象并继续分析？",
+      "expectedSeconds": 180,
+      "isAnchor": false,
+      "rubric": [
+        {
+          "criterion": "先写清支付转化率的分子、分母、分析单位与时间口径",
+          "weight": 0.25
+        },
+        {
+          "criterion": "指出分母流量增长或流量结构变化可使转化率下降而订单量不变",
+          "weight": 0.25
+        },
+        {
+          "criterion": "按渠道、新老用户、商品、端和页面版本等维度做结构分解",
+          "weight": 0.2
+        },
+        {
+          "criterion": "检查漏斗各步骤、支付失败、库存、价格和埋点变化以定位环节",
+          "weight": 0.2
+        },
+        {
+          "criterion": "用绝对量与相对率共同评估业务影响，避免只优化单一比例",
+          "weight": 0.1
+        }
+      ],
+      "verificationQuestions": [
+        "如果新渠道带来大量低意向用户，如何区分渠道内转化变化与流量结构变化？",
+        "订单量不变是否意味着业务完全没有损失？还要看哪些指标？"
+      ]
+    },
+    {
+      "id": "business_analytics_004",
+      "skill": "business_analytics",
+      "difficulty": 3,
+      "jobTags": ["指标体系", "产品分析", "护栏指标"],
+      "question": "短视频团队计划优化人均观看时长。请设计一套指标体系，避免团队只追求时长而损害长期体验。",
+      "expectedSeconds": 210,
+      "isAnchor": false,
+      "rubric": [
+        {
+          "criterion": "定义核心结果指标并明确活跃用户、观看行为、时间窗口及异常播放口径",
+          "weight": 0.2
+        },
+        {
+          "criterion": "将观看时长拆为活跃人数、观看频次、单次时长或内容消费漏斗等驱动指标",
+          "weight": 0.2
+        },
+        {
+          "criterion": "设置次日或长期留存、负反馈、退出率、投诉或健康使用等护栏指标",
+          "weight": 0.25
+        },
+        {
+          "criterion": "加入内容供给、多样性、创作者生态或商业化等平衡指标",
+          "weight": 0.15
+        },
+        {
+          "criterion": "说明短期指标提升需通过长期分群或实验观察验证，不直接等同于用户价值提升",
+          "weight": 0.2
+        }
+      ],
+      "verificationQuestions": [
+        "如果观看时长上升但次日留存下降，你会怎样判断是否上线？",
+        "如何识别时长提升只是因为用户更难找到想看的内容？"
+      ]
+    },
+    {
+      "id": "business_analytics_005",
+      "skill": "business_analytics",
+      "difficulty": 4,
+      "jobTags": ["业务分析", "A/B测试", "决策沟通"],
+      "question": "实验显示新推荐策略点击率提升5%，但购买转化率下降2%，收入无显著变化。你会如何向产品经理给出上线建议？",
+      "expectedSeconds": 210,
+      "isAnchor": false,
+      "rubric": [
+        {
+          "criterion": "区分点击率等中间指标与收入或长期价值等最终目标，不因单一显著提升直接上线",
+          "weight": 0.2
+        },
+        {
+          "criterion": "报告各指标的绝对变化、置信区间、样本量和实验功效，而不只陈述百分比与显著性",
+          "weight": 0.2
+        },
+        {
+          "criterion": "按用户、商品、渠道或推荐位分群，定位点击质量下降的来源",
+          "weight": 0.2
+        },
+        {
+          "criterion": "结合客单价、利润、长期留存和护栏指标量化收益风险",
+          "weight": 0.2
+        },
+        {
+          "criterion": "给出可执行决策，如暂缓、限定人群灰度或修改策略后复验，并说明触发条件",
+          "weight": 0.2
+        }
+      ],
+      "verificationQuestions": [
+        "收入无显著变化是否能证明两个策略收入相同？为什么？",
+        "如果提升主要来自低客单价用户，你会设计怎样的灰度方案？"
+      ]
+    },
+    {
+      "id": "business_analytics_006",
+      "skill": "business_analytics",
+      "difficulty": 5,
+      "jobTags": ["平台分析", "供需匹配", "市场设计"],
+      "question": "一个网约车平台高峰期乘客等待变长、司机收入却没有明显增加。请建立分析框架，判断问题发生在哪里并提出验证方案。",
+      "expectedSeconds": 240,
+      "isAnchor": false,
+      "rubric": [
+        {
+          "criterion": "建立供需框架并定义请求量、在线司机、接单率、应答时长、接驾距离、完成率和司机利用率等指标",
+          "weight": 0.2
+        },
+        {
+          "criterion": "按时间、区域、车型和用户群拆分，识别局部供需失衡而非只看全局均值",
+          "weight": 0.2
+        },
+        {
+          "criterion": "把乘客请求到订单完成的漏斗与司机空驶、派单、接驾和服务时长路径对应起来",
+          "weight": 0.2
+        },
+        {
+          "criterion": "提出可检验假设，如派单效率、司机空间错配、取消率或价格激励传导问题，并指出所需证据",
+          "weight": 0.2
+        },
+        {
+          "criterion": "设计分区域或分时段实验，并设置乘客体验、司机收入、平台成本和跨区域干扰护栏",
+          "weight": 0.2
+        }
+      ],
+      "verificationQuestions": [
+        "如果全城在线司机充足，但少数热点区域等待很长，你会怎样区分数量问题与空间错配？",
+        "提高热点区域补贴可能对周边区域产生什么干扰，实验应如何处理？"
+      ]
+    }
+  ]
+}

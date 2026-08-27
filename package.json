@@ -1,0 +1,58 @@
+{
+  "name": "statinterview-coach",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "dev": "node scripts/run-vinext.mjs dev",
+    "build": "node scripts/run-vinext.mjs build",
+    "start": "node scripts/run-vinext.mjs start",
+    "doctor": "node scripts/config-doctor.mjs",
+    "validate:content": "node content/validate-question-bank.mjs",
+    "test": "npm run build && node --test tests/config-doctor.test.mjs tests/rendered-html.test.mjs && tsx --test tests/policy-parity.test.ts tests/rubric-evaluator.test.ts tests/livekit-token.test.ts tests/voice-readiness.test.ts tests/voice-telemetry.test.ts tests/cost-telemetry.test.ts tests/model-cost.test.ts tests/decision-audit.test.ts tests/guided-demo.test.ts tests/public-showcase.test.ts",
+    "test:agent": "node scripts/run-python.mjs -m pytest services/agent",
+    "test:e2e": "npm run db:local && node tests/policy-audit-e2e.mjs",
+    "test:policy": "tsx --test tests/policy-parity.test.ts tests/rubric-evaluator.test.ts tests/livekit-token.test.ts tests/voice-readiness.test.ts tests/voice-telemetry.test.ts tests/cost-telemetry.test.ts tests/model-cost.test.ts tests/decision-audit.test.ts tests/guided-demo.test.ts tests/public-showcase.test.ts",
+    "experiment": "node scripts/run-python.mjs experiments/run_policy_benchmark.py",
+    "eval:scorer:predict": "tsx experiments/run_scoring_inference.ts",
+    "eval:scorer:fixture": "node scripts/run-python.mjs experiments/evaluate_scoring_benchmark.py --answers tests/fixtures/scoring-evaluation/answers.v1.jsonl --annotations tests/fixtures/scoring-evaluation/annotations.v1.jsonl --predictions tests/fixtures/scoring-evaluation/predictions.v1.jsonl --output content/scoring-benchmark.json --bootstrap-replicates 500",
+    "eval:voice:fixture": "node scripts/run-python.mjs experiments/evaluate_voice_transcripts.py --samples tests/fixtures/voice-evaluation/samples.v1.jsonl --output content/voice-benchmark.json",
+    "verify:artifacts": "npm run experiment && npm run eval:scorer:fixture && npm run eval:voice:fixture",
+    "verify": "npm run doctor && npm run validate:content && npm run lint && npm run test:agent && npm test && npm run test:e2e && npm run verify:artifacts",
+    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
+    "db:generate": "drizzle-kit generate",
+    "db:local": "node scripts/run-wrangler.mjs d1 migrations apply site-creator-d1 --local --config wrangler.local.jsonc"
+  },
+  "dependencies": {
+    "@livekit/protocol": "^1.43.4",
+    "drizzle-orm": "0.45.2",
+    "livekit-client": "^2.21.0",
+    "livekit-server-sdk": "^2.17.0",
+    "next": "^16.2.11",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "react-loading-skeleton": "3.5.0"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "1.37.1",
+    "@tailwindcss/postcss": "4.2.1",
+    "@types/node": "22.19.19",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.2",
+    "@vitejs/plugin-rsc": "0.5.26",
+    "drizzle-kit": "0.31.10",
+    "eslint": "9.39.4",
+    "eslint-config-next": "^16.2.11",
+    "react-server-dom-webpack": "19.2.6",
+    "tailwindcss": "4.2.1",
+    "tsx": "^4.20.6",
+    "typescript": "5.9.3",
+    "vinext": "0.0.50",
+    "vite": "8.0.13",
+    "wrangler": "4.92.0"
+  },
+  "type": "module"
+}

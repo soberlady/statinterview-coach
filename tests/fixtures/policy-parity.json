@@ -1,0 +1,72 @@
+{
+  "schemaVersion": "1.0.0",
+  "prior": {
+    "mean": 0.0,
+    "standardDeviation": 1.0
+  },
+  "utilityInput": {
+    "difficulty": 0.75,
+    "questionRelevance": 0.6,
+    "skillJobWeight": 0.4,
+    "maxJobWeight": 0.5,
+    "answeredCount": 1,
+    "expectedSeconds": 150,
+    "remainingSeconds": 600
+  },
+  "cases": [
+    {
+      "name": "centered_correct",
+      "difficulty": 0.0,
+      "outcome": 1.0,
+      "expected": {
+        "mean": 0.407105713188941,
+        "standardDeviation": 0.9005739584653064,
+        "lowerCredibleBound": -1.1,
+        "upperCredibleBound": 1.9,
+        "entropy": 3.6149389615427747,
+        "informationGain": 0.07832855281614037,
+        "normalizedInformationGain": 0.11300421470785497,
+        "jdRelevance": 0.7,
+        "coverageNeed": 0.5,
+        "timeCost": 0.25,
+        "utility": 0.3121523180893202
+      }
+    },
+    {
+      "name": "easy_fractional",
+      "difficulty": -0.75,
+      "outcome": 0.35,
+      "expected": {
+        "mean": -0.25113556657790326,
+        "standardDeviation": 0.905135886626666,
+        "lowerCredibleBound": -1.7,
+        "upperCredibleBound": 1.3,
+        "entropy": 3.6206072732294716,
+        "informationGain": 0.06940954535339383,
+        "normalizedInformationGain": 0.10013680687169887,
+        "jdRelevance": 0.7,
+        "coverageNeed": 0.5,
+        "timeCost": 0.25,
+        "utility": 0.3050752437794344
+      }
+    },
+    {
+      "name": "hard_incorrect",
+      "difficulty": 1.5,
+      "outcome": 0.0,
+      "expected": {
+        "mean": -0.18659764983140184,
+        "standardDeviation": 0.9305511906814403,
+        "lowerCredibleBound": -1.7,
+        "upperCredibleBound": 1.3,
+        "entropy": 3.6479786328178725,
+        "informationGain": 0.07348860687324477,
+        "normalizedInformationGain": 0.10602164869786881,
+        "jdRelevance": 0.7,
+        "coverageNeed": 0.5,
+        "timeCost": 0.25,
+        "utility": 0.3083119067838278
+      }
+    }
+  ]
+}
