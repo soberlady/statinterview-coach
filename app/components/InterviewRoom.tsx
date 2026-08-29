@@ -1228,4 +1228,3 @@ function questionTypeLabel(questionType: PublicQuestion["questionType"]) {
   if (questionType === "verification") return "可靠性验证题";
   return "自适应诊断题";
 }
-

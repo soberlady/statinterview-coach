@@ -144,4 +144,3 @@ def build_opening_prompt(
             f"{spoken_question}"
         )
     return f"欢迎回来，已恢复到第{sequence_number}题。{spoken_question}"
-

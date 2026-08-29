@@ -30,4 +30,3 @@ def test_api_auth_rejects_an_empty_header_name(monkeypatch) -> None:
         assert "cannot be empty" in str(error)
     else:
         raise AssertionError("expected an empty auth header name to fail")
-

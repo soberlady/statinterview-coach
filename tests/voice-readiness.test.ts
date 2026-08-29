@@ -44,4 +44,3 @@ test("weak networks get longer signaling and peer connection retries", () => {
     websocketTimeout: 20_000,
   });
 });
-

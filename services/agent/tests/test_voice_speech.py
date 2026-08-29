@@ -57,4 +57,3 @@ def test_percentages_use_natural_mandarin_number_words() -> None:
     assert prepare_question_for_speech("变化为0.5%、10%、30%和100%。") == (
         "变化为百分之零点五、百分之十、百分之三十和百分之一百。"
     )
-

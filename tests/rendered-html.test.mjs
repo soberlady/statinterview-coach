@@ -85,4 +85,3 @@ test("packages Sites metadata and the generated D1 migration", async () => {
     access(new URL("dist/.openai/drizzle/0000_flat_thor.sql", projectRoot)),
   ]);
 });
-

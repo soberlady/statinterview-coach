@@ -39,4 +39,3 @@ def test_cloud_build_context_excludes_local_state_and_tests() -> None:
     }
 
     assert {".env", ".env.*", ".venv", "tests", "__pycache__"} <= exclusions
-

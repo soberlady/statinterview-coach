@@ -65,4 +65,3 @@ export function voiceStatusHeading(status: VoiceStatus): string {
       return "实时语音未连接";
   }
 }
-

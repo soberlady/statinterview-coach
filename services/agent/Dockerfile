@@ -36,4 +36,3 @@ COPY --from=build --chown=appuser:appuser /app/.venv /app/.venv
 USER appuser
 
 CMD ["python", "-m", "statinterview_agent.livekit_worker", "start"]
-
