@@ -13,7 +13,9 @@ import { useRouter } from "next/navigation";
 import type { GuidedDemoPayload } from "@/app/lib/guided-demo";
 import {
   transitionVoiceStatus,
+  VOICE_AGENT_COLD_START_NOTICE_MS,
   VOICE_AGENT_READY_TIMEOUT_MS,
+  VOICE_ROOM_CONNECT_OPTIONS,
   voiceStatusHeading,
   type VoiceStatus,
 } from "@/app/lib/voice-readiness";
@@ -755,6 +757,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       await room.connect(
         credentials.serverUrl,
         credentials.participantToken,
+        VOICE_ROOM_CONNECT_OPTIONS,
       );
       await room.startAudio();
       await room.localParticipant.setMicrophoneEnabled(true);
@@ -782,14 +785,26 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
           transitionVoiceStatus(current, "ROOM_CONNECTED"),
         );
         setVoiceMessage(
-          "语音房间已连接，正在等待实时面试官音频；确认音频到达后才会开始。",
+          "语音房间已连接，正在唤醒云端面试官；首次连接通常需要 10–20 秒。",
         );
         voiceAgentReadyTimerRef.current = window.setTimeout(() => {
-          fallBackToText(
-            "voice.agent_timeout",
-            "15 秒内没有收到实时面试官音频，已自动切回文本通道。请继续作答，或在网络恢复后重新连接语音。",
+          if (
+            voiceRoomRef.current !== room ||
+            voiceExpectedDisconnectRef.current ||
+            voiceAgentReadyRef.current
+          ) {
+            return;
+          }
+          setVoiceMessage(
+            "云端面试官仍在唤醒，弱网络会自动尝试 TCP 或加密中继；请再稍候。",
           );
-        }, VOICE_AGENT_READY_TIMEOUT_MS);
+          voiceAgentReadyTimerRef.current = window.setTimeout(() => {
+            fallBackToText(
+              "voice.agent_timeout",
+              "45 秒内仍未收到实时面试官音频，已自动切回文本通道。你可以继续文字作答，或点击重新连接实时语音。",
+            );
+          }, VOICE_AGENT_READY_TIMEOUT_MS - VOICE_AGENT_COLD_START_NOTICE_MS);
+        }, VOICE_AGENT_COLD_START_NOTICE_MS);
       }
     } catch (voiceError) {
       voiceExpectedDisconnectRef.current = true;
@@ -1050,7 +1065,9 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
                   >
                     {voiceStatus === "connecting"
                       ? "正在连接…"
-                      : "切换到实时语音"}
+                      : voiceStatus === "error"
+                        ? "重新连接实时语音"
+                        : "切换到实时语音"}
                   </button>
                 )}
               </div>

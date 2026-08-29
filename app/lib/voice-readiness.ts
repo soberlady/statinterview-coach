@@ -1,4 +1,11 @@
-export const VOICE_AGENT_READY_TIMEOUT_MS = 15_000;
+export const VOICE_AGENT_COLD_START_NOTICE_MS = 15_000;
+export const VOICE_AGENT_READY_TIMEOUT_MS = 45_000;
+
+export const VOICE_ROOM_CONNECT_OPTIONS = {
+  maxRetries: 2,
+  peerConnectionTimeout: 30_000,
+  websocketTimeout: 20_000,
+} as const;
 
 export type VoiceStatus =
   | "idle"
@@ -58,4 +65,3 @@ export function voiceStatusHeading(status: VoiceStatus): string {
       return "实时语音未连接";
   }
 }
-

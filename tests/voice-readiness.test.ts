@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   transitionVoiceStatus,
+  VOICE_AGENT_COLD_START_NOTICE_MS,
   VOICE_AGENT_READY_TIMEOUT_MS,
+  VOICE_ROOM_CONNECT_OPTIONS,
   voiceStatusHeading,
 } from "../app/lib/voice-readiness";
 
@@ -31,5 +33,14 @@ test("failure falls back to an error state that can be stopped or retried", () =
   assert.equal(transitionVoiceStatus("connected", "FAIL"), "error");
   assert.equal(transitionVoiceStatus("error", "STOP"), "idle");
   assert.equal(transitionVoiceStatus("muted", "UNMUTE"), "connected");
-  assert.equal(VOICE_AGENT_READY_TIMEOUT_MS, 15_000);
+  assert.equal(VOICE_AGENT_COLD_START_NOTICE_MS, 15_000);
+  assert.equal(VOICE_AGENT_READY_TIMEOUT_MS, 45_000);
+});
+
+test("weak networks get longer signaling and peer connection retries", () => {
+  assert.deepEqual(VOICE_ROOM_CONNECT_OPTIONS, {
+    maxRetries: 2,
+    peerConnectionTimeout: 30_000,
+    websocketTimeout: 20_000,
+  });
 });
