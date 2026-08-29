@@ -11,6 +11,14 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import type { GuidedDemoPayload } from "@/app/lib/guided-demo";
+import {
+  transitionVoiceStatus,
+  VOICE_AGENT_COLD_START_NOTICE_MS,
+  VOICE_AGENT_READY_TIMEOUT_MS,
+  VOICE_ROOM_CONNECT_OPTIONS,
+  voiceStatusHeading,
+  type VoiceStatus,
+} from "@/app/lib/voice-readiness";
 
 type PublicQuestion = {
   id: string;
@@ -76,14 +84,6 @@ type VoiceTokenResponse = ApiErrorBody & {
   voiceSessionId?: string;
 };
 
-type VoiceStatus =
-  | "idle"
-  | "connecting"
-  | "connected"
-  | "muted"
-  | "unavailable"
-  | "error";
-
 type VoiceTranscriptStatus = "waiting" | "interim" | "final" | "saved";
 
 type VoiceEventInput = {
@@ -140,6 +140,10 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   const voiceFinalTranscriptAtRef = useRef<number | null>(null);
   const voiceReconnectStartedAtRef = useRef<number | null>(null);
   const voiceExpectedDisconnectRef = useRef(false);
+  const voiceAgentReadyRef = useRef(false);
+  const voiceAgentIdentityRef = useRef<string | null>(null);
+  const voiceAgentReadyTimerRef = useRef<number | null>(null);
+  const voiceAgentLostRecordedRef = useRef(false);
 
   const recordVoiceEvent = useCallback(
     (event: VoiceEventInput) => {
@@ -257,6 +261,9 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
 
   useEffect(() => {
     return () => {
+      if (voiceAgentReadyTimerRef.current !== null) {
+        window.clearTimeout(voiceAgentReadyTimerRef.current);
+      }
       voiceExpectedDisconnectRef.current = true;
       void voiceRoomRef.current?.disconnect();
       voiceRoomRef.current = null;
@@ -452,7 +459,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     const clientAttemptId = crypto.randomUUID();
     let requestedVoiceSessionId: string | null = null;
     setError("");
-    setVoiceStatus("connecting");
+    setVoiceStatus((current) => transitionVoiceStatus(current, "START"));
     setVoiceTranscript("");
     setVoiceTranscriptStatus("waiting");
     voiceTranscriptSegmentsRef.current.clear();
@@ -463,6 +470,13 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     voiceFinalTranscriptAtRef.current = null;
     voiceReconnectStartedAtRef.current = null;
     voiceExpectedDisconnectRef.current = false;
+    voiceAgentReadyRef.current = false;
+    voiceAgentIdentityRef.current = null;
+    voiceAgentLostRecordedRef.current = false;
+    if (voiceAgentReadyTimerRef.current !== null) {
+      window.clearTimeout(voiceAgentReadyTimerRef.current);
+      voiceAgentReadyTimerRef.current = null;
+    }
     setVoiceMessage("正在申请麦克风并连接实时面试官…");
 
     try {
@@ -549,17 +563,121 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
           }
         },
       );
-      room.on(RoomEvent.TrackSubscribed, (track) => {
+      const fallBackToText = (
+        eventType: "voice.agent_timeout" | "voice.agent_disconnected",
+        message: string,
+      ) => {
+        if (
+          voiceRoomRef.current !== room ||
+          voiceExpectedDisconnectRef.current
+        ) {
+          return;
+        }
+        if (voiceAgentReadyTimerRef.current !== null) {
+          window.clearTimeout(voiceAgentReadyTimerRef.current);
+          voiceAgentReadyTimerRef.current = null;
+        }
+        if (
+          eventType === "voice.agent_disconnected" &&
+          voiceAgentLostRecordedRef.current
+        ) {
+          return;
+        }
+        voiceAgentLostRecordedRef.current =
+          eventType === "voice.agent_disconnected";
+        recordVoiceEvent({
+          eventType,
+          latencyMs: Math.max(
+            0,
+            Math.round(performance.now() - connectionStartedAt),
+          ),
+          idempotencyKey: `client:voice:${credentials.voiceSessionId}:${
+            eventType === "voice.agent_timeout"
+              ? "agent-timeout"
+              : "agent-disconnected"
+          }`,
+          payload: {
+            voiceSessionId: credentials.voiceSessionId,
+            roomName: credentials.roomName,
+            agentIdentity: voiceAgentIdentityRef.current,
+          },
+        });
+        voiceExpectedDisconnectRef.current = true;
+        voiceRoomRef.current = null;
+        voiceAgentReadyRef.current = false;
+        setVoiceStatus((current) => transitionVoiceStatus(current, "FAIL"));
+        setInputChannel("text");
+        setVoiceMessage(message);
+        void room.disconnect();
+      };
+
+      room.on(RoomEvent.TrackSubscribed, (track, _publication, participant) => {
         if (track.kind !== Track.Kind.Audio) return;
         const element = track.attach();
         element.dataset.livekitRemoteAudio = "true";
         remoteAudioRef.current?.appendChild(element);
+        if (voiceRoomRef.current !== room || voiceAgentReadyRef.current) return;
+
+        const readyAt = performance.now();
+        voiceAgentReadyRef.current = true;
+        voiceAgentIdentityRef.current = participant.identity;
+        if (voiceAgentReadyTimerRef.current !== null) {
+          window.clearTimeout(voiceAgentReadyTimerRef.current);
+          voiceAgentReadyTimerRef.current = null;
+        }
+        recordVoiceEvent({
+          eventType: "voice.agent_ready",
+          latencyMs: Math.max(0, Math.round(readyAt - connectionStartedAt)),
+          idempotencyKey: `client:voice:${credentials.voiceSessionId}:agent-ready`,
+          payload: {
+            voiceSessionId: credentials.voiceSessionId,
+            roomName: credentials.roomName,
+            agentIdentity: participant.identity,
+          },
+        });
+        recordVoiceEvent({
+          eventType: "voice.first_audio_received",
+          latencyMs: Math.max(0, Math.round(readyAt - connectionStartedAt)),
+          idempotencyKey: `client:voice:${credentials.voiceSessionId}:first-audio`,
+          payload: {
+            voiceSessionId: credentials.voiceSessionId,
+            roomName: credentials.roomName,
+            agentIdentity: participant.identity,
+          },
+        });
+        setVoiceStatus((current) =>
+          transitionVoiceStatus(current, "AGENT_AUDIO_RECEIVED"),
+        );
+        setVoiceMessage(
+          "面试官音频已到达。回答结束后停顿，系统会保存最终转写并选择下一题。",
+        );
       });
-      room.on(RoomEvent.TrackUnsubscribed, (track) => {
-        track.detach().forEach((element) => element.remove());
+      room.on(
+        RoomEvent.TrackUnsubscribed,
+        (track, _publication, participant) => {
+          track.detach().forEach((element) => element.remove());
+          if (
+            track.kind === Track.Kind.Audio &&
+            participant.identity === voiceAgentIdentityRef.current
+          ) {
+            fallBackToText(
+              "voice.agent_disconnected",
+              "实时面试官的音频已中断，已自动切回文本通道。你可以继续作答或重新连接语音。",
+            );
+          }
+        },
+      );
+      room.on(RoomEvent.ParticipantDisconnected, (participant) => {
+        if (participant.identity !== voiceAgentIdentityRef.current) return;
+        fallBackToText(
+          "voice.agent_disconnected",
+          "实时面试官已离开语音房间，已自动切回文本通道。你可以继续作答或重新连接语音。",
+        );
       });
       room.on(RoomEvent.Reconnecting, () => {
         voiceReconnectStartedAtRef.current = performance.now();
+        setVoiceStatus((current) => transitionVoiceStatus(current, "START"));
+        setVoiceMessage("网络正在重连；恢复远端音频前不会显示为已就绪。请稍候…");
       });
       room.on(RoomEvent.Reconnected, () => {
         const reconnectStartedAt = voiceReconnectStartedAtRef.current;
@@ -575,6 +693,19 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
           },
         });
         voiceReconnectStartedAtRef.current = null;
+        setVoiceStatus((current) =>
+          transitionVoiceStatus(
+            current,
+            voiceAgentReadyRef.current
+              ? "AGENT_AUDIO_RECEIVED"
+              : "ROOM_CONNECTED",
+          ),
+        );
+        setVoiceMessage(
+          voiceAgentReadyRef.current
+            ? "网络已恢复，实时面试官音频已就绪。"
+            : "语音房间已恢复，正在等待实时面试官音频…",
+        );
       });
       room.on(RoomEvent.Disconnected, (reason) => {
         const sessionStartedAt = voiceSessionStartedAtRef.current;
@@ -591,15 +722,42 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
             reason: reason === undefined ? null : String(reason),
           },
         });
-        setVoiceStatus("idle");
+        if (voiceRoomRef.current !== room) return;
+        if (voiceAgentReadyTimerRef.current !== null) {
+          window.clearTimeout(voiceAgentReadyTimerRef.current);
+          voiceAgentReadyTimerRef.current = null;
+        }
+        const expected = voiceExpectedDisconnectRef.current;
+        if (!expected && voiceAgentReadyRef.current) {
+          recordVoiceEvent({
+            eventType: "voice.agent_disconnected",
+            idempotencyKey: `client:voice:${credentials.voiceSessionId}:agent-disconnected`,
+            payload: {
+              voiceSessionId: credentials.voiceSessionId,
+              roomName: credentials.roomName,
+              agentIdentity: voiceAgentIdentityRef.current,
+              reason: reason === undefined ? null : String(reason),
+            },
+          });
+        }
+        voiceRoomRef.current = null;
+        voiceAgentReadyRef.current = false;
+        setVoiceStatus((current) =>
+          transitionVoiceStatus(current, expected ? "STOP" : "FAIL"),
+        );
         setInputChannel("text");
-        setVoiceMessage("语音连接已结束，可以继续使用文本通道。");
+        setVoiceMessage(
+          expected
+            ? "语音连接已结束，可以继续使用文本通道。"
+            : "语音连接意外中断，已自动切回文本通道。你可以继续作答或重新连接语音。",
+        );
       });
 
       voiceRoomRef.current = room;
       await room.connect(
         credentials.serverUrl,
         credentials.participantToken,
+        VOICE_ROOM_CONNECT_OPTIONS,
       );
       await room.startAudio();
       await room.localParticipant.setMicrophoneEnabled(true);
@@ -617,10 +775,43 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         },
       });
       setInputChannel("voice");
-      setVoiceStatus("connected");
-      setVoiceMessage("已连接。回答结束后停顿，Agent 会保存最终原始转写并选择下一题。");
+      if (voiceAgentReadyRef.current) {
+        setVoiceStatus((current) =>
+          transitionVoiceStatus(current, "AGENT_AUDIO_RECEIVED"),
+        );
+        setVoiceMessage("面试官音频已到达，可以开始回答。");
+      } else {
+        setVoiceStatus((current) =>
+          transitionVoiceStatus(current, "ROOM_CONNECTED"),
+        );
+        setVoiceMessage(
+          "语音房间已连接，正在唤醒云端面试官；首次连接通常需要 10–20 秒。",
+        );
+        voiceAgentReadyTimerRef.current = window.setTimeout(() => {
+          if (
+            voiceRoomRef.current !== room ||
+            voiceExpectedDisconnectRef.current ||
+            voiceAgentReadyRef.current
+          ) {
+            return;
+          }
+          setVoiceMessage(
+            "云端面试官仍在唤醒，弱网络会自动尝试 TCP 或加密中继；请再稍候。",
+          );
+          voiceAgentReadyTimerRef.current = window.setTimeout(() => {
+            fallBackToText(
+              "voice.agent_timeout",
+              "45 秒内仍未收到实时面试官音频，已自动切回文本通道。你可以继续文字作答，或点击重新连接实时语音。",
+            );
+          }, VOICE_AGENT_READY_TIMEOUT_MS - VOICE_AGENT_COLD_START_NOTICE_MS);
+        }, VOICE_AGENT_COLD_START_NOTICE_MS);
+      }
     } catch (voiceError) {
       voiceExpectedDisconnectRef.current = true;
+      if (voiceAgentReadyTimerRef.current !== null) {
+        window.clearTimeout(voiceAgentReadyTimerRef.current);
+        voiceAgentReadyTimerRef.current = null;
+      }
       recordVoiceEvent({
         eventType: "voice.connection_failed",
         latencyMs: Math.max(
@@ -640,6 +831,11 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       await voiceRoomRef.current?.disconnect();
       voiceRoomRef.current = null;
       setInputChannel("text");
+      setVoiceStatus((current) =>
+        current === "unavailable"
+          ? current
+          : transitionVoiceStatus(current, "FAIL"),
+      );
       setVoiceMessage(
         voiceError instanceof Error
           ? voiceError.message
@@ -650,10 +846,14 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
 
   async function toggleMicrophone() {
     const room = voiceRoomRef.current;
-    if (!room) return;
+    if (!room || (voiceStatus !== "connected" && voiceStatus !== "muted")) {
+      return;
+    }
     const shouldEnable = voiceStatus === "muted";
     await room.localParticipant.setMicrophoneEnabled(shouldEnable);
-    setVoiceStatus(shouldEnable ? "connected" : "muted");
+    setVoiceStatus((current) =>
+      transitionVoiceStatus(current, shouldEnable ? "UNMUTE" : "MUTE"),
+    );
     setVoiceMessage(
       shouldEnable
         ? "麦克风已开启，可以继续回答。"
@@ -671,11 +871,16 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   }
 
   async function stopVoiceInterview() {
+    if (voiceAgentReadyTimerRef.current !== null) {
+      window.clearTimeout(voiceAgentReadyTimerRef.current);
+      voiceAgentReadyTimerRef.current = null;
+    }
     voiceExpectedDisconnectRef.current = true;
     await voiceRoomRef.current?.disconnect();
     voiceRoomRef.current = null;
     setInputChannel("text");
-    setVoiceStatus("idle");
+    voiceAgentReadyRef.current = false;
+    setVoiceStatus((current) => transitionVoiceStatus(current, "STOP"));
     setVoiceMessage("语音连接已结束，可以继续使用文本通道。");
   }
 
@@ -746,6 +951,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
 
   return (
     <main className="room-shell">
+      <div className="remote-audio" ref={remoteAudioRef} />
       <header className="room-header">
         <Link className="brand compact" href="/">
           <span className="brand-mark">S</span>
@@ -859,7 +1065,9 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
                   >
                     {voiceStatus === "connecting"
                       ? "正在连接…"
-                      : "切换到实时语音"}
+                      : voiceStatus === "error"
+                        ? "重新连接实时语音"
+                        : "切换到实时语音"}
                   </button>
                 )}
               </div>
@@ -920,11 +1128,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
               </div>
               <div className="voice-copy">
                 <span>LIVEKIT VOICE CHANNEL</span>
-                <strong>
-                  {voiceStatus === "muted"
-                    ? "麦克风已静音"
-                    : "实时面试官已连接"}
-                </strong>
+                <strong>{voiceStatusHeading(voiceStatus)}</strong>
                 <p>{voiceMessage}</p>
               </div>
               <div className="voice-actions">
@@ -932,6 +1136,9 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
                   className="secondary-button"
                   type="button"
                   onClick={toggleMicrophone}
+                  disabled={
+                    voiceStatus !== "connected" && voiceStatus !== "muted"
+                  }
                 >
                   {voiceStatus === "muted" ? "开启麦克风" : "静音"}
                 </button>
@@ -969,7 +1176,6 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
                     "开始回答后，识别出的文字会显示在这里。说完请点击“我已回答完”，不要直接退出语音模式。"}
                 </p>
               </div>
-              <div className="remote-audio" ref={remoteAudioRef} />
             </section>
           )}
         </section>
@@ -1022,3 +1228,4 @@ function questionTypeLabel(questionType: PublicQuestion["questionType"]) {
   if (questionType === "verification") return "可靠性验证题";
   return "自适应诊断题";
 }
+

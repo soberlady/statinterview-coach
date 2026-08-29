@@ -27,3 +27,34 @@ def test_mixed_terms_are_normalized_only_for_speech() -> None:
     assert spoken == (
         "A B 测试里用 邦费罗尼 控制 F D R，并说明 P 值。"
     )
+
+
+def test_confidence_interval_is_spoken_instead_of_treated_as_metadata() -> None:
+    question = (
+        "一次抽样得到新用户次日留存率为30%，"
+        "95%置信区间为[27%，33%]。"
+        "请解释这个区间，并说明样本量增加后通常会发生什么。"
+    )
+
+    spoken = prepare_question_for_speech(question)
+
+    assert spoken == (
+        "一次抽样得到新用户次日留存率为百分之三十，"
+        "百分之九十五置信区间为百分之二十七至百分之三十三。"
+        "请解释这个区间，并说明样本量增加后通常会发生什么。"
+    )
+    assert "[" not in spoken
+    assert "]" not in spoken
+
+
+def test_compact_percent_interval_applies_unit_to_both_endpoints() -> None:
+    assert prepare_question_for_speech("区间为[27, 33%]。") == (
+        "区间为百分之二十七至百分之三十三。"
+    )
+
+
+def test_percentages_use_natural_mandarin_number_words() -> None:
+    assert prepare_question_for_speech("变化为0.5%、10%、30%和100%。") == (
+        "变化为百分之零点五、百分之十、百分之三十和百分之一百。"
+    )
+

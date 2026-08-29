@@ -75,6 +75,25 @@ STT_KEYTERMS = [
 ]
 
 
+def _api_request_headers() -> dict[str, str]:
+    """Return an optional bearer header for an owner-only API deployment."""
+
+    token = os.environ.get(
+        "STATINTERVIEW_API_AUTH_BEARER_TOKEN", ""
+    ).strip()
+    header_name = os.environ.get(
+        "STATINTERVIEW_API_AUTH_HEADER", "OAI-Sites-Authorization"
+    ).strip()
+    if not token:
+        return {}
+    if not header_name:
+        raise ValueError(
+            "STATINTERVIEW_API_AUTH_HEADER cannot be empty when an API "
+            "auth token is configured"
+        )
+    return {header_name: f"Bearer {token}"}
+
+
 @dataclass
 class VoiceRuntime:
     interview_id: str
@@ -275,7 +294,10 @@ async def _load_next_question(
         f"{api_base_url}/api/interviews/{interview_id}/next-question"
     )
     async with httpx.AsyncClient(timeout=15.0) as client:
-        response = await client.get(endpoint)
+        response = await client.get(
+            endpoint,
+            headers=_api_request_headers(),
+        )
         response.raise_for_status()
         payload = response.json()
         if not isinstance(payload, dict):
@@ -293,7 +315,11 @@ async def _post_voice_turn(
     )
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
-            response = await client.post(endpoint, json=payload)
+            response = await client.post(
+                endpoint,
+                json=payload,
+                headers=_api_request_headers(),
+            )
         body: dict[str, Any] = {}
         if response.status_code < 400:
             parsed = response.json()
@@ -354,6 +380,7 @@ async def _complete_interview(
                 "status": "COMPLETED",
                 "currentStage": "COMPLETED",
             },
+            headers=_api_request_headers(),
         )
         response.raise_for_status()
 
@@ -416,7 +443,11 @@ async def _export_voice_usage(
     )
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(endpoint, json=event)
+            response = await client.post(
+                endpoint,
+                json=event,
+                headers=_api_request_headers(),
+            )
             response.raise_for_status()
     except httpx.HTTPError:
         logger.warning(
@@ -431,3 +462,4 @@ async def _export_voice_usage(
 
 if __name__ == "__main__":
     cli.run_app(server)
+

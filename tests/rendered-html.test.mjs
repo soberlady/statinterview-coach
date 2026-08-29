@@ -5,13 +5,14 @@ import test from "node:test";
 const projectRoot = new URL("../", import.meta.url);
 
 test("keeps the production product copy and safety boundary", async () => {
-  const [page, setup, interview, report, lab] = await Promise.all([
+  const [page, setup, interview, voiceReadiness, report, lab] = await Promise.all([
     readFile(new URL("app/page.tsx", projectRoot), "utf8"),
     readFile(
       new URL("app/components/InterviewSetupForm.tsx", projectRoot),
       "utf8",
     ),
     readFile(new URL("app/components/InterviewRoom.tsx", projectRoot), "utf8"),
+    readFile(new URL("app/lib/voice-readiness.ts", projectRoot), "utf8"),
     readFile(new URL("app/components/ReportView.tsx", projectRoot), "utf8"),
     readFile(new URL("app/lab/page.tsx", projectRoot), "utf8"),
   ]);
@@ -19,7 +20,10 @@ test("keeps the production product copy and safety boundary", async () => {
   assert.match(page, /不凑题数/);
   assert.match(page, /Private research build/);
   assert.doesNotMatch(page, /Public beta/);
-  assert.match(setup, /开始文本诊断/);
+  assert.match(setup, /开始诊断/);
+  assert.doesNotMatch(setup, /开始文本诊断/);
+  assert.match(voiceReadiness, /实时面试官已就绪/);
+  assert.match(voiceReadiness, /正在等待实时面试官/);
   assert.match(setup, /进入引导演示/);
   assert.match(setup, /合成回答/);
   assert.match(interview, /暂停并退出/);
@@ -81,3 +85,4 @@ test("packages Sites metadata and the generated D1 migration", async () => {
     access(new URL("dist/.openai/drizzle/0000_flat_thor.sql", projectRoot)),
   ]);
 });
+

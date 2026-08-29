@@ -145,7 +145,7 @@ export function InterviewSetupForm() {
           type="submit"
           disabled={submittingKind !== null}
         >
-          {submittingKind === "diagnostic" ? "正在创建…" : "开始文本诊断"}
+          {submittingKind === "diagnostic" ? "正在创建…" : "开始诊断"}
           <span aria-hidden="true">→</span>
         </button>
 
@@ -171,3 +171,4 @@ export function InterviewSetupForm() {
     </aside>
   );
 }
+
