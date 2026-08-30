@@ -27,6 +27,17 @@ def test_same_conversation_item_is_updated_instead_of_duplicated() -> None:
     assert buffer.text == "使用窗口函数按品类分组"
 
 
+def test_transcript_confidence_tracks_committed_fragments() -> None:
+    buffer = CommittedTranscriptBuffer()
+    buffer.add("item-1", "第一段", 0.6)
+    buffer.add("item-2", "第二段", 0.8)
+
+    assert buffer.confidence == 0.7
+
+    buffer.add("item-1", "第一段更新", 0.9)
+    assert buffer.confidence == 0.85
+
+
 def test_clear_starts_a_new_question_transcript() -> None:
     buffer = CommittedTranscriptBuffer()
     buffer.add("item-1", "第一题回答")
@@ -61,3 +72,14 @@ def test_scoring_hint_normalizes_mixed_language_identifiers() -> None:
     )
 
     assert hint == "用 user_id 分组，再用 ROW_NUMBER 和 ROC-AUC 评估。"
+
+
+def test_accent_aliases_are_normalized_only_when_question_provides_context() -> None:
+    raw = "先用 R O W number，再看 R O C A U C 和 panda。"
+    contextual = prepare_transcript_for_scoring(
+        raw,
+        "请解释 ROW_NUMBER、ROC-AUC 和 Pandas。",
+    )
+
+    assert contextual == "先用 ROW_NUMBER，再看 ROC-AUC 和 Pandas。"
+    assert prepare_transcript_for_scoring(raw, "请解释置信区间。") == raw

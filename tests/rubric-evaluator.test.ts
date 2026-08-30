@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   buildRubricMessages,
   combineRubricPasses,
+  guardEvaluationForTranscriptConfidence,
 } from "../app/lib/rubric-evaluator";
 import {
   evaluateAnswer,
@@ -52,6 +53,18 @@ test("transcript hint helps interpretation but cannot become evidence", () => {
   assert.match(system, /冲突时，以回答原文为准/);
   assert.equal(user.candidateAnswer, "留存率是30");
   assert.equal(user.transcriptScoringHint, "留存率是30%");
+});
+
+test("low voice transcript confidence forces verification", () => {
+  const evaluation = evaluateAnswer(
+    question,
+    "我会比较训练集与验证集表现，并使用交叉验证和学习曲线判断。",
+  );
+  const guarded = guardEvaluationForTranscriptConfidence(evaluation, 0.61);
+
+  assert.equal(guarded.reliability, "LOW");
+  assert.equal(guarded.action, "VERIFY");
+  assert.match(guarded.disclaimer, /不会直接写入能力后验/);
 });
 
 test("double-pass rubric keeps only verbatim evidence", () => {

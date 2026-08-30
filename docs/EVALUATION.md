@@ -6,7 +6,7 @@ maps to a measurable offline or online test.
 ## Current automated checks
 
 - question-bank schema: 24 questions, four skills, with two public anchors;
-- Python policy kernel, scoring evaluator and voice helpers: 83 tests covering state
+- Python policy kernel, scoring evaluator and voice helpers: 88 tests covering state
   transitions, ability updates, selection, reliability, verification budget,
   agreement metrics, strict dataset validation and shared golden fixtures;
 - TypeScript policy: three shared golden parity fixtures for posterior update,
