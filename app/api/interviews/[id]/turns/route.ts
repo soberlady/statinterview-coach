@@ -81,6 +81,17 @@ export async function POST(request: Request, context: RouteContext) {
     if (!["text", "voice"].includes(inputMode)) {
       throw validationError("inputMode", "must be text or voice");
     }
+    const transcriptScoringHint = optionalString(
+      payload,
+      "transcriptScoringHint",
+      { max: 20_000 },
+    );
+    if (transcriptScoringHint && inputMode !== "voice") {
+      throw validationError(
+        "transcriptScoringHint",
+        "is only accepted for voice input",
+      );
+    }
 
     const db = getDb();
     const [interview] = await db
@@ -212,7 +223,9 @@ export async function POST(request: Request, context: RouteContext) {
     const evaluation =
       interview.mode === GUIDED_DEMO_MODE
         ? evaluateGuidedDemoAnswer(question, answerText)
-        : await evaluateAnswerWithFallback(question, answerText);
+        : await evaluateAnswerWithFallback(question, answerText, {
+            transcriptScoringHint,
+          });
     const now = new Date().toISOString();
     const turnId = `turn_${crypto.randomUUID()}`;
     const turnValues: typeof interviewTurns.$inferInsert = {

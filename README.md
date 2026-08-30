@@ -39,7 +39,7 @@ complete text/voice system locally.
 - bounded reliability verification and explicit `ABSTAIN`;
 - evidence-linked reports, uncertainty display, and user feedback collection;
 - D1 persistence for sessions, turns, skill states, Agent events and feedback;
-- standalone Python policy, scorer-evaluation and voice helpers with 78 tests;
+- standalone Python policy, scorer-evaluation and voice helpers with 83 tests;
 - browser LiveKit token/room flow plus a LiveKit 1.6 voice worker that stores
   committed transcript fragments verbatim, restores the authoritative current
   question on reconnect and uses Mandarin-first synthesis;

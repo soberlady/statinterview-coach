@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { combineRubricPasses } from "../app/lib/rubric-evaluator";
+import {
+  buildRubricMessages,
+  combineRubricPasses,
+} from "../app/lib/rubric-evaluator";
 import {
   evaluateAnswer,
   updateAbility,
@@ -33,6 +36,23 @@ const question: InterviewQuestion = {
   ],
   verificationQuestions: ["你会怎样画学习曲线？"],
 };
+
+test("transcript hint helps interpretation but cannot become evidence", () => {
+  const messages = buildRubricMessages({
+    reviewer: false,
+    question: "留存率如何解释？",
+    criteria: [{ criterionIndex: 0, description: "解释比例", weight: 1 }],
+    candidateAnswer: "留存率是30",
+    transcriptScoringHint: "留存率是30%",
+  });
+  const system = messages[0].content;
+  const user = JSON.parse(messages[1].content);
+
+  assert.match(system, /不能引用转写理解辅助/);
+  assert.match(system, /冲突时，以回答原文为准/);
+  assert.equal(user.candidateAnswer, "留存率是30");
+  assert.equal(user.transcriptScoringHint, "留存率是30%");
+});
 
 test("double-pass rubric keeps only verbatim evidence", () => {
   const answer =

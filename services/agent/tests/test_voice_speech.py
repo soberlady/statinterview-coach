@@ -74,6 +74,13 @@ def test_ratios_numbers_acronyms_and_table_schemas_are_speakable() -> None:
     )
 
 
+def test_identifier_underscore_is_never_spoken() -> None:
+    spoken = prepare_question_for_speech("请按 user_id 分组。")
+
+    assert spoken == "请按 user id 分组。"
+    assert "_" not in spoken
+
+
 def test_lowercase_p_value_next_to_chinese_is_normalized() -> None:
     assert prepare_question_for_speech("只有一个指标p值小于0.05。") == (
         "只有一个指标P 值小于零点零五。"
