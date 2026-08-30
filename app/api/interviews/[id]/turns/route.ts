@@ -8,6 +8,7 @@ import {
 } from "@/db/schema";
 import {
   selectNextQuestion,
+  TARGET_SUBSTANTIVE_TURNS,
   updateAbility,
 } from "@/app/lib/agent-policy";
 import { evaluateAnswerWithFallback } from "@/app/lib/rubric-evaluator";
@@ -613,7 +614,7 @@ function buildProgress(turns: typeof interviewTurns.$inferSelect[], hasNext: boo
   return {
     completedTurns: completed,
     substantiveTurns: substantive,
-    targetSubstantiveTurns: 6,
+    targetSubstantiveTurns: TARGET_SUBSTANTIVE_TURNS,
     hasNext,
   };
 }

@@ -7,11 +7,13 @@ marketing language; be able to derive and modify the decisions below.
 
 > I built StatInterview Coach, an adaptive interview-training Agent for Chinese
 > data-analysis internships. The problem I focus on is not generating more
-> questions, but deciding what to ask under a six-question budget and refusing
-> to score weak evidence. Four anchors establish comparable coverage. A
+> questions, but deciding what to ask under a seven-question budget and refusing
+> to score weak evidence. Two public anchors establish comparable coverage,
+> then two JD-directed baseline questions are frozen before answers can affect
+> routing. A
 > discrete Bayesian ability state stores both mean and uncertainty. The Agent
-> then selects two follow-ups using expected information gain, job relevance,
-> coverage and time cost. If answer evidence is unreliable, a bounded
+> then selects three posterior-adaptive follow-ups using expected information
+> gain, job relevance, coverage, difficulty match and time cost. If answer evidence is unreliable, a bounded
 > verification policy asks an approved follow-up or abstains instead of
 > updating ability. The web flow, D1 checkpoints, evidence report and LiveKit
 > browser/worker boundary are implemented. The final report deterministically
@@ -19,8 +21,8 @@ marketing language; be able to derive and modify the decisions below.
 > a SHA-256 policy fingerprint; a counterfactual test proves that a legal but
 > non-selected question is detected. I also wrote Python and TypeScript parity
 > fixtures and a reproducible 4,000-candidate simulation. Under the
-> stated assumptions, adaptive selection reduced job-weighted MAE by 2.29%
-> versus a fixed sequence; the effect was small for balanced roles, which is an
+> stated assumptions, adaptive selection reduced job-weighted MAE by 3.83%
+> versus a fixed sequence; the effect varied by role profile, which is an
 > important limitation rather than something I hide.
 
 ## The technical throughline
@@ -50,11 +52,13 @@ multiple actions, invokes tools, changes the next question based on state and
 persists a recoverable decision trace. The language model controls
 conversation, but it cannot bypass the deterministic policy API.
 
-### Why four anchors before adaptation?
+### Why two public anchors and two JD-directed baselines?
 
-Without anchors, a personalized path may be efficient but incomparable. One
-anchor per dimension creates minimum coverage and makes later uncertainty
-meaningful. The trade-off is that only two of six questions remain adaptive.
+Without public anchors, a personalized path may be efficient but incomparable.
+The two public questions preserve a minimum common baseline. The next two
+questions cover the JD's highest-weight dimensions and are frozen before
+answers can affect routing, so they remain baselines rather than adaptive
+questions. Three of seven formal questions then remain posterior-adaptive.
 
 ### What does expected information gain mean?
 
@@ -70,12 +74,12 @@ signals such as evidence coverage, transcript completeness, answer units,
 schema validity and double-pass score disagreement. Low reliability blocks the
 ability update.
 
-### Is the 2.29% result meaningful?
+### Is the 3.83% result meaningful?
 
 It is evidence that the implementation behaves as intended under a Rasch
-simulation. It is not a user-learning or hiring-validity result. The balanced
-profile has almost no benefit, so job weighting—not generic adaptivity—is the
-main source of gain.
+simulation. It is not a user-learning or hiring-validity result. Gains vary
+across profiles and are strongest for data engineering, so the result cannot
+be generalized beyond the frozen simulation.
 
 ## Five-minute demo
 
@@ -86,12 +90,13 @@ main source of gain.
    verification answer and show `ABSTAIN` without a posterior update.
 4. Use the remaining recommended complete answers and show that accepted
    evidence changes the ability state.
-5. Show that the final two questions concentrate on the SQL-heavy JD and open
+5. Show how the two frozen JD baselines cover the SQL-heavy role, then how the
+   final three adaptive questions respond to posterior uncertainty; open
    the decision reason.
 6. Pause the session, reopen it and show that the persisted checkpoint enters
    `RECOVERING` before the next answer is accepted.
 7. Open the report and trace a conclusion to the exact answer excerpt.
-8. Expand the decision audit; show 7/7 replay, then explain why the final two
+8. Expand the decision audit; show 8/8 replay for the guided path, then explain why the final three
    questions outranked their alternatives.
 9. Open `/lab`; explain the fixed/random ablation and the balanced-role
    limitation, then show the scorer release gate and why 12 synthetic fixtures
@@ -106,7 +111,8 @@ main source of gain.
 
 > StatInterview Coach — uncertainty-aware adaptive interview training Agent
 >
-> - Built an explicit Agent state machine with four anchor questions, bounded
+> - Built an explicit Agent state machine with two public anchors, two frozen
+>   JD-directed baselines, three posterior-adaptive questions, bounded
 >   verification/abstention and D1 checkpoint recovery; reports trace conclusions
 >   to verbatim answer evidence.
 > - Implemented a discrete Bayesian/Rasch ability state and a constrained
@@ -115,14 +121,14 @@ main source of gain.
 > - Built deterministic decision replay with five invariants, counterfactual
 >   candidate rankings and a SHA-256 fingerprint; added a tamper test that
 >   detects a bank-approved question not chosen by the policy.
-> - Ran a deterministic 4,000-candidate paired simulation under a six-question
->   budget; adaptive selection reduced job-weighted MAE by 2.29% versus a fixed
+> - Ran a deterministic 4,000-candidate paired simulation under a seven-question
+>   budget; adaptive selection reduced job-weighted MAE by 3.83% versus a fixed
 >   sequence, with gains concentrated in uneven job profiles.
 > - Integrated a short-lived LiveKit room-token endpoint and Python Agent worker
 >   that stores final raw transcripts and delegates scoring/selection to the
 >   policy API.
 > - Added a secret-safe configuration preflight, deployment health endpoint and
->   one-command CI gate; 66 Python tests plus TypeScript, rendered-output and
+>   one-command CI gate; 78 Python tests plus TypeScript, rendered-output and
 >   local D1 end-to-end tests cover recovery and policy-tamper failure paths.
 
 Do not write “production-grade voice system,” “validated hiring predictor,” or

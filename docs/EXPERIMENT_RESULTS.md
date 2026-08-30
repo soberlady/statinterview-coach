@@ -1,20 +1,26 @@
 # Offline experiment results
 
-Updated: 2026-07-30
+Updated: 2026-08-30
 
 ## Question
 
-With the same six-question budget, can the Agent estimate abilities that matter
+With the same seven-question budget, can the Agent estimate abilities that matter
 to a target role more accurately than a fixed or random valid question
 sequence?
 
 ## Design
 
-- Four fixed anchors: one for each ability dimension.
-- Two remaining questions:
-  - adaptive: expected information gain + JD relevance + coverage − time cost;
-  - fixed: the same two medium-difficulty questions for every role;
-  - random: two valid non-anchor questions.
+- Two public anchors: statistics reasoning and business analysis.
+- Two JD-directed baseline questions: the two highest-weight skill dimensions,
+  frozen before answers can affect routing.
+- Three remaining questions:
+  - adaptive: expected information gain + JD relevance + coverage + difficulty
+    match − time cost;
+  - fixed: the same three valid follow-ups;
+  - random: three valid non-anchor questions.
+- Candidate routing is held at the intermediate band with preferred bank
+  difficulty 3, so this benchmark isolates policy allocation rather than
+  background classification.
 - Four role profiles: balanced, growth analytics, experiment analysis and data
   engineering.
 - 1,000 simulated candidates per profile, 4,000 total.
@@ -28,19 +34,20 @@ sequence?
 
 | Strategy | Weighted MAE | Weighted RMSE | 90% interval coverage |
 | --- | ---: | ---: | ---: |
-| Adaptive | 0.6906 | 0.8626 | 89.77% |
-| Fixed | 0.7067 | 0.8808 | 89.71% |
-| Random valid | 0.7043 | 0.8813 | 89.78% |
+| Adaptive | 0.6725 | 0.8412 | 90.02% |
+| Fixed | 0.6993 | 0.8731 | 90.07% |
+| Random valid | 0.6880 | 0.8612 | 89.66% |
 
 Adaptive versus fixed weighted MAE:
 
-- absolute paired difference: `-0.01618`;
-- paired 95% interval: `[-0.02144, -0.01092]`;
-- relative change: `-2.29%`.
+- absolute paired difference: `-0.02679`;
+- paired 95% interval: `[-0.03124, -0.02233]`;
+- relative change: `-3.83%`.
 
-The balanced profile had little difference. The clearest improvement occurred
-for data-engineering analysis, where the adaptive policy allocated both
-follow-ups to the most job-relevant dimension.
+The growth-analytics profile had the smallest difference. The clearest
+improvement occurred for data-engineering analysis, where the adaptive phase
+allocated more evidence to the most job-relevant dimension without allowing
+three consecutive questions from that dimension.
 
 ## Reliability fault injection
 
@@ -60,14 +67,14 @@ measure the detection model's recall or precision.
 ## What may be claimed
 
 > In a deterministic 4,000-candidate Rasch simulation, the full adaptive policy
-> reduced job-weighted ability MAE by 2.29% versus a fixed sequence under the
-> same six-question budget. The gain was concentrated in job profiles with
+> reduced job-weighted ability MAE by 3.83% versus a fixed sequence under the
+> same seven-question budget. The gain was concentrated in job profiles with
 > uneven skill weights.
 
 ## What may not be claimed
 
 - that the Agent predicts hiring outcomes;
-- that real candidates improve by 2.29%;
+- that real candidates improve by 3.83%;
 - that authored question difficulties are calibrated;
 - that detected-transcript fault results measure real detection recall;
 - that synthetic results replace a labeled human-answer study.

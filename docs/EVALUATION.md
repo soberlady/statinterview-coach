@@ -5,17 +5,17 @@ maps to a measurable offline or online test.
 
 ## Current automated checks
 
-- question-bank schema: 24 questions, four skills, one anchor per skill;
-- Python policy kernel, scoring evaluator and voice helpers: 66 tests covering state
+- question-bank schema: 24 questions, four skills, with two public anchors;
+- Python policy kernel, scoring evaluator and voice helpers: 78 tests covering state
   transitions, ability updates, selection, reliability, verification budget,
   agreement metrics, strict dataset validation and shared golden fixtures;
 - TypeScript policy: three shared golden parity fixtures for posterior update,
   uncertainty, information gain and utility signals;
 - web production build;
 - local end-to-end API scenario: create interview, reject an approved but
-  policy-inconsistent question before persistence, score six turns through a
+  policy-inconsistent question before persistence, score seven turns through a
   deterministic semantic-scorer stub, retrieve the evidence report and
-  reproduce all six question decisions;
+  reproduce all seven question decisions;
 - D1 batch fault injection: force the final event write to violate a unique
   key, then verify that turn, posterior and interview counters all remain
   unchanged;
@@ -26,10 +26,10 @@ maps to a measurable offline or online test.
   accepts the expected next answer, and a paused finalizing interview can only
   complete when the deterministic policy has no remaining question;
 - guided-demo isolation: the recommended deterministic path triggers
-  `VERIFY`, then `ABSTAIN`, completes five accepted fixture turns and two
-  adaptive turns, replays all 7/7 decisions, makes zero scorer calls and
+  `VERIFY`, then `ABSTAIN`, completes six accepted fixture turns and three
+  adaptive turns, replays all 8/8 decisions, makes zero scorer calls and
   rejects attempts to save demo feedback;
-- policy audit checks: deterministic 6/6 replay, stable SHA-256 fingerprint,
+- policy audit checks: deterministic 7/7 replay, stable SHA-256 fingerprint,
   sorted candidate utilities and detection of an approved-but-counterfactual
   replacement question;
 - missing-credential voice fallback: token endpoint returns an explicit 503
@@ -65,18 +65,18 @@ results are checked into `content/policy-benchmark.json`.
 
 | Strategy | Job-weighted MAE | Job-weighted RMSE | Mean selected job weight |
 | --- | ---: | ---: | ---: |
-| Adaptive | 0.691 | 0.863 | 0.363 |
-| Fixed | 0.707 | 0.881 | 0.238 |
-| Random valid | 0.704 | 0.881 | 0.250 |
+| Adaptive | 0.672 | 0.841 | 0.281 |
+| Fixed | 0.699 | 0.873 | 0.169 |
+| Random valid | 0.688 | 0.861 | 0.240 |
 
 With 4,000 simulated candidates, adaptive minus fixed weighted MAE was
-`-0.0162`, paired 95% interval `[-0.0214, -0.0109]`, a relative reduction of
-2.29%. The nominal 90% credible interval coverage was 89.8%.
+`-0.0268`, paired 95% interval `[-0.0312, -0.0223]`, a relative reduction of
+3.83%. The nominal 90% credible interval coverage was 90.0%.
 
-Interpretation: the overall benefit comes primarily from roles with uneven
-skill weights. For a balanced role the difference is small. The experiment
-validates the policy under a one-parameter logistic response simulation; it
-does not establish real interview validity.
+Interpretation: the benefit varies by role profile and is largest for the
+data-engineering profile. The experiment validates the policy under a
+one-parameter logistic response simulation; it does not establish real
+interview validity.
 
 ## Release gates
 

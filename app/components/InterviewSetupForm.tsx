@@ -28,7 +28,7 @@ export function InterviewSetupForm() {
       jobTitle: String(form.get("jobTitle") ?? "").trim(),
       jobDescription: String(form.get("jobDescription") ?? "").trim(),
       candidateBackground: String(form.get("candidateBackground") ?? "").trim(),
-      durationMinutes: Number(form.get("durationMinutes") ?? 15),
+      durationMinutes: Number(form.get("durationMinutes") ?? 20),
       cameraEnabled: form.get("cameraEnabled") === "on",
       recordingEnabled: false,
       mode: "diagnostic",
@@ -81,7 +81,7 @@ export function InterviewSetupForm() {
           <p>开始一次诊断</p>
           <h2 id="setup-title">创建你的面试</h2>
         </div>
-        <span>约 15 分钟</span>
+        <span>约 20 分钟</span>
       </div>
 
       <form onSubmit={handleSubmit}>
@@ -120,7 +120,7 @@ export function InterviewSetupForm() {
         <div className="form-row">
           <label>
             诊断时长
-            <select name="durationMinutes" defaultValue="15">
+            <select name="durationMinutes" defaultValue="20">
               <option value="15">15 分钟</option>
               <option value="20">20 分钟</option>
             </select>

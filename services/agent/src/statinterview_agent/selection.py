@@ -18,15 +18,17 @@ from .models import (
 
 
 class SelectionWeights(StrictModel):
-    information_gain: float = Field(default=0.55, ge=0.0, le=1.0)
+    information_gain: float = Field(default=0.45, ge=0.0, le=1.0)
     jd_relevance: float = Field(default=0.25, ge=0.0, le=1.0)
-    coverage_need: float = Field(default=0.20, ge=0.0, le=1.0)
+    coverage_need: float = Field(default=0.15, ge=0.0, le=1.0)
+    difficulty_match: float = Field(default=0.15, ge=0.0, le=1.0)
     time_penalty: float = Field(default=0.10, ge=0.0, le=1.0)
 
     @model_validator(mode="after")
     def validate_positive_signal_weights(self) -> "SelectionWeights":
         positive_total = (
             self.information_gain + self.jd_relevance + self.coverage_need
+            + self.difficulty_match
         )
         if abs(positive_total - 1.0) > 1e-8:
             raise ValueError("positive selection weights must sum to 1.0")
@@ -88,6 +90,10 @@ class QuestionSelector:
                 question.skill, 0
             )
             coverage_need = 1.0 if answered_count == 0 else 1.0 / (answered_count + 1)
+            difficulty_match = max(
+                0.0,
+                1.0 - abs(question.difficulty - context.preferred_difficulty) / 3.0,
+            )
             time_cost = min(
                 question.expected_seconds / context.remaining_seconds,
                 1.0,
@@ -96,6 +102,7 @@ class QuestionSelector:
                 self.weights.information_gain * normalized_information_gain
                 + self.weights.jd_relevance * jd_relevance
                 + self.weights.coverage_need * coverage_need
+                + self.weights.difficulty_match * difficulty_match
                 - self.weights.time_penalty * time_cost
             )
             decisions.append(
@@ -106,6 +113,7 @@ class QuestionSelector:
                     information_gain=information_gain,
                     normalized_information_gain=normalized_information_gain,
                     jd_relevance=jd_relevance,
+                    difficulty_match=difficulty_match,
                     coverage_need=coverage_need,
                     time_cost=time_cost,
                 )

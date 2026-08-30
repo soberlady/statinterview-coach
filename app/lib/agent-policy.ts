@@ -5,8 +5,9 @@ import type {
 } from "@/db/schema";
 import {
   getInterviewQuestion,
-  listAnchorQuestions,
   listQuestions,
+  SKILL_LABELS,
+  toRoleAnchorQuestion,
   type BankQuestion,
   type InterviewQuestion,
   type SkillKey,
@@ -109,12 +110,40 @@ export type SelectionCandidate = {
   expectedSeconds: number;
   utility: number;
   signals: UtilitySignals;
+  routing: {
+    targetDifficulty: number;
+    scenarioMatch: number;
+  } | null;
 };
 
 export type SelectionContext = {
+  policyVersion: typeof SELECTION_POLICY_VERSION;
+  selectionPhase: SelectionPhase;
   remainingSeconds: number;
   jobWeights: Record<SkillKey, number>;
+  candidateRouting: CandidateRouting;
 };
+
+export type SelectionPhase =
+  | "public_anchor"
+  | "jd_directed_baseline"
+  | "posterior_adaptive";
+
+export type CandidateRouting = {
+  experienceBand: "beginner" | "intermediate" | "advanced";
+  preferredDifficulty: 2 | 3 | 4;
+  scenarioTags: string[];
+};
+
+export const SELECTION_POLICY_VERSION = "three-stage-v2";
+export const TARGET_SUBSTANTIVE_TURNS = 7;
+const PUBLIC_ANCHOR_IDS = [
+  "statistics_ml_002",
+  "business_analytics_002",
+] as const;
+const PUBLIC_ANCHOR_COUNT = PUBLIC_ANCHOR_IDS.length;
+const JD_BASELINE_COUNT = 2;
+const MAX_VERIFICATIONS = 2;
 
 const DOMAIN_KEYWORDS: Record<SkillKey, string[]> = {
   statistics_ml: [
@@ -359,7 +388,10 @@ export function updateAbility(
 export function selectNextQuestion(input: {
   interview: Pick<
     Interview,
-    "jobDescription" | "durationMinutes" | "verificationCount"
+    | "jobDescription"
+    | "candidateBackground"
+    | "durationMinutes"
+    | "verificationCount"
   >;
   turns: InterviewTurn[];
   skillStates: SkillState[];
@@ -378,7 +410,7 @@ export function selectNextQuestion(input: {
     lastTurn &&
     lastTurn.questionType !== "verification" &&
     lastAction === "VERIFY" &&
-    interview.verificationCount < 2
+    interview.verificationCount < MAX_VERIFICATIONS
   ) {
     const source = lastTurn.questionId
       ? getInterviewQuestion(lastTurn.questionId)
@@ -414,42 +446,147 @@ export function selectNextQuestion(input: {
     completedTurns
       .map((turn) => turn.questionId)
       .filter((id): id is string => Boolean(id))
-      .map((id) => id.split("__verify_")[0]),
+      .map((id) => getInterviewQuestion(id)?.sourceQuestionId ?? id),
   );
-  const nextAnchor = listAnchorQuestions().find(
-    (question) => !askedSourceIds.has(question.id),
+  const substantiveTurns = completedTurns.filter(
+    (turn) => turn.questionType !== "verification",
   );
-  if (nextAnchor) {
+  const candidateRouting = inferCandidateRouting(
+    interview.candidateBackground,
+  );
+  const jobWeights = inferJobWeights(interview.jobDescription);
+  const remainingSeconds = calculateRemainingSeconds(
+    interview.durationMinutes,
+    completedTurns,
+  );
+
+  if (substantiveTurns.length < PUBLIC_ANCHOR_COUNT) {
+    const nextAnchor = getInterviewQuestion(
+      PUBLIC_ANCHOR_IDS[substantiveTurns.length],
+    );
+    if (!nextAnchor) {
+      throw new Error("configured public anchor is missing from the bank");
+    }
     return {
       nextQuestion: nextAnchor,
       action: shouldAbstainFromLastQuestion ? "ABSTAIN" : "ACCEPT",
       reason: shouldAbstainFromLastQuestion
         ? abstentionReason
-        : "固定锚点用于建立四个能力维度之间可比较的初始状态。",
+        : "公共锚点不读取 JD、候选人背景或能力后验，用于建立跨会话可比基线。",
       utility: null,
       ranking: [],
-      context: null,
+      context: selectionContext(
+        "public_anchor",
+        remainingSeconds,
+        jobWeights,
+        candidateRouting,
+      ),
     };
   }
 
-  const substantiveTurns = completedTurns.filter(
-    (turn) => turn.questionType !== "verification",
-  );
-  if (substantiveTurns.length >= 6) {
+  if (
+    substantiveTurns.length <
+    PUBLIC_ANCHOR_COUNT + JD_BASELINE_COUNT
+  ) {
+    const frozenBaselineSeconds = Math.max(
+      interview.durationMinutes * 60 -
+        PUBLIC_ANCHOR_IDS.reduce(
+          (total, id) =>
+            total + (getInterviewQuestion(id)?.expectedSeconds ?? 120),
+          0,
+        ),
+      1,
+    );
+    const baselineIndex =
+      substantiveTurns.length - PUBLIC_ANCHOR_COUNT;
+    const targetSkill = rankedJobSkills(jobWeights)[baselineIndex];
+    const maxJobWeight = Math.max(...Object.values(jobWeights), 1e-9);
+    const scored = listQuestions()
+      .filter(
+        (question) =>
+          question.skill === targetSkill &&
+          !askedSourceIds.has(question.id),
+      )
+      .map((question) => {
+        const signals = baselineSignals(
+          question,
+          interview.jobDescription,
+          jobWeights,
+          maxJobWeight,
+          candidateRouting,
+          frozenBaselineSeconds,
+        );
+        return {
+          question,
+          signals,
+          scenarioMatch: countScenarioMatches(
+            question,
+            candidateRouting.scenarioTags,
+          ),
+        };
+      })
+      .sort(
+        (left, right) =>
+          right.signals.utility - left.signals.utility ||
+          right.scenarioMatch - left.scenarioMatch ||
+          left.question.expectedSeconds - right.question.expectedSeconds ||
+          left.question.id.localeCompare(right.question.id),
+      );
+    const winner = scored[0];
+    if (!winner) {
+      return noEligibleQuestion(
+        remainingSeconds,
+        jobWeights,
+        candidateRouting,
+        "jd_directed_baseline",
+      );
+    }
+    const ranking = scored.slice(0, 5).map(
+      ({ question, signals, scenarioMatch }) =>
+        selectionCandidate(
+          toRoleAnchorQuestion(question),
+          signals,
+          candidateRouting.preferredDifficulty,
+          scenarioMatch,
+        ),
+    );
+    return {
+      nextQuestion: toRoleAnchorQuestion(winner.question),
+      action: shouldAbstainFromLastQuestion ? "ABSTAIN" : "ACCEPT",
+      reason: shouldAbstainFromLastQuestion
+        ? `${abstentionReason}随后进入已冻结的 JD 定向基线阶段。`
+        : `面试开始时已将“${SKILL_LABELS[targetSkill]}”冻结为第 ${baselineIndex + 1} 个 JD 定向基线维度；背景路由仅用于选择难度档位和场景，不参与评分。`,
+      utility: round(winner.signals.utility),
+      ranking,
+      context: selectionContext(
+        "jd_directed_baseline",
+        frozenBaselineSeconds,
+        jobWeights,
+        candidateRouting,
+      ),
+    };
+  }
+
+  if (substantiveTurns.length >= TARGET_SUBSTANTIVE_TURNS) {
     return {
       nextQuestion: null,
       action: "COMPLETE",
-      reason: "已完成四道锚点题和两道信息增益最高的自适应题。",
+      reason:
+        "已完成两道公共锚点题、两道 JD 定向基线题和三道后验自适应题。",
       utility: null,
       ranking: [],
-      context: null,
+      context: selectionContext(
+        "posterior_adaptive",
+        remainingSeconds,
+        jobWeights,
+        candidateRouting,
+      ),
     };
   }
 
   const stateBySkill = new Map(
     skillStates.map((state) => [state.skill, state]),
   );
-  const jobWeights = inferJobWeights(interview.jobDescription);
   const maxJobWeight = Math.max(...Object.values(jobWeights), 1e-9);
   const answeredBySkill = new Map<SkillKey, number>();
   for (const turn of substantiveTurns) {
@@ -457,20 +594,16 @@ export function selectNextQuestion(input: {
     const skill = turn.skill as SkillKey;
     answeredBySkill.set(skill, (answeredBySkill.get(skill) ?? 0) + 1);
   }
+  const lastTwoSkills = substantiveTurns.slice(-2).map((turn) => turn.skill);
+  const blockedSkill =
+    lastTwoSkills.length === 2 && lastTwoSkills[0] === lastTwoSkills[1]
+      ? lastTwoSkills[0]
+      : null;
   const candidates = listQuestions().filter(
-    (question) => !question.isAnchor && !askedSourceIds.has(question.id),
-  );
-  const remainingSeconds = Math.max(
-    interview.durationMinutes * 60 -
-      substantiveTurns.reduce(
-        (total, turn) =>
-          total +
-          (turn.questionId
-            ? (getInterviewQuestion(turn.questionId)?.expectedSeconds ?? 120)
-            : 120),
-        0,
-      ),
-    1,
+    (question) =>
+      !question.isAnchor &&
+      !askedSourceIds.has(question.id) &&
+      question.skill !== blockedSkill,
   );
   const scored = candidates
     .map((question) => ({
@@ -483,6 +616,7 @@ export function selectNextQuestion(input: {
         maxJobWeight,
         answeredBySkill.get(question.skill) ?? 0,
         remainingSeconds,
+        candidateRouting,
       ),
     }))
     .sort(
@@ -491,29 +625,24 @@ export function selectNextQuestion(input: {
         left.question.id.localeCompare(right.question.id),
     );
   const winner = scored[0];
-  if (!winner) {
-    return {
-      nextQuestion: null,
-      action: "ABSTAIN",
-      reason: "题库中没有满足约束的未作答问题。",
-      utility: null,
-      ranking: [],
-      context: {
-        remainingSeconds,
-        jobWeights: roundWeights(jobWeights),
-      },
-    };
-  }
+  if (!winner)
+    return noEligibleQuestion(
+      remainingSeconds,
+      jobWeights,
+      candidateRouting,
+      "posterior_adaptive",
+    );
 
-  const ranking = scored.slice(0, 5).map(({ question, signals }) => ({
-    questionId: question.id,
-    questionText: question.question,
-    skill: question.skill,
-    difficulty: question.difficulty,
-    expectedSeconds: question.expectedSeconds,
-    utility: round(signals.utility),
-    signals: roundUtilitySignals(signals),
-  }));
+  const ranking = scored
+    .slice(0, 5)
+    .map(({ question, signals }) =>
+      selectionCandidate(
+        question,
+        signals,
+        candidateRouting.preferredDifficulty,
+        0,
+      ),
+    );
 
   return {
     nextQuestion: {
@@ -524,13 +653,15 @@ export function selectNextQuestion(input: {
     action: shouldAbstainFromLastQuestion ? "ABSTAIN" : "ACCEPT",
     reason: shouldAbstainFromLastQuestion
       ? `${abstentionReason}随后按信息价值选择新的能力题。`
-      : "综合当前能力不确定性、题目难度匹配、岗位关键词和剩余时长后，该题的信息价值最高。",
+      : "综合能力后验不确定性、JD 相关度、覆盖需求、难度匹配和剩余时长后，该题效用最高。",
     utility: round(winner.signals.utility),
     ranking,
-    context: {
+    context: selectionContext(
+      "posterior_adaptive",
       remainingSeconds,
-      jobWeights: roundWeights(jobWeights),
-    },
+      jobWeights,
+      candidateRouting,
+    ),
   };
 }
 
@@ -542,12 +673,12 @@ function selectionSignals(
   maxJobWeight: number,
   answeredCount: number,
   remainingSeconds: number,
+  candidateRouting: CandidateRouting,
 ): UtilitySignals {
-  const jd = jobDescription.toLowerCase();
-  const tagHits = question.jobTags.filter((tag) =>
-    jd.includes(tag.toLowerCase()),
-  ).length;
-  const questionRelevance = Math.min(1, 0.35 + tagHits * 0.2);
+  const questionRelevance = questionJdRelevance(
+    question,
+    jobDescription,
+  );
   const posterior = parsePosterior(
     state?.posterior ?? "[]",
     state?.posteriorMean ?? 0,
@@ -562,7 +693,234 @@ function selectionSignals(
     answeredCount,
     expectedSeconds: question.expectedSeconds,
     remainingSeconds,
+    difficultyMatch: difficultyMatch(
+      question.difficulty,
+      candidateRouting.preferredDifficulty,
+    ),
   });
+}
+
+function baselineSignals(
+  question: BankQuestion,
+  jobDescription: string,
+  jobWeights: Record<SkillKey, number>,
+  maxJobWeight: number,
+  candidateRouting: CandidateRouting,
+  remainingSeconds: number,
+): UtilitySignals {
+  const questionRelevance = questionJdRelevance(
+    question,
+    jobDescription,
+  );
+  const jdRelevance = Math.min(
+    1,
+    0.5 * questionRelevance +
+      0.5 * (jobWeights[question.skill] / maxJobWeight),
+  );
+  const matchedDifficulty = difficultyMatch(
+    question.difficulty,
+    candidateRouting.preferredDifficulty,
+  );
+  const timeCost = Math.min(
+    question.expectedSeconds / Math.max(remainingSeconds, 1),
+    1,
+  );
+  return {
+    utility:
+      0.25 * jdRelevance +
+      0.15 +
+      0.15 * matchedDifficulty -
+      0.1 * timeCost,
+    informationGain: 0,
+    normalizedInformationGain: 0,
+    jdRelevance,
+    difficultyMatch: matchedDifficulty,
+    coverageNeed: 1,
+    timeCost,
+  };
+}
+
+function selectionCandidate(
+  question: BankQuestion,
+  signals: UtilitySignals,
+  targetDifficulty: number,
+  scenarioMatch: number,
+): SelectionCandidate {
+  return {
+    questionId: question.id,
+    questionText: question.question,
+    skill: question.skill,
+    difficulty: question.difficulty,
+    expectedSeconds: question.expectedSeconds,
+    utility: round(signals.utility),
+    signals: roundUtilitySignals(signals),
+    routing: {
+      targetDifficulty,
+      scenarioMatch,
+    },
+  };
+}
+
+function selectionContext(
+  selectionPhase: SelectionPhase,
+  remainingSeconds: number,
+  jobWeights: Record<SkillKey, number>,
+  candidateRouting: CandidateRouting,
+): SelectionContext {
+  return {
+    policyVersion: SELECTION_POLICY_VERSION,
+    selectionPhase,
+    remainingSeconds,
+    jobWeights: roundWeights(jobWeights),
+    candidateRouting,
+  };
+}
+
+function noEligibleQuestion(
+  remainingSeconds: number,
+  jobWeights: Record<SkillKey, number>,
+  candidateRouting: CandidateRouting,
+  selectionPhase: SelectionPhase,
+): SelectionResult {
+  return {
+    nextQuestion: null,
+    action: "ABSTAIN",
+    reason: "题库中没有满足阶段、覆盖与连续维度约束的未作答问题。",
+    utility: null,
+    ranking: [],
+    context: selectionContext(
+      selectionPhase,
+      remainingSeconds,
+      jobWeights,
+      candidateRouting,
+    ),
+  };
+}
+
+function calculateRemainingSeconds(
+  durationMinutes: number,
+  completedTurns: InterviewTurn[],
+): number {
+  return Math.max(
+    durationMinutes * 60 -
+      completedTurns.reduce(
+        (total, turn) =>
+          total +
+          (turn.questionId
+            ? (getInterviewQuestion(turn.questionId)?.expectedSeconds ?? 120)
+            : 120),
+        0,
+      ),
+    1,
+  );
+}
+
+function rankedJobSkills(
+  jobWeights: Record<SkillKey, number>,
+): SkillKey[] {
+  return (Object.keys(SKILL_LABELS) as SkillKey[]).sort(
+    (left, right) =>
+      jobWeights[right] - jobWeights[left] ||
+      left.localeCompare(right),
+  );
+}
+
+function questionJdRelevance(
+  question: BankQuestion,
+  jobDescription: string,
+): number {
+  const normalized = jobDescription.toLowerCase();
+  const tagHits = question.jobTags.filter((tag) =>
+    normalized.includes(tag.toLowerCase()),
+  ).length;
+  return Math.min(1, 0.35 + tagHits * 0.2);
+}
+
+function difficultyMatch(
+  difficulty: number,
+  preferredDifficulty: number,
+): number {
+  return Math.max(
+    0,
+    1 - Math.abs(difficulty - preferredDifficulty) / 4,
+  );
+}
+
+const SCENARIO_TERMS: Record<string, string[]> = {
+  ecommerce: ["电商", "订单", "商品", "销售", "支付"],
+  experiment: ["实验", "a/b", "ab测试", "因果", "随机"],
+  modeling: ["模型", "机器学习", "预测", "分类", "回归"],
+  "data-engineering": [
+    "数据工程",
+    "etl",
+    "数仓",
+    "任务",
+    "管道",
+  ],
+  growth: ["增长", "漏斗", "留存", "转化", "运营"],
+};
+
+function inferCandidateRouting(
+  candidateBackground: string,
+): CandidateRouting {
+  const normalized = candidateBackground.toLowerCase();
+  const beginnerTerms = [
+    "零基础",
+    "初学",
+    "入门",
+    "转行",
+    "尚未",
+    "没有项目",
+  ];
+  const advancedTerms = [
+    "博士",
+    "高级",
+    "资深",
+    "精通",
+    "三年",
+    "四年",
+    "五年",
+  ];
+  const experienceBand = advancedTerms.some((term) =>
+    normalized.includes(term),
+  )
+    ? "advanced"
+    : beginnerTerms.some((term) => normalized.includes(term))
+      ? "beginner"
+      : "intermediate";
+  const preferredDifficulty =
+    experienceBand === "advanced"
+      ? 4
+      : experienceBand === "beginner"
+        ? 2
+        : 3;
+  const scenarioTags = Object.entries(SCENARIO_TERMS)
+    .filter(([, terms]) =>
+      terms.some((term) => normalized.includes(term)),
+    )
+    .map(([tag]) => tag);
+  return {
+    experienceBand,
+    preferredDifficulty,
+    scenarioTags,
+  };
+}
+
+function countScenarioMatches(
+  question: BankQuestion,
+  scenarioTags: string[],
+): number {
+  const haystack = `${question.question} ${question.jobTags.join(" ")}`.toLowerCase();
+  return scenarioTags.reduce(
+    (count, tag) =>
+      count +
+      (SCENARIO_TERMS[tag]?.some((term) =>
+        haystack.includes(term),
+      )
+        ? 1
+        : 0),
+    0,
+  );
 }
 
 const JOB_SKILL_TERMS: Record<SkillKey, string[]> = {
@@ -665,6 +1023,7 @@ function roundUtilitySignals(signals: UtilitySignals): UtilitySignals {
       6,
     ),
     jdRelevance: round(signals.jdRelevance, 6),
+    difficultyMatch: round(signals.difficultyMatch, 6),
     coverageNeed: round(signals.coverageNeed, 6),
     timeCost: round(signals.timeCost, 6),
   };

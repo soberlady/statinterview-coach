@@ -41,6 +41,30 @@ CREATED -> ANCHOR_INTERVIEW -> ADAPTIVE_INTERVIEW
 `CANCELLED` are explicit states so recovery logic is testable rather than
 hidden in prompts.
 
+## Three-stage selection policy
+
+Every normal interview budgets seven substantive questions:
+
+1. two public anchors are identical for every session and do not read the JD,
+   candidate background or posterior;
+2. two JD-directed baseline questions target the highest-weight skill
+   dimensions and are frozen from the original JD plus a bounded candidate
+   route before answers can affect selection;
+3. three posterior-adaptive questions maximize a deterministic utility made
+   from information gain, JD relevance, coverage need, difficulty match and
+   time cost.
+
+Candidate background is reduced to experience band, preferred difficulty and
+bounded scenario tags. Those values can route question difficulty or scenario,
+but they never enter rubric scoring or posterior updates. A separate invariant
+test proves that the same question and answer produce identical scores and
+ability updates under different backgrounds. The adaptive phase excludes a
+skill after two consecutive substantive questions from that dimension.
+
+Weak evidence may insert at most two verification turns, with at most one
+verification for any source question. Verification turns do not consume the
+seven-question substantive budget.
+
 The browser's exit action persists `PAUSED`. Reopening an active checkpoint
 enters `RECOVERING` before another turn is accepted. If all policy-selected
 questions were already persisted, a paused/finalizing checkpoint may move to
@@ -81,9 +105,11 @@ non-deterministic semantic model again. The audit checks five invariants:
 4. the expected and actual question ids match;
 5. the final replay reaches `COMPLETE`.
 
-For adaptive turns, the report stores the top three candidates and decomposes
-utility into normalized information gain, JD relevance, coverage need and time
-cost. A SHA-256 fingerprint makes two replays easy to compare. It is a
+For JD-directed and adaptive turns, the report stores the top three candidates,
+the policy version and selection phase. Adaptive utility is decomposed into
+normalized information gain, JD relevance, coverage need, difficulty match and
+time cost; the report stores only the bounded background route, not an extra
+background score. A SHA-256 fingerprint makes two replays easy to compare. It is a
 reproducibility fingerprint, not a signed security attestation.
 
 The turn API also runs the selector before persistence and rejects an

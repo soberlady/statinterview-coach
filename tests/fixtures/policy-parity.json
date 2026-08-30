@@ -6,6 +6,8 @@
   },
   "utilityInput": {
     "difficulty": 0.75,
+    "preferredDifficulty": 0.0,
+    "difficultyMatch": 0.75,
     "questionRelevance": 0.6,
     "skillJobWeight": 0.4,
     "maxJobWeight": 0.5,
@@ -27,9 +29,10 @@
         "informationGain": 0.07832855281614037,
         "normalizedInformationGain": 0.11300421470785497,
         "jdRelevance": 0.7,
+        "difficultyMatch": 0.75,
         "coverageNeed": 0.5,
         "timeCost": 0.25,
-        "utility": 0.3121523180893202
+        "utility": 0.3883518966185347
       }
     },
     {
@@ -45,9 +48,10 @@
         "informationGain": 0.06940954535339383,
         "normalizedInformationGain": 0.10013680687169887,
         "jdRelevance": 0.7,
+        "difficultyMatch": 0.75,
         "coverageNeed": 0.5,
         "timeCost": 0.25,
-        "utility": 0.3050752437794344
+        "utility": 0.38256156309226304
       }
     },
     {
@@ -63,9 +67,10 @@
         "informationGain": 0.07348860687324477,
         "normalizedInformationGain": 0.10602164869786881,
         "jdRelevance": 0.7,
+        "difficultyMatch": 0.75,
         "coverageNeed": 0.5,
         "timeCost": 0.25,
-        "utility": 0.3083119067838278
+        "utility": 0.38520974191404035
       }
     }
   ]

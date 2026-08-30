@@ -1,6 +1,6 @@
 # Implementation status
 
-Updated: 2026-08-11
+Updated: 2026-08-30
 
 ## Complete
 
@@ -10,10 +10,11 @@ Updated: 2026-08-11
   initialization;
 - turn, event, report and feedback APIs;
 - approved 24-question Chinese bank and validator;
-- fixed anchors, adaptive utility, bounded verification and abstention;
+- two public anchors, two frozen JD-directed baselines, three posterior-adaptive
+  questions, bounded verification and abstention;
 - versioned per-turn checkpoints and resume endpoint;
 - evidence-linked report based on persisted data;
-- Python deterministic policy kernel, scorer evaluator and voice helpers with 66 passing
+- Python deterministic policy kernel, scorer evaluator and voice helpers with 78 passing
   tests;
 - shared Python/TypeScript golden parity fixtures for posterior and utility
   signals;
@@ -62,12 +63,12 @@ Updated: 2026-08-11
 - isolated `guided_demo` mode with server-generated synthetic answer options,
   a deterministic `DEMO_FIXTURE` evaluator, visible report disclaimers and a
   server-side prohibition on saving demo feedback as user-study data;
-- guided-demo end-to-end proof: seven stored turns, one verification, five
-  accepted fixture turns, two adaptive decisions, 7/7 policy replay and zero
+- guided-demo end-to-end proof: eight stored turns, one verification, six
+  accepted fixture turns, three adaptive decisions, 8/8 policy replay and zero
   semantic-model calls;
 - bounded one-criterion rubrics for verification questions;
 - self-contained local API end-to-end test using a deterministic strict scorer
-  for six accepted turns and a 6/6 replay;
+  for seven accepted turns and a 7/7 replay;
 - frozen three-file semantic-scoring dataset protocol, strict inference runner,
   12-answer synthetic smoke fixture, grouped bootstrap, baselines,
   risk-coverage and a deliberate `NOT_READY` gate;

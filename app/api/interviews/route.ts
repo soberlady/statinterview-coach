@@ -87,7 +87,7 @@ export async function POST(request: Request) {
       optionalInteger(normalizedPayload, "durationMinutes", {
         min: 5,
         max: 60,
-      }) ?? 15;
+      }) ?? 20;
     const cameraEnabled =
       optionalBoolean(normalizedPayload, "cameraEnabled") ?? true;
     const recordingEnabled =

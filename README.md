@@ -3,9 +3,10 @@
 [![CI](https://github.com/soberlady/statinterview-coach/actions/workflows/ci.yml/badge.svg)](https://github.com/soberlady/statinterview-coach/actions/workflows/ci.yml)
 
 An uncertainty-aware, adaptive interview training agent for Chinese data
-analysis internships. It asks four fixed anchor questions, then selects two
-questions that reduce the largest remaining ability uncertainty. When evidence
-is weak, it verifies or abstains instead of inventing a confident score.
+analysis internships. It asks two public anchors, freezes two JD-directed
+baseline questions, then selects three posterior-adaptive questions. When
+evidence is weak, it inserts at most two bounded verifications or abstains
+instead of inventing a confident score.
 
 > This is a training product, not a hiring predictor. It evaluates answer
 > content only and does not score faces, voices, accents, emotions, or gender.
@@ -33,11 +34,12 @@ complete text/voice system locally.
   external model calls; every fixture score is visibly synthetic and demo
   sessions cannot enter user-feedback data;
 - 24-question Chinese data-analysis bank with weighted rubrics;
-- four comparable anchor questions plus deterministic adaptive selection;
+- two comparable public anchors, two frozen JD-directed baselines and three
+  deterministic posterior-adaptive questions;
 - bounded reliability verification and explicit `ABSTAIN`;
 - evidence-linked reports, uncertainty display, and user feedback collection;
 - D1 persistence for sessions, turns, skill states, Agent events and feedback;
-- standalone Python policy, scorer-evaluation and voice helpers with 66 tests;
+- standalone Python policy, scorer-evaluation and voice helpers with 78 tests;
 - browser LiveKit token/room flow plus a LiveKit 1.6 voice worker that stores
   committed transcript fragments verbatim, restores the authoritative current
   question on reconnect and uses Mandarin-first synthesis;
@@ -76,15 +78,17 @@ reliability.
 Most demos generate questions and a final score. This project makes the
 decision policy inspectable:
 
-1. anchors establish a comparable baseline;
-2. a simplified Rasch posterior stores both ability and uncertainty;
-3. expected-value selection blends uncertainty, difficulty, JD relevance,
+1. two public anchors establish a comparable baseline;
+2. two JD-directed baseline questions freeze role coverage before answers can
+   influence the route;
+3. a simplified Rasch posterior stores both ability and uncertainty;
+4. expected-value selection blends uncertainty, difficulty, JD relevance,
    coverage and time;
-4. reliability is derived from observable evidence signals, not an LLM's
+5. reliability is derived from observable evidence signals, not an LLM's
    self-reported confidence;
-5. every answer, transition, decision reason and checkpoint is persisted;
-6. reports link conclusions back to exact answer excerpts;
-7. the complete question path can be replayed from persisted turns to detect
+6. every answer, transition, decision reason and checkpoint is persisted;
+7. reports link conclusions back to exact answer excerpts;
+8. the complete question path can be replayed from persisted turns to detect
    a question that was approved by the bank but not selected by the policy.
 
 ## Architecture
@@ -109,16 +113,16 @@ utility signals in both implementations.
 
 `experiments/run_policy_benchmark.py` runs a deterministic, paired synthetic
 benchmark. With seed `20260730`, 4,000 simulated candidates and the same
-six-question budget, the adaptive policy reduced job-weighted MAE by 2.29%
-versus the fixed sequence (paired absolute difference 95% interval:
-`[-0.0214, -0.0109]`). The 90% posterior interval covered 89.8% of simulated
+seven-question budget, the three-stage adaptive policy reduced job-weighted
+MAE by 3.83% versus the fixed sequence (paired absolute difference 95%
+interval: `[-0.0312, -0.0223]`). The 90% posterior interval covered 90.0% of simulated
 latent abilities.
 
-The effect is small for balanced roles and larger for roles with uneven skill
-weights. This supports a narrow claim: the policy allocates limited follow-up
-questions more efficiently under its simulation assumptions. It does not prove
-hiring validity or real-user learning impact. See the in-product `/lab` page
-and [experiment report](docs/EXPERIMENT_RESULTS.md).
+The effect varies by role profile and is largest for the data-engineering
+profile. This supports a narrow claim: the policy allocates limited follow-up
+questions more efficiently under its simulation assumptions. It does not
+prove hiring validity or real-user learning impact. See the in-product `/lab`
+page and [experiment report](docs/EXPERIMENT_RESULTS.md).
 
 ## Local development
 
@@ -135,7 +139,7 @@ Open `http://localhost:3000`.
 For a repeatable interview demo, choose **进入引导演示** on the landing page
 and use the answer option marked **推荐步骤**. The first weak answer triggers a
 bounded verification, the verification remains insufficient and abstains, and
-the remaining fixture answers establish evidence before two adaptive turns.
+the remaining fixture answers establish evidence before three adaptive turns.
 
 Agent kernel:
 

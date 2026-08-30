@@ -6,15 +6,14 @@ import re
 
 
 _TERM_REPLACEMENTS = (
-    (r"\bSQL\b", "S Q L"),
-    (r"\bFDR\b", "F D R"),
-    (r"\bCTR\b", "C T R"),
-    (r"\bA/B\b", "A B"),
-    (r"\bROW_NUMBER\b", "row number"),
-    (r"\bDENSE_RANK\b", "dense rank"),
-    (r"\bRANK\b", "rank"),
+    (r"(?<![A-Za-z])A/B(?![A-Za-z])", "A B"),
+    (r"(?<![A-Za-z])ROW_NUMBER(?![A-Za-z])", "row number"),
+    (r"(?<![A-Za-z])DENSE_RANK(?![A-Za-z])", "dense rank"),
+    (r"(?<![A-Za-z])RANK(?![A-Za-z])", "rank"),
     (r"Bonferroni", "邦费罗尼"),
     (r"Benjamini-Hochberg", "本杰明尼霍赫贝格"),
+    (r"(?<![A-Za-z])App(?![A-Za-z])", "应用"),
+    (r"(?<![A-Za-z])Top(?![A-Za-z])\s*", "前"),
 )
 
 _CHINESE_DIGITS = "零一二三四五六七八九"
@@ -27,6 +26,22 @@ _NUMERIC_INTERVAL = re.compile(
     r"[,，]\s*"
     r"(?P<upper>[+-]?\d+(?:\.\d+)?)\s*(?P<upper_percent>[%％]?)\s*"
     r"[\]】]"
+)
+_NUMERIC_RATIO = re.compile(
+    r"(?P<left>[+-]?\d+(?:\.\d+)?)\s*[:：]\s*"
+    r"(?P<right>[+-]?\d+(?:\.\d+)?)"
+)
+_TABLE_SCHEMA = re.compile(
+    r"(?P<table>[A-Za-z][A-Za-z0-9_]*)\s*"
+    r"\((?P<fields>[A-Za-z][A-Za-z0-9_,\s]*)\)"
+)
+_SPEECH_RISKS = (
+    ("阿拉伯数字", re.compile(r"\d")),
+    ("百分号", re.compile(r"[%％]")),
+    ("方括号", re.compile(r"[\[\]【】]")),
+    ("字段下划线", re.compile(r"(?<=[A-Za-z])_(?=[A-Za-z])")),
+    ("连续大写缩写", re.compile(r"[A-Z]{2,}")),
+    ("未口语化符号", re.compile(r"[/<>=≤≥±×÷~～]")),
 )
 
 
@@ -45,7 +60,11 @@ def _speak_numeric_interval(match: re.Match[str]) -> str:
     return f"{lower}至{upper}"
 
 
-def _speak_small_integer(value: int) -> str:
+def _speak_small_integer(
+    value: int,
+    *,
+    omit_leading_one: bool = True,
+) -> str:
     """Render an integer from 1 through 9999 as natural Mandarin."""
 
     parts: list[str] = []
@@ -56,7 +75,12 @@ def _speak_small_integer(value: int) -> str:
         if digit:
             if zero_pending and parts:
                 parts.append("零")
-            if not (digit == 1 and position == 1 and not parts):
+            if not (
+                omit_leading_one
+                and digit == 1
+                and position == 1
+                and not parts
+            ):
                 parts.append(_CHINESE_DIGITS[digit])
             parts.append(_SMALL_NUMBER_UNITS[position])
             zero_pending = False
@@ -84,7 +108,9 @@ def _speak_integer(value: int) -> str:
             continue
         if parts and (zero_pending or group < 1_000):
             parts.append("零")
-        parts.append(_speak_small_integer(group))
+        parts.append(
+            _speak_small_integer(group, omit_leading_one=not parts)
+        )
         if index < len(_NUMBER_GROUP_UNITS):
             parts.append(_NUMBER_GROUP_UNITS[index])
         zero_pending = False
@@ -107,6 +133,34 @@ def _speak_percentage(match: re.Match[str]) -> str:
     return f"百分之{_speak_number(match.group(1))}"
 
 
+def _speak_ratio(match: re.Match[str]) -> str:
+    return (
+        f"{_speak_number(match.group('left'))}"
+        f"比{_speak_number(match.group('right'))}"
+    )
+
+
+def _speak_table_schema(match: re.Match[str]) -> str:
+    fields = re.sub(r"\s*,\s*", "、", match.group("fields"))
+    return f"{match.group('table')}，字段包括{fields}"
+
+
+def _speak_standalone_number(match: re.Match[str]) -> str:
+    return _speak_number(match.group(0))
+
+
+def _space_acronym(match: re.Match[str]) -> str:
+    return f" {' '.join(match.group(0))} "
+
+
+def find_speech_risks(text: str) -> tuple[str, ...]:
+    """Return machine-checkable reasons a normalized prompt needs review."""
+
+    return tuple(
+        label for label, pattern in _SPEECH_RISKS if pattern.search(text)
+    )
+
+
 def prepare_question_for_speech(text: str) -> str:
     """Make mixed Chinese/English interview terms easier to hear.
 
@@ -123,11 +177,35 @@ def prepare_question_for_speech(text: str) -> str:
         _speak_percentage,
         spoken,
     )
+    spoken = _NUMERIC_RATIO.sub(_speak_ratio, spoken)
+    spoken = _TABLE_SCHEMA.sub(_speak_table_schema, spoken)
+    spoken = re.sub(
+        r"[+-]?\d+(?:\.\d+)?",
+        _speak_standalone_number,
+        spoken,
+    )
     for pattern, replacement in _TERM_REPLACEMENTS:
         spoken = re.sub(pattern, replacement, spoken, flags=re.IGNORECASE)
-    spoken = re.sub(r"(?i)\bp\s*[- ]?value\b", "P 值", spoken)
-    spoken = re.sub(r"(?i)\bp\s*值\b", "P 值", spoken)
-    return re.sub(r"\s+", " ", spoken)
+    spoken = re.sub(
+        r"(?i)(?<![A-Za-z])p\s*[- ]?value(?![A-Za-z])",
+        "P 值",
+        spoken,
+    )
+    spoken = re.sub(
+        r"(?i)(?<![A-Za-z])p\s*值",
+        "P 值",
+        spoken,
+    )
+    spoken = re.sub(r"(?<=[A-Za-z])_(?=[A-Za-z])", " ", spoken)
+    spoken = re.sub(
+        r"(?<=[\u4e00-\u9fffA-Za-z])/(?=[\u4e00-\u9fffA-Za-z])",
+        "或",
+        spoken,
+    )
+    spoken = re.sub(r"(?<=[A-Z])-(?=[A-Z])", " ", spoken)
+    spoken = re.sub(r"[A-Z]{2,}", _space_acronym, spoken)
+    spoken = re.sub(r"\s+", " ", spoken).strip()
+    return re.sub(r"\s+([，。！？；：、])", r"\1", spoken)
 
 
 def build_opening_prompt(

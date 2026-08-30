@@ -5,7 +5,7 @@ import {
 import type { InterviewQuestion } from "./question-bank";
 
 export const GUIDED_DEMO_MODE = "guided_demo";
-export const GUIDED_DEMO_VERSION = "sql-analyst-v1";
+export const GUIDED_DEMO_VERSION = "sql-analyst-three-stage-v2";
 
 export const GUIDED_DEMO_REQUEST = {
   jobTitle: "增长数据分析实习生（引导演示）",
@@ -13,7 +13,7 @@ export const GUIDED_DEMO_REQUEST = {
     "负责增长漏斗和留存分析，熟练使用 SQL 与 Python 完成数据提取、口径校验和异常排查；参与 A/B 测试设计、实验指标分析与业务复盘。",
   candidateBackground:
     "演示候选人：应用统计研一，掌握统计推断、SQL、Python 和基础实验设计。所有回答均为可复现的合成演示数据。",
-  durationMinutes: 15,
+  durationMinutes: 20,
   cameraEnabled: false,
   recordingEnabled: false,
   mode: GUIDED_DEMO_MODE,

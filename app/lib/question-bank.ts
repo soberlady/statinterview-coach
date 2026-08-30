@@ -47,6 +47,14 @@ export function listAnchorQuestions(): InterviewQuestion[] {
 export function getInterviewQuestion(
   questionId: string,
 ): InterviewQuestion | undefined {
+  const roleAnchorMatch = questionId.match(/^(.+)__role_anchor$/);
+  if (roleAnchorMatch) {
+    const source = questions.find(
+      (question) => question.id === roleAnchorMatch[1],
+    );
+    return source ? toRoleAnchorQuestion(source) : undefined;
+  }
+
   const verificationMatch = questionId.match(
     /^(?<source>.+)__verify_(?<index>\d+)$/,
   );
@@ -80,6 +88,18 @@ export function getInterviewQuestion(
     source,
     source.isAnchor ? "anchor" : "adaptive",
   );
+}
+
+export function toRoleAnchorQuestion(
+  question: BankQuestion,
+): InterviewQuestion {
+  return {
+    ...question,
+    id: `${question.id}__role_anchor`,
+    isAnchor: true,
+    questionType: "anchor",
+    sourceQuestionId: question.id,
+  };
 }
 
 export function toPublicQuestion(question: InterviewQuestion) {
