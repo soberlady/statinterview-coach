@@ -69,6 +69,39 @@ def test_success_preserves_verbatim_evidence_and_advances_question() -> None:
     assert runtime.transcript_buffer.text == ""
 
 
+def test_voice_payload_keeps_raw_answer_and_adds_conservative_scoring_hint() -> None:
+    runtime = Runtime(
+        current_question={"id": "q_rate", "text": "留存率为30%时如何解释？"}
+    )
+    raw = "嗯，留存率为百分之三十，还要看 user ID 分组。"
+    runtime.transcript_buffer.add("item-1", raw)
+    captured: dict[str, Any] = {}
+
+    async def post(payload: dict[str, Any]) -> VoiceApiResponse:
+        captured.update(payload)
+        return VoiceApiResponse(
+            201,
+            {"nextQuestion": None, "progress": {"completedTurns": 2}},
+        )
+
+    async def complete() -> None:
+        return None
+
+    asyncio.run(
+        process_voice_answer(
+            runtime,
+            post_turn=post,
+            load_authoritative_state=unexpected_load,
+            complete_interview=complete,
+        )
+    )
+
+    assert captured["answerText"] == raw
+    assert captured["transcriptScoringHint"] == (
+        "留存率为30%，还要看 user_id 分组。"
+    )
+
+
 def test_short_transcript_never_reaches_the_api() -> None:
     runtime = Runtime()
     runtime.transcript_buffer.add("item-1", "太短了")

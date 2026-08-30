@@ -33,7 +33,7 @@ from livekit.agents.llm.tool_context import ToolFlag
 
 from .voice_cost import estimate_livekit_inference_cost
 from .voice_room import resolve_interview_id, resolve_voice_session_id
-from .voice_speech import build_opening_prompt
+from .voice_speech import build_opening_prompt, prepare_question_for_speech
 from .voice_transcript import CommittedTranscriptBuffer
 from .voice_turn import (
     VoiceApiResponse,
@@ -71,6 +71,36 @@ STT_KEYTERMS = [
     "ROW_NUMBER",
     "RANK",
     "DENSE_RANK",
+    "user_id",
+    "product_id",
+    "event_name",
+    "event_time",
+    "login_date",
+    "pay_time",
+    "add_time",
+    "SELECT",
+    "WHERE",
+    "JOIN",
+    "DISTINCT",
+    "MERGE",
+    "UPSERT",
+    "Pandas",
+    "Polars",
+    "DuckDB",
+    "CSV",
+    "AUC",
+    "ROC-AUC",
+    "PR-AUC",
+    "F1",
+    "SRM",
+    "SUTVA",
+    "Platt",
+    "Brier",
+    "百分之",
+    "30%",
+    "95%",
+    "27%",
+    "33%",
     "因果推断",
 ]
 
@@ -111,7 +141,7 @@ class StatInterviewVoiceAgent(Agent):
 
     def __init__(self, first_question: dict[str, Any] | None) -> None:
         question_text = (
-            first_question["text"]
+            prepare_question_for_speech(first_question["text"])
             if first_question
             else "本次诊断已经完成，请提醒候选人查看报告。"
         )
@@ -125,13 +155,13 @@ class StatInterviewVoiceAgent(Agent):
 一、一次只问一个问题，表达简短、自然，不给标准答案或暗示。
 二、候选人完成一次回答后，必须调用 submit_current_answer，且每轮只调用一次。
 三、工具保存的是 LiveKit 的最终原始转写，不得改写、总结或美化候选人证据。
-四、工具返回 next_question 时，只做一句简短承接，然后逐字询问其中的 text。
+四、工具返回 CONTINUE 时，只做一句简短承接，然后原样朗读 spoken_question；不要读取或复述其他字段。
 五、工具返回 COMPLETE 时，告知诊断已完成并引导候选人查看网页报告。
 六、不要分析表情、音色、口音、情绪或性别，不做录用决策。
 七、不得自行创建题目，不得跳过可靠性追问。
 八、不要向候选人口播连接异常、HTTP 状态或系统内部错误。
-九、工具返回 RESYNCED 时，以 next_question 为唯一事实并逐字提问，不要重复提交旧回答。
-十、全程使用标准普通话语调。遇到 spoken_question 时必须原样朗读，不自行改写题目。
+九、工具返回 RESYNCED 时，以 spoken_question 为唯一题目并原样朗读，不要重复提交旧回答。
+十、全程使用标准普通话语调。spoken_question 已为朗读优化，必须原样朗读，不自行改写题目。
 """.strip(),
         )
 

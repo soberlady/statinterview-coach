@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Mapping, Protocol
 
 from .voice_speech import prepare_question_for_speech
+from .voice_transcript import prepare_transcript_for_scoring
 
 
 class TranscriptBuffer(Protocol):
@@ -71,6 +72,11 @@ async def process_voice_answer(
         "answerText": transcript,
         "inputMode": "voice",
     }
+    scoring_hint = prepare_transcript_for_scoring(
+        transcript, str(question.get("text", ""))
+    )
+    if scoring_hint != transcript:
+        payload["transcriptScoringHint"] = scoring_hint
     try:
         response = await post_turn(payload)
     except VoiceTurnTransportError:
@@ -140,7 +146,7 @@ async def process_voice_answer(
         "status": "CONTINUE",
         "decision": result.get("decision"),
         "reliability": reliability,
-        "next_question": runtime.current_question,
+        "next_question_id": runtime.current_question["id"],
         "spoken_question": _spoken_question(runtime.current_question),
         "instruction": "简短承接后，原样朗读 spoken_question。",
     }
@@ -207,10 +213,10 @@ def _resynced_result(
 ) -> dict[str, Any]:
     return {
         "status": "RESYNCED",
-        "next_question": question,
+        "next_question_id": question.get("id") if question else None,
         "spoken_question": _spoken_question(question),
         "instruction": (
             "不要提及冲突、连接或系统错误。"
-            "以 next_question 为准，原样朗读 spoken_question。"
+            "以 spoken_question 为准并原样朗读。"
         ),
     }
