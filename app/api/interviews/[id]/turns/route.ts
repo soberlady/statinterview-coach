@@ -11,7 +11,10 @@ import {
   TARGET_SUBSTANTIVE_TURNS,
   updateAbility,
 } from "@/app/lib/agent-policy";
-import { evaluateAnswerWithFallback } from "@/app/lib/rubric-evaluator";
+import {
+  evaluateAnswerWithFallback,
+  guardEvaluationForTranscriptConfidence,
+} from "@/app/lib/rubric-evaluator";
 import {
   buildGuidedDemoPayload,
   evaluateGuidedDemoAnswer,
@@ -80,6 +83,23 @@ export async function POST(request: Request, context: RouteContext) {
       optionalString(payload, "inputMode", { max: 16 }) ?? "text";
     if (!["text", "voice"].includes(inputMode)) {
       throw validationError("inputMode", "must be text or voice");
+    }
+    const transcriptConfidenceValue = payload.transcriptConfidence;
+    let transcriptConfidence: number | null = null;
+    if (transcriptConfidenceValue !== undefined) {
+      if (
+        inputMode !== "voice" ||
+        typeof transcriptConfidenceValue !== "number" ||
+        !Number.isFinite(transcriptConfidenceValue) ||
+        transcriptConfidenceValue < 0 ||
+        transcriptConfidenceValue > 1
+      ) {
+        throw validationError(
+          "transcriptConfidence",
+          "must be a number between 0 and 1 for voice input",
+        );
+      }
+      transcriptConfidence = transcriptConfidenceValue;
     }
     const transcriptScoringHint = optionalString(
       payload,
@@ -220,12 +240,17 @@ export async function POST(request: Request, context: RouteContext) {
       );
     }
 
-    const evaluation =
+    const rawEvaluation =
       interview.mode === GUIDED_DEMO_MODE
         ? evaluateGuidedDemoAnswer(question, answerText)
         : await evaluateAnswerWithFallback(question, answerText, {
             transcriptScoringHint,
           });
+    const evaluation = guardEvaluationForTranscriptConfidence(
+      rawEvaluation,
+      transcriptConfidence,
+      scorerTranscriptConfidenceThreshold(),
+    );
     const now = new Date().toISOString();
     const turnId = `turn_${crypto.randomUUID()}`;
     const turnValues: typeof interviewTurns.$inferInsert = {
@@ -239,6 +264,7 @@ export async function POST(request: Request, context: RouteContext) {
       answerText: answerText.trim(),
       inputMode,
       status: "completed",
+      transcriptConfidence,
       evidence: jsonString(evaluation.evidence, "evidence", 32 * 1024),
       evaluation: jsonString(evaluation, "evaluation", 32 * 1024),
       reliability: evaluation.reliability,
@@ -272,7 +298,7 @@ export async function POST(request: Request, context: RouteContext) {
       answerText: turnValues.answerText ?? "",
       inputMode: turnValues.inputMode ?? "voice",
       status: turnValues.status ?? "completed",
-      transcriptConfidence: null,
+      transcriptConfidence,
       evidence: turnValues.evidence ?? "[]",
       evaluation: turnValues.evaluation ?? "{}",
       reliability: turnValues.reliability ?? null,
@@ -434,7 +460,7 @@ export async function POST(request: Request, context: RouteContext) {
               ),
               inputMode: sql<string>`${turnValues.inputMode}`.as("input_mode"),
               status: sql<string>`${turnValues.status}`.as("status"),
-              transcriptConfidence: sql<number | null>`${null}`.as(
+              transcriptConfidence: sql<number | null>`${turnValues.transcriptConfidence ?? null}`.as(
                 "transcript_confidence",
               ),
               evidence: sql<string>`${turnValues.evidence}`.as("evidence"),
@@ -616,6 +642,11 @@ function stageForQuestion(
   if (questionType === "anchor") return "ANCHOR_INTERVIEW" as const;
   if (questionType === "verification") return "VERIFYING" as const;
   return "ADAPTIVE_INTERVIEW" as const;
+}
+
+function scorerTranscriptConfidenceThreshold(): number {
+  const parsed = Number(process.env.STATINTERVIEW_STT_MIN_CONFIDENCE ?? "0.72");
+  return Number.isFinite(parsed) ? Math.min(1, Math.max(0, parsed)) : 0.72;
 }
 
 function buildProgress(turns: typeof interviewTurns.$inferSelect[], hasNext: boolean) {

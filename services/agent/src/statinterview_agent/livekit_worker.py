@@ -34,6 +34,7 @@ from livekit.agents.llm.tool_context import ToolFlag
 from .voice_cost import estimate_livekit_inference_cost
 from .voice_room import resolve_interview_id, resolve_voice_session_id
 from .voice_speech import build_opening_prompt, prepare_question_for_speech
+from .voice_terms import build_question_keyterms
 from .voice_transcript import CommittedTranscriptBuffer
 from .voice_turn import (
     VoiceApiResponse,
@@ -45,65 +46,6 @@ load_dotenv(".env.local")
 load_dotenv()
 
 logger = logging.getLogger(__name__)
-
-STT_KEYTERMS = [
-    "SQL",
-    "Python",
-    "A/B 测试",
-    "点击率",
-    "转化率",
-    "留存率",
-    "显著性水平",
-    "统计功效",
-    "样本量",
-    "p 值",
-    "置信区间",
-    "假阳性",
-    "假阴性",
-    "多重比较",
-    "碰巧显著",
-    "主指标",
-    "Bonferroni 校正",
-    "Benjamini-Hochberg",
-    "FDR",
-    "错误发现率",
-    "窗口函数",
-    "ROW_NUMBER",
-    "RANK",
-    "DENSE_RANK",
-    "user_id",
-    "product_id",
-    "event_name",
-    "event_time",
-    "login_date",
-    "pay_time",
-    "add_time",
-    "SELECT",
-    "WHERE",
-    "JOIN",
-    "DISTINCT",
-    "MERGE",
-    "UPSERT",
-    "Pandas",
-    "Polars",
-    "DuckDB",
-    "CSV",
-    "AUC",
-    "ROC-AUC",
-    "PR-AUC",
-    "F1",
-    "SRM",
-    "SUTVA",
-    "Platt",
-    "Brier",
-    "百分之",
-    "30%",
-    "95%",
-    "27%",
-    "33%",
-    "因果推断",
-]
-
 
 def _api_request_headers() -> dict[str, str]:
     """Return an optional bearer header for an owner-only API deployment."""
@@ -130,6 +72,8 @@ class VoiceRuntime:
     api_base_url: str
     sequence_number: int
     current_question: dict[str, Any] | None
+    minimum_transcript_confidence: float = 0.72
+    low_confidence_retries: int = 0
     transcript_buffer: CommittedTranscriptBuffer = field(
         default_factory=CommittedTranscriptBuffer
     )
@@ -189,6 +133,14 @@ class StatInterviewVoiceAgent(Agent):
                 ),
                 complete_interview=lambda: _complete_for_turn(runtime),
             )
+            next_question = runtime.current_question
+            context.session.update_options(
+                keyterms=build_question_keyterms(
+                    str(next_question.get("text", ""))
+                    if next_question
+                    else ""
+                )
+            )
             internal_reason = result.pop("reason", None)
             if internal_reason:
                 logger.warning(
@@ -225,6 +177,7 @@ async def statinterview_session(ctx: JobContext) -> None:
         api_base_url=api_base_url,
         sequence_number=int(progress.get("completedTurns", 0)) + 1,
         current_question=initial.get("nextQuestion"),
+        minimum_transcript_confidence=_minimum_transcript_confidence(),
     )
     ctx.log_context_fields = {
         "room": ctx.room.name,
@@ -240,7 +193,6 @@ async def statinterview_session(ctx: JobContext) -> None:
             language=os.environ.get(
                 "STATINTERVIEW_STT_LANGUAGE", "zh-CN"
             ),
-            extra_kwargs={"keyterm": STT_KEYTERMS},
         ),
         llm=inference.LLM(
             model=os.environ.get(
@@ -270,6 +222,12 @@ async def statinterview_session(ctx: JobContext) -> None:
                 "max_delay": 3.0,
             }
         },
+        stt_context_options={
+            "keyterms": build_question_keyterms(
+                str((initial.get("nextQuestion") or {}).get("text", ""))
+            ),
+            "keyterm_detection": False,
+        },
     )
 
     @session.on("conversation_item_added")
@@ -282,7 +240,11 @@ async def statinterview_session(ctx: JobContext) -> None:
             return
         transcript = (event.item.text_content or "").strip()
         if transcript:
-            runtime.transcript_buffer.add(event.item.id, transcript)
+            runtime.transcript_buffer.add(
+                event.item.id,
+                transcript,
+                event.item.transcript_confidence,
+            )
 
     await session.start(
         room=ctx.room,
@@ -314,6 +276,15 @@ async def statinterview_session(ctx: JobContext) -> None:
         )
     else:
         session.say("这次诊断已经完成，请回到网页查看报告。")
+
+
+def _minimum_transcript_confidence() -> float:
+    raw = os.environ.get("STATINTERVIEW_STT_MIN_CONFIDENCE", "0.72")
+    try:
+        return min(1.0, max(0.0, float(raw)))
+    except ValueError:
+        logger.warning("invalid STT confidence threshold; using 0.72")
+        return 0.72
 
 
 async def _load_next_question(

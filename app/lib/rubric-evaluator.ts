@@ -19,6 +19,29 @@ export type AnswerEvaluationOptions = {
   transcriptScoringHint?: string;
 };
 
+export function guardEvaluationForTranscriptConfidence(
+  evaluation: AnswerEvaluation,
+  transcriptConfidence: number | null,
+  minimumConfidence = 0.72,
+): AnswerEvaluation {
+  if (
+    transcriptConfidence === null ||
+    transcriptConfidence >= minimumConfidence
+  ) {
+    return evaluation;
+  }
+  return {
+    ...evaluation,
+    reliability: "LOW",
+    action: "VERIFY",
+    gaps: [
+      "语音转写置信度较低，需要通过追问验证核心结论",
+      ...evaluation.gaps,
+    ].slice(0, 4),
+    disclaimer: `${evaluation.disclaimer} 本轮语音转写置信度较低，结果不会直接写入能力后验。`,
+  };
+}
+
 export type RubricPass = {
   criteria: CriterionResult[];
 };

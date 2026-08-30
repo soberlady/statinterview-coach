@@ -98,8 +98,62 @@ def test_voice_payload_keeps_raw_answer_and_adds_conservative_scoring_hint() -> 
 
     assert captured["answerText"] == raw
     assert captured["transcriptScoringHint"] == (
-        "留存率为30%，还要看 user_id 分组。"
+        "留存率为30%，还要看 user ID 分组。"
     )
+
+
+def test_low_confidence_english_term_gets_one_focused_repeat() -> None:
+    runtime = Runtime(
+        current_question={"id": "q_sql", "text": "解释 ROW_NUMBER 的作用。"}
+    )
+    runtime.transcript_buffer.add(
+        "item-1",
+        "我会用 row number 给每个分组中的记录编号。",
+        0.55,
+    )
+
+    first = asyncio.run(
+        process_voice_answer(
+            runtime,
+            post_turn=unexpected_post,
+            load_authoritative_state=unexpected_load,
+            complete_interview=unexpected_complete,
+        )
+    )
+
+    assert first["reason"] == "ENGLISH_TERM_LOW_CONFIDENCE"
+    assert "逐个字母" in first["instruction"]
+    assert runtime.low_confidence_retries == 1
+
+    captured: dict[str, Any] = {}
+    runtime.transcript_buffer.add(
+        "item-2",
+        "我说的是 R O W number，它给每组记录编号。",
+        0.6,
+    )
+
+    async def post(payload: dict[str, Any]) -> VoiceApiResponse:
+        captured.update(payload)
+        return VoiceApiResponse(
+            201,
+            {"nextQuestion": None, "progress": {"completedTurns": 2}},
+        )
+
+    async def complete() -> None:
+        return None
+
+    second = asyncio.run(
+        process_voice_answer(
+            runtime,
+            post_turn=post,
+            load_authoritative_state=unexpected_load,
+            complete_interview=complete,
+        )
+    )
+
+    assert second["status"] == "COMPLETE"
+    assert captured["transcriptConfidence"] == 0.6
+    assert runtime.low_confidence_retries == 0
 
 
 def test_short_transcript_never_reaches_the_api() -> None:

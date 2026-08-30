@@ -14,13 +14,20 @@ _PERCENT_LABELS = (
     "置信水平|显著性水平"
 )
 _TERM_REPLACEMENTS = (
-    (re.compile(r"\buser\s*(?:underscore|下划线|[_ -])?\s*id\b", re.I), "user_id"),
-    (re.compile(r"\bproduct\s*(?:underscore|下划线|[_ -])?\s*id\b", re.I), "product_id"),
-    (re.compile(r"\brow[\s_-]*number\b", re.I), "ROW_NUMBER"),
-    (re.compile(r"\bdense[\s_-]*rank\b", re.I), "DENSE_RANK"),
-    (re.compile(r"\broc[\s_-]*auc\b", re.I), "ROC-AUC"),
-    (re.compile(r"\bpr[\s_-]*auc\b", re.I), "PR-AUC"),
-    (re.compile(r"\ba\s*(?:/|斜杠|和)?\s*b\s*(?:test|测试)?\b", re.I), "A/B 测试"),
+    ("user_id", re.compile(r"\buser\s*(?:underscore|下划线|[_ -])?\s*id\b", re.I)),
+    ("product_id", re.compile(r"\bproduct\s*(?:underscore|下划线|[_ -])?\s*id\b", re.I)),
+    (
+        "ROW_NUMBER",
+        re.compile(r"\b(?:row|roll|raw|r\s*o\s*w)[\s_-]*(?:number|no)\b", re.I),
+    ),
+    ("DENSE_RANK", re.compile(r"\bdense[\s_-]*rank\b", re.I)),
+    (
+        "ROC-AUC",
+        re.compile(r"\b(?:roc|rock|r\s*o\s*c)[\s_-]*a\s*u\s*c\b", re.I),
+    ),
+    ("PR-AUC", re.compile(r"\bpr[\s_-]*auc\b", re.I)),
+    ("Pandas", re.compile(r"\bpandas?\b", re.I)),
+    ("A/B 测试", re.compile(r"\ba\s*(?:/|斜杠|和)?\s*b\s*(?:test|测试)?\b", re.I)),
 )
 
 
@@ -53,8 +60,11 @@ def prepare_transcript_for_scoring(raw: str, question_text: str) -> str:
             hint,
         )
 
-    for pattern, replacement in _TERM_REPLACEMENTS:
-        hint = pattern.sub(replacement, hint)
+    compact_question = re.sub(r"[\s_-]", "", question_text).lower()
+    for canonical, pattern in _TERM_REPLACEMENTS:
+        compact_canonical = re.sub(r"[\s_-]", "", canonical).lower()
+        if compact_canonical in compact_question:
+            hint = pattern.sub(canonical, hint)
     return re.sub(r" {2,}", " ", hint).strip()
 
 
@@ -102,16 +112,31 @@ def _chinese_integer(value: str) -> int:
 class CommittedTranscriptBuffer:
     """Keep committed user messages in arrival order without duplicating IDs."""
 
-    _items: dict[str, str] = field(default_factory=dict)
+    _items: dict[str, tuple[str, float | None]] = field(default_factory=dict)
 
-    def add(self, item_id: str, text: str) -> None:
+    def add(
+        self,
+        item_id: str,
+        text: str,
+        confidence: float | None = None,
+    ) -> None:
         normalized = text.strip()
         if normalized:
-            self._items[item_id] = normalized
+            bounded_confidence = (
+                min(1.0, max(0.0, confidence))
+                if isinstance(confidence, (int, float))
+                else None
+            )
+            self._items[item_id] = (normalized, bounded_confidence)
 
     @property
     def text(self) -> str:
-        return " ".join(self._items.values()).strip()
+        return " ".join(text for text, _ in self._items.values()).strip()
+
+    @property
+    def confidence(self) -> float | None:
+        values = [value for _, value in self._items.values() if value is not None]
+        return round(sum(values) / len(values), 6) if values else None
 
     def clear(self) -> None:
         self._items.clear()

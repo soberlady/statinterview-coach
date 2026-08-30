@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Mapping, Protocol
 
 from .voice_speech import prepare_question_for_speech
+from .voice_terms import answer_contains_english_fragment, extract_question_keyterms
 from .voice_transcript import prepare_transcript_for_scoring
 
 
@@ -14,6 +15,9 @@ class TranscriptBuffer(Protocol):
     def text(self) -> str: ...
 
     def clear(self) -> None: ...
+
+    @property
+    def confidence(self) -> float | None: ...
 
 
 class VoiceTurnRuntime(Protocol):
@@ -54,6 +58,7 @@ async def process_voice_answer(
     """
 
     transcript = runtime.transcript_buffer.text
+    transcript_confidence = runtime.transcript_buffer.confidence
     question = runtime.current_question
     if not question:
         runtime.transcript_buffer.clear()
@@ -66,14 +71,40 @@ async def process_voice_answer(
         runtime.transcript_buffer.clear()
         return _repeat_result("TRANSCRIPT_TOO_SHORT")
 
+    question_text = str(question.get("text", ""))
+    minimum_confidence = float(
+        getattr(runtime, "minimum_transcript_confidence", 0.72)
+    )
+    retries = int(getattr(runtime, "low_confidence_retries", 0))
+    if (
+        transcript_confidence is not None
+        and transcript_confidence < minimum_confidence
+        and extract_question_keyterms(question_text)
+        and answer_contains_english_fragment(transcript)
+        and retries < 1
+    ):
+        setattr(runtime, "low_confidence_retries", retries + 1)
+        runtime.transcript_buffer.clear()
+        return {
+            "status": "REPEAT_CURRENT_ANSWER",
+            "reason": "ENGLISH_TERM_LOW_CONFIDENCE",
+            "instruction": (
+                "不要猜测候选人说了哪个术语。请说："
+                "我没有听清其中的英文词组，请把英文词组逐个字母说一遍，"
+                "再把包含它的这一句重说一次。"
+            ),
+        }
+
     payload = {
         "sequenceNumber": runtime.sequence_number,
         "questionId": question["id"],
         "answerText": transcript,
         "inputMode": "voice",
     }
+    if transcript_confidence is not None:
+        payload["transcriptConfidence"] = transcript_confidence
     scoring_hint = prepare_transcript_for_scoring(
-        transcript, str(question.get("text", ""))
+        transcript, question_text
     )
     if scoring_hint != transcript:
         payload["transcriptScoringHint"] = scoring_hint
@@ -115,6 +146,7 @@ async def process_voice_answer(
         return _resynced_result(runtime.current_question)
 
     runtime.transcript_buffer.clear()
+    setattr(runtime, "low_confidence_retries", 0)
 
     if runtime.current_question is None:
         completion_sync = "COMMITTED"
