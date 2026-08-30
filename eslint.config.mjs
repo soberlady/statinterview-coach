@@ -16,6 +16,9 @@ const eslintConfig = defineConfig([
     "outputs/**",
     "work/**",
     "coverage/**",
+    "**/.pytest_cache/**",
+    "**/__pycache__/**",
+    "services/agent/.venv/**",
     "next-env.d.ts",
   ]),
 ]);

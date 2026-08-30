@@ -3,7 +3,7 @@
 This experiment does not substitute for a real-user study. It isolates two
 engineering claims that can be tested before human labels are available:
 
-1. under the same six-question budget, does the policy reduce job-weighted
+1. under the same seven-question budget, does the policy reduce job-weighted
    ability estimation error compared with a fixed or random question sequence?
 2. when transcript corruption is detected, does verify/abstain reduce unsafe
    ability updates compared with always accepting the observed answer?
@@ -38,15 +38,15 @@ from statinterview_agent import (  # noqa: E402
 
 
 SKILLS = tuple(SkillDimension)
-ANCHOR_ORDER = (
+PUBLIC_ANCHOR_ORDER = (
     SkillDimension.STATISTICS_ML,
-    SkillDimension.EXPERIMENT_CAUSAL,
-    SkillDimension.SQL_PYTHON_ENGINEERING,
     SkillDimension.BUSINESS_ANALYSIS,
 )
 FIXED_FOLLOW_UP_IDS = (
     "statistics_ml_004",
     "business_analytics_004",
+    "sql_python_004",
+    "experiment_causal_004",
 )
 JOB_PROFILES: dict[str, dict[SkillDimension, float]] = {
     "balanced": {
@@ -167,20 +167,34 @@ def _choose_follow_ups(
         question for question in questions if not question.is_anchor
     ]
     if strategy == "fixed":
-        return [by_id[question_id] for question_id in FIXED_FOLLOW_UP_IDS]
+        return [
+            by_id[question_id]
+            for question_id in FIXED_FOLLOW_UP_IDS
+            if question_id not in {item.id for item in asked}
+        ][:3]
     if strategy == "random":
         rng = random.Random(f"{seed}:{profile}:{candidate_id}:random-policy")
-        return rng.sample(eligible, 2)
+        return rng.sample(
+            [question for question in eligible if question not in asked],
+            3,
+        )
 
     selector = QuestionSelector()
     selected: list[Question] = []
-    counts = {skill: 1 for skill in SKILLS}
+    counts = {
+        skill: sum(question.skill is skill for question in asked)
+        for skill in SKILLS
+    }
     last_skill = asked[-1].skill
-    consecutive_same_skill = 1
+    consecutive_same_skill = 0
+    for question in reversed(asked):
+        if question.skill is not last_skill:
+            break
+        consecutive_same_skill += 1
     remaining_seconds = 600
-    for _ in range(2):
+    for _ in range(3):
         decision = selector.select_next(
-            questions=questions,
+            questions=tuple(eligible),
             posteriors=posteriors,
             context=SelectionContext(
                 asked_question_ids=frozenset(
@@ -191,9 +205,11 @@ def _choose_follow_ups(
                 remaining_seconds=remaining_seconds,
                 last_skill=last_skill,
                 consecutive_same_skill=consecutive_same_skill,
+                preferred_difficulty=0.0,
             ),
         )
         question = by_id[decision.question_id]
+        assert not question.is_anchor
         selected.append(question)
         counts[question.skill] += 1
         if question.skill is last_skill:
@@ -204,6 +220,38 @@ def _choose_follow_ups(
         remaining_seconds = max(
             1, remaining_seconds - question.expected_seconds
         )
+    return selected
+
+
+def _jd_directed_baselines(
+    *,
+    questions: tuple[Question, ...],
+    profile_weights: dict[SkillDimension, float],
+    asked: list[Question],
+) -> list[Question]:
+    ranked_skills = sorted(
+        SKILLS,
+        key=lambda skill: (-profile_weights[skill], skill.value),
+    )[:2]
+    selected: list[Question] = []
+    asked_ids = {question.id for question in asked}
+    for skill in ranked_skills:
+        candidates = [
+            question
+            for question in questions
+            if question.skill is skill and question.id not in asked_ids
+        ]
+        winner = sorted(
+            candidates,
+            key=lambda question: (
+                abs(question.difficulty),
+                -question.jd_relevance,
+                question.expected_seconds,
+                question.id,
+            ),
+        )[0]
+        selected.append(winner)
+        asked_ids.add(winner.id)
     return selected
 
 
@@ -220,15 +268,21 @@ def _run_candidate(
     posteriors = {
         skill: AbilityEstimator.create_prior(skill) for skill in SKILLS
     }
-    anchors = [
+    public_anchors = [
         next(
             question
             for question in questions
             if question.skill is skill and question.is_anchor
         )
-        for skill in ANCHOR_ORDER
+        for skill in PUBLIC_ANCHOR_ORDER
     ]
-    for question in anchors:
+    jd_baselines = _jd_directed_baselines(
+        questions=questions,
+        profile_weights=profile_weights,
+        asked=public_anchors,
+    )
+    baselines = [*public_anchors, *jd_baselines]
+    for question in baselines:
         outcome = _response(
             seed=seed,
             profile=profile,
@@ -247,7 +301,7 @@ def _run_candidate(
         questions=questions,
         posteriors=posteriors,
         profile_weights=profile_weights,
-        asked=anchors,
+        asked=baselines,
         seed=seed,
         profile=profile,
         candidate_id=candidate_id,
@@ -395,9 +449,11 @@ def run_adaptive_benchmark(
             "profiles": len(JOB_PROFILES),
             "total_simulated_candidates": candidates_per_profile
             * len(JOB_PROFILES),
-            "question_budget": 6,
-            "fixed_anchors": 4,
-            "adaptive_or_baseline_follow_ups": 2,
+            "question_budget": 7,
+            "public_anchors": 2,
+            "jd_directed_baselines": 2,
+            "adaptive_or_control_follow_ups": 3,
+            "candidate_route": "intermediate / preferred difficulty 3",
             "response_model": "one-parameter logistic Rasch simulation",
             "seed": seed,
         },

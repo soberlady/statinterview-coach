@@ -110,7 +110,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   const [progress, setProgress] = useState<Progress>({
     completedTurns: 0,
     substantiveTurns: 0,
-    targetSubstantiveTurns: 6,
+    targetSubstantiveTurns: 7,
   });
   const [decision, setDecision] = useState<AgentDecision | null>(null);
   const [interviewMode, setInterviewMode] = useState("diagnostic");
@@ -981,7 +981,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         <aside className="room-progress">
           <p className="card-index">DIAGNOSTIC FLOW</p>
           <h2>能力诊断</h2>
-          <p>四道固定锚点建立基线，两道自适应题减少最大的不确定性。</p>
+          <p>两道公共锚点保证可比，两道 JD 定向基线覆盖岗位重点，三道自适应题减少最大的不确定性。</p>
           <ol>
             {flowLabels.map((label, index) => (
               <li

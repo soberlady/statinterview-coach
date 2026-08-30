@@ -52,6 +52,7 @@ type PolicyCandidate = {
   signals: {
     normalizedInformationGain: number;
     jdRelevance: number;
+    difficultyMatch: number;
     coverageNeed: number;
     timeCost: number;
   };
@@ -76,6 +77,18 @@ type PolicyAuditStep = {
     uncertainty: number;
   } | null;
   ranking: PolicyCandidate[];
+  context: {
+    policyVersion: string;
+    selectionPhase:
+      | "public_anchor"
+      | "jd_directed_baseline"
+      | "posterior_adaptive";
+    candidateRouting: {
+      experienceBand: "beginner" | "intermediate" | "advanced";
+      preferredDifficulty: 2 | 3 | 4;
+      scenarioTags: string[];
+    };
+  } | null;
 };
 
 type PolicyAudit = {
@@ -624,6 +637,19 @@ export function ReportView({ interviewId }: { interviewId: string }) {
                       step.questionType}
                   </span>
                   <span>{labels[step.skill] ?? step.skill}</span>
+                  {step.context ? (
+                    <span>
+                      {step.context.selectionPhase === "public_anchor"
+                        ? "公共锚点"
+                        : step.context.selectionPhase ===
+                            "jd_directed_baseline"
+                          ? "JD 定向基线"
+                          : "后验自适应"}
+                      {" · 难度路由 " +
+                        step.context.candidateRouting
+                          .preferredDifficulty}
+                    </span>
+                  ) : null}
                   <span
                     className={
                       step.matchesPolicy
@@ -690,6 +716,12 @@ export function ReportView({ interviewId }: { interviewId: string }) {
                             JD 相关{" "}
                             {formatPercent(
                               candidate.signals.jdRelevance,
+                            )}
+                          </span>
+                          <span>
+                            难度匹配{" "}
+                            {formatPercent(
+                              candidate.signals.difficultyMatch,
                             )}
                           </span>
                           <span>

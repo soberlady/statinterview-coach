@@ -1,7 +1,10 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { interviews, interviewTurns, skillStates } from "@/db/schema";
-import { selectNextQuestion } from "@/app/lib/agent-policy";
+import {
+  selectNextQuestion,
+  TARGET_SUBSTANTIVE_TURNS,
+} from "@/app/lib/agent-policy";
 import {
   buildGuidedDemoPayload,
   GUIDED_DEMO_MODE,
@@ -79,7 +82,7 @@ export async function GET(_request: Request, context: RouteContext) {
       progress: {
         completedTurns,
         substantiveTurns,
-        targetSubstantiveTurns: 6,
+        targetSubstantiveTurns: TARGET_SUBSTANTIVE_TURNS,
       },
     });
   } catch (error) {

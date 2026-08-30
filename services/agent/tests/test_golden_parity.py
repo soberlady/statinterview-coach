@@ -52,15 +52,25 @@ def test_python_policy_matches_shared_golden_fixture(case) -> None:
         1.0,
     )
     coverage_need = 1.0 / (utility_input["answeredCount"] + 1)
+    difficulty_match = max(
+        0.0,
+        1.0
+        - abs(
+            utility_input["difficulty"]
+            - utility_input["preferredDifficulty"]
+        )
+        / 3.0,
+    )
     time_cost = min(
         utility_input["expectedSeconds"]
         / utility_input["remainingSeconds"],
         1.0,
     )
     utility = (
-        0.55 * normalized_information_gain
+        0.45 * normalized_information_gain
         + 0.25 * jd_relevance
-        + 0.20 * coverage_need
+        + 0.15 * coverage_need
+        + 0.15 * difficulty_match
         - 0.10 * time_cost
     )
     expected = case["expected"]
@@ -83,6 +93,9 @@ def test_python_policy_matches_shared_golden_fixture(case) -> None:
     )
     assert coverage_need == pytest.approx(
         expected["coverageNeed"], abs=1e-10
+    )
+    assert difficulty_match == pytest.approx(
+        expected["difficultyMatch"], abs=1e-10
     )
     assert time_cost == pytest.approx(expected["timeCost"], abs=1e-10)
     assert utility == pytest.approx(expected["utility"], abs=1e-10)

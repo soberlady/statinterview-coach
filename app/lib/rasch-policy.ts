@@ -16,6 +16,7 @@ export type UtilitySignals = {
   informationGain: number;
   normalizedInformationGain: number;
   jdRelevance: number;
+  difficultyMatch: number;
   coverageNeed: number;
   timeCost: number;
 };
@@ -130,6 +131,7 @@ export function scoreQuestionUtility(input: {
   answeredCount: number;
   expectedSeconds: number;
   remainingSeconds: number;
+  difficultyMatch?: number;
 }): UtilitySignals {
   const informationGain = expectedInformationGain(
     input.posterior,
@@ -154,15 +156,18 @@ export function scoreQuestionUtility(input: {
     input.expectedSeconds / Math.max(input.remainingSeconds, 1),
     1,
   );
+  const difficultyMatch = clamp(input.difficultyMatch ?? 0, 0, 1);
   return {
     utility:
-      0.55 * normalizedInformationGain +
+      0.45 * normalizedInformationGain +
       0.25 * jdRelevance +
-      0.2 * coverageNeed -
+      0.15 * coverageNeed +
+      0.15 * difficultyMatch -
       0.1 * timeCost,
     informationGain,
     normalizedInformationGain,
     jdRelevance,
+    difficultyMatch,
     coverageNeed,
     timeCost,
   };

@@ -526,8 +526,8 @@ try {
   );
   const report = reportResult.report;
   assert.ok(report);
-  assert.equal(report.metrics.completedTurns, 6);
-  assert.equal(report.metrics.acceptedTurns, 6);
+  assert.equal(report.metrics.completedTurns, 7);
+  assert.equal(report.metrics.acceptedTurns, 7);
   assert.deepEqual(report.metrics.voiceTelemetry, {
     sessionCount: 2,
     reconnectCount: 2,
@@ -541,14 +541,14 @@ try {
       p95Ms: 1_200,
     },
   });
-  assert.equal(report.metrics.estimatedCostUsd, 0.2168);
+  assert.equal(report.metrics.estimatedCostUsd, 0.2172);
   assert.deepEqual(report.metrics.costTelemetry, {
     status: "AVAILABLE",
-    estimatedCostMicrousd: 216_800,
-    pricedEventCount: 7,
+    estimatedCostMicrousd: 217_200,
+    pricedEventCount: 8,
     voiceUsageEventCount: 1,
-    scorerUsageEventCount: 6,
-    pricedUsageCount: 9,
+    scorerUsageEventCount: 7,
+    pricedUsageCount: 10,
     unpricedUsageCount: 0,
     pricingVersions: ["e2e-scorer-v1", "livekit-list-2026-08-08"],
     allowancesApplied: false,
@@ -567,8 +567,8 @@ try {
         ),
     ),
   );
-  assert.equal(report.policyAudit.summary.replayedTurns, 6);
-  assert.equal(report.policyAudit.summary.matchingSelections, 6);
+  assert.equal(report.policyAudit.summary.replayedTurns, 7);
+  assert.equal(report.policyAudit.summary.matchingSelections, 7);
   assert.equal(
     report.policyAudit.invariants.deterministicSelection,
     true,
@@ -581,7 +581,7 @@ try {
   const adaptiveSteps = report.policyAudit.steps.filter(
     (step) => step.questionType === "adaptive",
   );
-  assert.equal(adaptiveSteps.length, 2);
+  assert.equal(adaptiveSteps.length, 3);
   assert.ok(adaptiveSteps.every((step) => step.ranking.length === 3));
 
   const scorerRequestsBeforeDemo = scorerRequestCount;
@@ -592,7 +592,7 @@ try {
       jobDescription:
         "负责增长漏斗和留存分析，熟练使用 SQL 与 Python 完成数据提取、口径校验和异常排查；参与 A/B 测试设计、实验指标分析与业务复盘。",
       candidateBackground: "合成演示候选人",
-      durationMinutes: 15,
+      durationMinutes: 20,
       cameraEnabled: false,
       recordingEnabled: false,
       mode: "guided_demo",
@@ -648,7 +648,7 @@ try {
 
   while (demoSelection.nextQuestion) {
     demoSequence += 1;
-    assert.ok(demoSequence <= 8, "guided demo exceeded its bounded path");
+    assert.ok(demoSequence <= 9, "guided demo exceeded its bounded path");
     recommendedDemoAnswer = demoSelection.demo.answerOptions.find(
       (option) => option.recommended,
     );
@@ -679,12 +679,12 @@ try {
   const demoReport = demoReportResult.report;
   assert.ok(demoReport);
   assert.equal(demoReport.interview.mode, "guided_demo");
-  assert.equal(demoReport.metrics.completedTurns, 7);
-  assert.equal(demoReport.metrics.acceptedTurns, 5);
+  assert.equal(demoReport.metrics.completedTurns, 8);
+  assert.equal(demoReport.metrics.acceptedTurns, 6);
   assert.equal(demoReport.metrics.verificationTurns, 1);
-  assert.equal(demoReport.policyAudit.summary.replayedTurns, 7);
-  assert.equal(demoReport.policyAudit.summary.matchingSelections, 7);
-  assert.equal(demoReport.policyAudit.summary.adaptiveDecisions, 2);
+  assert.equal(demoReport.policyAudit.summary.replayedTurns, 8);
+  assert.equal(demoReport.policyAudit.summary.matchingSelections, 8);
+  assert.equal(demoReport.policyAudit.summary.adaptiveDecisions, 3);
   assert.ok(
     demoReport.turns.every(
       (turn) => turn.evaluation.evaluator === "DEMO_FIXTURE",

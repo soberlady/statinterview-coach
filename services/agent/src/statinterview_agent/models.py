@@ -149,6 +149,7 @@ class SelectionContext(StrictModel):
     last_skill: SkillDimension | None = None
     consecutive_same_skill: int = Field(default=0, ge=0)
     anchor_only: bool = False
+    preferred_difficulty: float = Field(default=0.0, ge=-3.0, le=3.0)
 
 
 class SelectionDecision(StrictModel):
@@ -158,6 +159,7 @@ class SelectionDecision(StrictModel):
     information_gain: float = Field(ge=0.0)
     normalized_information_gain: Probability
     jd_relevance: Probability
+    difficulty_match: Probability
     coverage_need: Probability
     time_cost: Probability
 
@@ -176,7 +178,7 @@ class VerificationBudget(StrictModel):
     verifications_for_question: int = Field(default=0, ge=0)
     total_verifications: int = Field(default=0, ge=0)
     max_per_question: int = Field(default=1, ge=0)
-    max_total: int = Field(default=3, ge=0)
+    max_total: int = Field(default=2, ge=0)
 
     @property
     def available(self) -> bool:

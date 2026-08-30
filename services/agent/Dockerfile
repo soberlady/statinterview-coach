@@ -5,12 +5,13 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
 
 WORKDIR /app
 
-COPY pyproject.toml README.md ./
+COPY pyproject.toml requirements.txt README.md ./
 COPY src ./src
 
 RUN python -m venv /app/.venv && \
     /app/.venv/bin/python -m pip install --upgrade pip && \
-    /app/.venv/bin/python -m pip install ".[voice]"
+    /app/.venv/bin/python -m pip install -r requirements.txt && \
+    /app/.venv/bin/python -m pip install --no-deps .
 
 FROM python:3.11-slim AS runtime
 

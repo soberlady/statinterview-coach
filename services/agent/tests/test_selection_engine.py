@@ -38,7 +38,7 @@ def test_selector_prefers_information_rich_question_when_other_signals_equal() -
     skill = SkillDimension.STATISTICS_ML
     prior = AbilityEstimator.create_prior(skill)
     questions = (
-        _question("near", skill, 0.0),
+        _question("near", skill, 0.75),
         _question("extreme", skill, 3.0),
     )
     decision = QuestionSelector().select_next(
@@ -51,6 +51,7 @@ def test_selector_prefers_information_rich_question_when_other_signals_equal() -
     )
 
     assert decision.question_id == "near"
+    assert decision.difficulty_match == 0.75
 
 
 def test_selector_prevents_three_consecutive_questions_for_same_skill() -> None:
@@ -118,4 +119,3 @@ def test_engine_updates_ability_for_accepted_evidence(basic_question) -> None:
     assert result.action is InterviewAction.ACCEPT
     assert result.updated_posterior is not None
     assert AbilityEstimator.summary(result.updated_posterior).mean > prior_mean
-

@@ -15,6 +15,8 @@ type Fixture = {
   };
   utilityInput: {
     difficulty: number;
+    preferredDifficulty: number;
+    difficultyMatch: number;
     questionRelevance: number;
     skillJobWeight: number;
     maxJobWeight: number;
@@ -81,6 +83,10 @@ for (const item of fixture.cases) {
       item.expected.normalizedInformationGain,
     );
     close(utility.jdRelevance, item.expected.jdRelevance);
+    close(
+      utility.difficultyMatch,
+      item.expected.difficultyMatch,
+    );
     close(utility.coverageNeed, item.expected.coverageNeed);
     close(utility.timeCost, item.expected.timeCost);
     close(utility.utility, item.expected.utility);

@@ -67,7 +67,10 @@ export type PolicyAudit = {
 export function replayInterviewPolicy(input: {
   interview: Pick<
     Interview,
-    "id" | "jobDescription" | "durationMinutes"
+    | "id"
+    | "jobDescription"
+    | "candidateBackground"
+    | "durationMinutes"
   >;
   turns: InterviewTurn[];
 }): PolicyAudit {
@@ -92,6 +95,7 @@ export function replayInterviewPolicy(input: {
     const decision = selectNextQuestion({
       interview: {
         jobDescription: input.interview.jobDescription,
+        candidateBackground: input.interview.candidateBackground,
         durationMinutes: input.interview.durationMinutes,
         verificationCount,
       },
@@ -178,6 +182,7 @@ export function replayInterviewPolicy(input: {
   const finalDecision = selectNextQuestion({
     interview: {
       jobDescription: input.interview.jobDescription,
+      candidateBackground: input.interview.candidateBackground,
       durationMinutes: input.interview.durationMinutes,
       verificationCount,
     },
@@ -237,6 +242,7 @@ export async function fingerprintPolicyAudit(
       utility: step.utility,
       reliability: step.reliability,
       matchesPolicy: step.matchesPolicy,
+      context: step.context,
       ranking: step.ranking.map((candidate) => ({
         questionId: candidate.questionId,
         utility: candidate.utility,

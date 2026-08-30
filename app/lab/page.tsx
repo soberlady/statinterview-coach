@@ -64,7 +64,8 @@ export default function LabPage() {
           <p className="eyebrow">REPRODUCIBLE POLICY EVALUATION</p>
           <h1>不只展示 Agent，验证它为什么这样决策。</h1>
           <p>
-            我们固定四道锚点题，在相同的六题预算下，对比自适应、固定题序与随机合法题序。
+            我们使用两道公共锚点和两道冻结的 JD 定向基线，在相同的七题预算下，
+            对比三道后验自适应题、固定题序与随机合法题序。
             所有结果由确定性脚本生成，并明确限制在仿真假设内。
           </p>
         </div>
@@ -114,7 +115,7 @@ export default function LabPage() {
           <div className="section-heading">
             <div>
               <p className="card-index">01 / SELECTION ABLATION</p>
-              <h2>同样六题，问题分配给谁更重要</h2>
+              <h2>同样七题，后验阶段如何分配更重要</h2>
             </div>
             <span className="legend">
               加权 MAE 越低越好 · n=

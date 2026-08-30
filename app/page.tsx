@@ -35,7 +35,7 @@ export default function Home() {
             找到真正的<span>能力缺口。</span>
           </h1>
           <p className="hero-description">
-            固定锚点保证可比较，自适应问题减少无效练习。证据不足时，
+            公共锚点保证可比较，JD 定向基线覆盖岗位重点，自适应问题减少无效练习。证据不足时，
             Agent 会继续验证，而不是武断地给你一个分数。
           </p>
           <div className="hero-proof">
@@ -118,7 +118,7 @@ export default function Home() {
           <p className="eyebrow">POLICY EVIDENCE · SYNTHETIC OFFLINE</p>
           <h2 id="evidence-title">创新不是一句“自适应”，而是可复现的对照结果。</h2>
           <p>
-            在相同六题预算下，4,000 个合成候选人的岗位加权能力估计 MAE
+            在相同七题预算下，4,000 个合成候选人的岗位加权能力估计 MAE
             相对固定题序下降{" "}
             {Math.abs(
               benchmark.adaptiveSelection.comparisons.adaptive_vs_fixed
