@@ -19,6 +19,7 @@ import {
   voiceStatusHeading,
   type VoiceStatus,
 } from "@/app/lib/voice-readiness";
+import { normalizeVoiceTranscriptForDisplay } from "@/app/lib/voice-transcript-display";
 
 type PublicQuestion = {
   id: string;
@@ -530,10 +531,11 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
             const isFinal =
               attributes["lk.transcription_final"] === "true";
             voiceTranscriptSegmentsRef.current.set(segmentId, text);
+            const rawTranscript = Array.from(
+              voiceTranscriptSegmentsRef.current.values(),
+            ).join(" ");
             setVoiceTranscript(
-              Array.from(voiceTranscriptSegmentsRef.current.values()).join(
-                " ",
-              ),
+              normalizeVoiceTranscriptForDisplay(rawTranscript),
             );
             setVoiceTranscriptStatus(isFinal ? "final" : "interim");
             if (isFinal) {
