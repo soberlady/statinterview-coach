@@ -321,18 +321,16 @@ async function callRubricModel(input: {
       Authorization: `Bearer ${input.apiKey}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      model: input.model,
-      temperature: 0,
-      response_format: { type: "json_object" },
-      messages: buildRubricMessages({
+    body: JSON.stringify(
+      buildRubricRequestBody({
+        model: input.model,
         reviewer: input.reviewer,
         question: input.question.question,
         criteria,
         candidateAnswer: input.answer,
         transcriptScoringHint: input.transcriptScoringHint,
       }),
-    }),
+    ),
     signal: AbortSignal.timeout(20_000),
   });
   if (!response.ok) {
@@ -361,6 +359,25 @@ async function callRubricModel(input: {
       typeof body.usage?.completion_tokens === "number"
         ? body.usage.completion_tokens
         : null,
+  };
+}
+
+export function buildRubricRequestBody(input: {
+  model: string;
+  reviewer: boolean;
+  question: string;
+  criteria: Array<{
+    criterionIndex: number;
+    description: string;
+    weight: number;
+  }>;
+  candidateAnswer: string;
+  transcriptScoringHint?: string;
+}) {
+  return {
+    model: input.model,
+    response_format: { type: "json_object" as const },
+    messages: buildRubricMessages(input),
   };
 }
 

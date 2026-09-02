@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildRubricMessages,
+  buildRubricRequestBody,
   combineRubricPasses,
   guardEvaluationForTranscriptConfidence,
 } from "../app/lib/rubric-evaluator";
@@ -37,6 +38,25 @@ const question: InterviewQuestion = {
   ],
   verificationQuestions: ["你会怎样画学习曲线？"],
 };
+
+test("gpt-5-mini request omits unsupported sampling parameters", () => {
+  const body = buildRubricRequestBody({
+    model: "gpt-5-mini",
+    reviewer: false,
+    question: question.question,
+    criteria: question.rubric.map((criterion, criterionIndex) => ({
+      criterionIndex,
+      description: criterion.criterion,
+      weight: criterion.weight,
+    })),
+    candidateAnswer: "我会比较训练集和验证集。",
+  });
+
+  assert.equal(body.model, "gpt-5-mini");
+  assert.ok(!("temperature" in body));
+  assert.ok(!("top_p" in body));
+  assert.equal(body.response_format.type, "json_object");
+});
 
 test("transcript hint helps interpretation but cannot become evidence", () => {
   const messages = buildRubricMessages({
