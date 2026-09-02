@@ -5,6 +5,7 @@ import {
   buildRubricRequestBody,
   combineRubricPasses,
   guardEvaluationForTranscriptConfidence,
+  scorerFailureTelemetry,
 } from "../app/lib/rubric-evaluator";
 import {
   evaluateAnswer,
@@ -56,6 +57,21 @@ test("gpt-5-mini request omits unsupported sampling parameters", () => {
   assert.ok(!("temperature" in body));
   assert.ok(!("top_p" in body));
   assert.equal(body.response_format.type, "json_object");
+});
+
+test("scorer failure telemetry excludes messages and request content", () => {
+  const telemetry = scorerFailureTelemetry(
+    new TypeError("secret prompt and credential must not be logged"),
+  );
+
+  assert.deepEqual(telemetry, {
+    category: "network",
+    status: null,
+    errorType: "TypeError",
+    errorCode: null,
+    requestId: null,
+  });
+  assert.doesNotMatch(JSON.stringify(telemetry), /secret|credential/);
 });
 
 test("transcript hint helps interpretation but cannot become evidence", () => {

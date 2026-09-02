@@ -52,6 +52,61 @@ type ModelCallResult = {
   outputTokens: number | null;
 };
 
+class ScorerHttpError extends Error {
+  constructor(
+    readonly status: number,
+    readonly errorType: string | null,
+    readonly errorCode: string | null,
+    readonly requestId: string | null,
+  ) {
+    super("semantic scorer HTTP request failed");
+    this.name = "ScorerHttpError";
+  }
+}
+
+export function scorerFailureTelemetry(error: unknown): {
+  category: "http" | "timeout" | "network" | "response";
+  status: number | null;
+  errorType: string | null;
+  errorCode: string | null;
+  requestId: string | null;
+} {
+  if (error instanceof ScorerHttpError) {
+    return {
+      category: "http",
+      status: error.status,
+      errorType: error.errorType,
+      errorCode: error.errorCode,
+      requestId: error.requestId,
+    };
+  }
+  if (error instanceof DOMException && error.name === "TimeoutError") {
+    return {
+      category: "timeout",
+      status: null,
+      errorType: error.name,
+      errorCode: null,
+      requestId: null,
+    };
+  }
+  if (error instanceof TypeError) {
+    return {
+      category: "network",
+      status: null,
+      errorType: error.name,
+      errorCode: null,
+      requestId: null,
+    };
+  }
+  return {
+    category: "response",
+    status: null,
+    errorType: error instanceof Error ? error.name : null,
+    errorCode: null,
+    requestId: null,
+  };
+}
+
 export async function evaluateAnswerWithFallback(
   question: InterviewQuestion,
   answer: string,
@@ -64,6 +119,10 @@ export async function evaluateAnswerWithFallback(
     if (runtime.STATINTERVIEW_SCORER_STRICT === "1") {
       throw error;
     }
+    console.error(
+      "[semantic-scorer] falling back to structure heuristic",
+      scorerFailureTelemetry(error),
+    );
     return {
       ...evaluateAnswer(question, answer),
       disclaimer:
@@ -334,7 +393,19 @@ async function callRubricModel(input: {
     signal: AbortSignal.timeout(20_000),
   });
   if (!response.ok) {
-    throw new Error(`scorer returned ${response.status}`);
+    const errorBody = (await response.json().catch(() => null)) as {
+      error?: { type?: unknown; code?: unknown };
+    } | null;
+    throw new ScorerHttpError(
+      response.status,
+      typeof errorBody?.error?.type === "string"
+        ? errorBody.error.type
+        : null,
+      typeof errorBody?.error?.code === "string"
+        ? errorBody.error.code
+        : null,
+      response.headers.get("x-request-id"),
+    );
   }
   const body = (await response.json()) as {
     choices?: Array<{
