@@ -57,6 +57,25 @@ test("gpt-5-mini request omits unsupported sampling parameters", () => {
   assert.ok(!("temperature" in body));
   assert.ok(!("top_p" in body));
   assert.equal(body.response_format.type, "json_object");
+  assert.ok(!("thinking" in body));
+});
+
+test("deepseek scoring uses low-latency non-thinking JSON mode", () => {
+  const body = buildRubricRequestBody({
+    model: "deepseek-v4-flash",
+    reviewer: true,
+    question: question.question,
+    criteria: question.rubric.map((criterion, criterionIndex) => ({
+      criterionIndex,
+      description: criterion.criterion,
+      weight: criterion.weight,
+    })),
+    candidateAnswer: "我会比较训练集和验证集。",
+  });
+
+  assert.deepEqual(body.thinking, { type: "disabled" });
+  assert.equal(body.response_format.type, "json_object");
+  assert.ok(!("temperature" in body));
 });
 
 test("scorer failure telemetry excludes messages and request content", () => {

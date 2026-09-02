@@ -445,8 +445,12 @@ export function buildRubricRequestBody(input: {
   candidateAnswer: string;
   transcriptScoringHint?: string;
 }) {
+  const providerOptions = input.model.startsWith("deepseek-")
+    ? { thinking: { type: "disabled" as const } }
+    : {};
   return {
     model: input.model,
+    ...providerOptions,
     response_format: { type: "json_object" as const },
     messages: buildRubricMessages(input),
   };
