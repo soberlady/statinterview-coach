@@ -96,10 +96,13 @@ export function inspectConfiguration(
     }
   }
 
+  const scorerKeyName = env.STATINTERVIEW_SCORER_MODEL?.trim().startsWith("deepseek-")
+    ? "STATINTERVIEW_DEEPSEEK_API_KEY"
+    : "STATINTERVIEW_SCORER_API_KEY";
   const scorerReady = group(
     [
       "STATINTERVIEW_SCORER_ENDPOINT",
-      "STATINTERVIEW_SCORER_API_KEY",
+      scorerKeyName,
       "STATINTERVIEW_SCORER_MODEL",
     ],
     "SCORER",

@@ -6,6 +6,7 @@ import {
   combineRubricPasses,
   guardEvaluationForTranscriptConfidence,
   scorerFailureTelemetry,
+  selectScorerApiKey,
 } from "../app/lib/rubric-evaluator";
 import {
   evaluateAnswer,
@@ -76,6 +77,25 @@ test("deepseek scoring uses low-latency non-thinking JSON mode", () => {
   assert.deepEqual(body.thinking, { type: "disabled" });
   assert.equal(body.response_format.type, "json_object");
   assert.ok(!("temperature" in body));
+});
+
+test("provider-specific scorer keys cannot cross providers", () => {
+  const runtime = {
+    STATINTERVIEW_SCORER_API_KEY: "openai-secret",
+    STATINTERVIEW_DEEPSEEK_API_KEY: "deepseek-secret",
+  };
+
+  assert.equal(selectScorerApiKey("gpt-5-mini", runtime), "openai-secret");
+  assert.equal(
+    selectScorerApiKey("deepseek-v4-flash", runtime),
+    "deepseek-secret",
+  );
+  assert.equal(
+    selectScorerApiKey("deepseek-v4-flash", {
+      STATINTERVIEW_SCORER_API_KEY: "openai-secret",
+    }),
+    undefined,
+  );
 });
 
 test("scorer failure telemetry excludes messages and request content", () => {

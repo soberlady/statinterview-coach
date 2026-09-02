@@ -138,8 +138,8 @@ export async function evaluateAnswerStrict(
 ): Promise<AnswerEvaluation> {
   const runtime = await scorerEnvironment();
   const endpoint = runtime.STATINTERVIEW_SCORER_ENDPOINT?.trim();
-  const apiKey = runtime.STATINTERVIEW_SCORER_API_KEY?.trim();
   const model = runtime.STATINTERVIEW_SCORER_MODEL?.trim();
+  const apiKey = selectScorerApiKey(model, runtime);
   if (!endpoint || !apiKey || !model) {
     throw new Error("semantic scorer configuration is incomplete");
   }
@@ -433,6 +433,16 @@ async function callRubricModel(input: {
   };
 }
 
+export function selectScorerApiKey(
+  model: string | undefined,
+  runtime: Record<string, string | undefined>,
+): string | undefined {
+  const keyName = model?.startsWith("deepseek-")
+    ? "STATINTERVIEW_DEEPSEEK_API_KEY"
+    : "STATINTERVIEW_SCORER_API_KEY";
+  return runtime[keyName]?.trim() || undefined;
+}
+
 export function buildRubricRequestBody(input: {
   model: string;
   reviewer: boolean;
@@ -565,6 +575,7 @@ async function scorerEnvironment(): Promise<
   const keys = [
     "STATINTERVIEW_SCORER_ENDPOINT",
     "STATINTERVIEW_SCORER_API_KEY",
+    "STATINTERVIEW_DEEPSEEK_API_KEY",
     "STATINTERVIEW_SCORER_MODEL",
     "STATINTERVIEW_SCORER_STRICT",
     "STATINTERVIEW_SCORER_INPUT_USD_PER_MILLION_TOKENS",
