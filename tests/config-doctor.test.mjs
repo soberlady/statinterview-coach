@@ -60,6 +60,31 @@ test("browser-visible secret-like variables fail", () => {
   assert.equal(report.ok, false);
 });
 
+test("DeepSeek scorer requires its dedicated provider key", () => {
+  const complete = inspectConfiguration(
+    {
+      STATINTERVIEW_SCORER_ENDPOINT: "https://api.deepseek.com/chat/completions",
+      STATINTERVIEW_DEEPSEEK_API_KEY: "deepseek-key",
+      STATINTERVIEW_SCORER_MODEL: "deepseek-v4-flash",
+    },
+    options,
+  );
+  assert.equal(complete.ok, true);
+
+  const unsafeFallback = inspectConfiguration(
+    {
+      STATINTERVIEW_SCORER_ENDPOINT: "https://api.deepseek.com/chat/completions",
+      STATINTERVIEW_SCORER_API_KEY: "openai-key",
+      STATINTERVIEW_SCORER_MODEL: "deepseek-v4-flash",
+    },
+    options,
+  );
+  assert.ok(
+    unsafeFallback.checks.some((check) => check.code === "SCORER_PARTIAL"),
+  );
+  assert.equal(unsafeFallback.ok, false);
+});
+
 test("public showcase switch accepts only zero or one", () => {
   const report = inspectConfiguration(
     { STATINTERVIEW_PUBLIC_SHOWCASE: "yes" },
