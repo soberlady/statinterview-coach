@@ -90,6 +90,7 @@ def prepare_transcript_for_scoring(raw: str, question_text: str) -> str:
     # Restore a missing percent sign only in an explicit rate context and only
     # when this question itself discusses percentages.
     if "%" in question_text or "百分之" in question_text:
+        hint = re.sub(r"(?<=\d)。(?=\d)", ".", hint)
         hint = re.sub(
             rf"(({_PERCENT_LABELS})(?:为|是|约为|大约为)?\s*)(\d+(?:\.\d+)?)(?!\s*[%\d])",
             r"\1\3%",
@@ -108,6 +109,14 @@ def prepare_transcript_for_scoring(raw: str, question_text: str) -> str:
         hint = re.sub(r"浏览\s*架构\s*支付", "浏览、加购、支付", hint)
         hint = re.sub(r"去除用户数", "去重用户数", hint)
         hint = re.sub(r"同意连续时间窗口", "同一连续时间窗口", hint)
+    if "标准误" in question_text:
+        hint = hint.replace("标准物", "标准误")
+    if "正样本" in question_text:
+        hint = hint.replace("中央本", "正样本").replace("抚养本", "负样本")
+    if "上线" in question_text:
+        hint = hint.replace("上限", "上线")
+    if "指标体系" in question_text and "长期" in question_text:
+        hint = hint.replace("互栏指标", "护栏指标")
     return re.sub(r" {2,}", " ", hint).strip()
 
 
@@ -131,7 +140,18 @@ def _restore_question_percentages(hint: str, question_text: str) -> str:
             return match.group(0)
         return f"{left}%{separator}{right}%"
 
-    return range_pattern.sub(restore_range, hint)
+    hint = range_pattern.sub(restore_range, hint)
+    bare_range_pattern = re.compile(
+        r"(?<![\d.])(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)(?=之间|区间)"
+    )
+
+    def restore_bare_range(match: re.Match[str]) -> str:
+        left, right = match.groups()
+        if left not in percent_values or right not in percent_values:
+            return match.group(0)
+        return f"{left}%到{right}%"
+
+    return bare_range_pattern.sub(restore_bare_range, hint)
 
 
 def _contextual_term_family(question_text: str) -> str:

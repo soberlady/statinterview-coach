@@ -79,6 +79,10 @@ def test_scoring_hint_restores_question_percentage_interval_only() -> None:
         "真实值落在27到33之间，样本量为30",
         question,
     ) == "真实值落在27%到33%之间，样本量为30"
+    assert prepare_transcript_for_scoring(
+        "真实值落在27 33之间",
+        question,
+    ) == "真实值落在27%到33%之间"
 
 
 def test_scoring_hint_does_not_invent_unmentioned_percentage() -> None:
@@ -135,3 +139,18 @@ def test_funnel_near_homophones_require_explicit_step_context() -> None:
         "事件表记录浏览、加购、支付，如何计算用户漏斗？",
     ) == "同一连续时间窗口内按浏览、加购、支付排序并统计去重用户数。"
     assert prepare_transcript_for_scoring(raw, "如何解释置信区间？") == raw
+
+
+def test_live_near_homophones_require_explicit_question_context() -> None:
+    assert prepare_transcript_for_scoring(
+        "标准物缩小一半",
+        "样本量翻四倍，标准误如何变化？",
+    ) == "标准误缩小一半"
+    assert prepare_transcript_for_scoring(
+        "中央本很少，全部预测为抚养本",
+        "欺诈识别中正样本只占0.5%，如何判断模型是否有用？",
+    ) == "正样本很少，全部预测为负样本"
+    assert prepare_transcript_for_scoring(
+        "建议暂缓全量上限",
+        "你会如何向产品经理给出上线建议？",
+    ) == "建议暂缓全量上线"

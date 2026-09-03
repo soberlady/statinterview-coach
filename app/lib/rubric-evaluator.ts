@@ -14,9 +14,21 @@ type CriterionResult = {
 };
 
 export const RUBRIC_PROMPT_VERSION = "rubric-double-pass-v2";
+export const TRANSCRIPT_REPAIR_PROMPT_VERSION = "transcript-repair-v1";
 
 export type AnswerEvaluationOptions = {
   transcriptScoringHint?: string;
+  enableTranscriptRepair?: boolean;
+};
+
+type TranscriptRepair = {
+  repairedText: string;
+  applied: boolean;
+  method: "raw" | "deterministic" | "model";
+  model: string | null;
+  promptVersion: string;
+  inputTokens: number | null;
+  outputTokens: number | null;
 };
 
 export function guardEvaluationForTranscriptConfidence(
@@ -145,6 +157,35 @@ export async function evaluateAnswerStrict(
   }
 
   const startedAt = Date.now();
+  const deterministicHint =
+    options.transcriptScoringHint?.trim() || answer.trim();
+  let transcriptRepair: TranscriptRepair = {
+    repairedText: deterministicHint,
+    applied: deterministicHint !== answer.trim(),
+    method: deterministicHint === answer.trim() ? "raw" : "deterministic",
+    model: null,
+    promptVersion: TRANSCRIPT_REPAIR_PROMPT_VERSION,
+    inputTokens: null,
+    outputTokens: null,
+  };
+  if (options.enableTranscriptRepair) {
+    try {
+      transcriptRepair = await callTranscriptRepairModel({
+        endpoint,
+        apiKey,
+        model,
+        question,
+        answer,
+        deterministicHint,
+      });
+    } catch (error) {
+      console.error(
+        "[transcript-repair] using conservative local interpretation",
+        scorerFailureTelemetry(error),
+      );
+    }
+  }
+  const scoringHint = transcriptRepair.repairedText;
   const questionFingerprint = await sha256(
     JSON.stringify({
       sourceQuestionId: question.sourceQuestionId,
@@ -157,7 +198,7 @@ export async function evaluateAnswerStrict(
       promptVersion: RUBRIC_PROMPT_VERSION,
       questionFingerprint,
       answer,
-      transcriptScoringHint: options.transcriptScoringHint,
+      transcriptScoringHint: scoringHint,
       model,
     }),
   );
@@ -169,7 +210,7 @@ export async function evaluateAnswerStrict(
       model,
       question,
       answer,
-      transcriptScoringHint: options.transcriptScoringHint,
+      transcriptScoringHint: scoringHint,
       reviewer: false,
     }),
     callRubricModel({
@@ -178,12 +219,20 @@ export async function evaluateAnswerStrict(
       model,
       question,
       answer,
-      transcriptScoringHint: options.transcriptScoringHint,
+      transcriptScoringHint: scoringHint,
       reviewer: true,
     }),
   ]);
-  const inputTokens = sumNullable(primary.inputTokens, review.inputTokens);
-  const outputTokens = sumNullable(primary.outputTokens, review.outputTokens);
+  const inputTokens = sumNullableMany([
+    options.enableTranscriptRepair ? transcriptRepair.inputTokens : 0,
+    primary.inputTokens,
+    review.inputTokens,
+  ]);
+  const outputTokens = sumNullableMany([
+    options.enableTranscriptRepair ? transcriptRepair.outputTokens : 0,
+    primary.outputTokens,
+    review.outputTokens,
+  ]);
   const costEstimate = estimateTokenCost({
     inputTokens,
     outputTokens,
@@ -206,6 +255,7 @@ export async function evaluateAnswerStrict(
     promptVersion: RUBRIC_PROMPT_VERSION,
     questionFingerprint,
     requestFingerprint,
+    transcriptRepair,
   });
 }
 
@@ -222,6 +272,7 @@ export function combineRubricPasses(input: {
   promptVersion?: string;
   questionFingerprint?: string;
   requestFingerprint?: string;
+  transcriptRepair?: TranscriptRepair;
 }): AnswerEvaluation {
   const { question, answer, primary, review } = input;
   const costEstimate =
@@ -345,6 +396,17 @@ export function combineRubricPasses(input: {
           evidence: criterion.evidence,
         })),
       },
+      transcriptRepair: input.transcriptRepair
+        ? {
+            applied: input.transcriptRepair.applied,
+            method: input.transcriptRepair.method,
+            model: input.transcriptRepair.model,
+            promptVersion: input.transcriptRepair.promptVersion,
+            repairedText: input.transcriptRepair.applied
+              ? input.transcriptRepair.repairedText
+              : undefined,
+          }
+        : undefined,
     },
     telemetry: {
       model: input.model,
@@ -358,6 +420,186 @@ export function combineRubricPasses(input: {
     disclaimer:
       "本轮经过初评与角色分离的复核两遍量表评分；证据必须能在回答原文中精确定位。结果仅用于训练反馈。",
   };
+}
+
+async function callTranscriptRepairModel(input: {
+  endpoint: string;
+  apiKey: string;
+  model: string;
+  question: InterviewQuestion;
+  answer: string;
+  deterministicHint: string;
+}): Promise<TranscriptRepair> {
+  const response = await fetch(input.endpoint, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${input.apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(
+      buildTranscriptRepairRequestBody({
+        model: input.model,
+        question: input.question.question,
+        rubric: input.question.rubric.map((item) => item.criterion),
+        rawTranscript: input.answer,
+        deterministicHint: input.deterministicHint,
+      }),
+    ),
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!response.ok) {
+    const errorBody = (await response.json().catch(() => null)) as {
+      error?: { type?: unknown; code?: unknown };
+    } | null;
+    throw new ScorerHttpError(
+      response.status,
+      typeof errorBody?.error?.type === "string"
+        ? errorBody.error.type
+        : null,
+      typeof errorBody?.error?.code === "string"
+        ? errorBody.error.code
+        : null,
+      response.headers.get("x-request-id"),
+    );
+  }
+  const body = (await response.json()) as {
+    choices?: Array<{ message?: { content?: string } }>;
+    usage?: { prompt_tokens?: number; completion_tokens?: number };
+  };
+  const content = body.choices?.[0]?.message?.content;
+  if (!content) throw new Error("transcript repair returned no content");
+  const parsed = parseJsonObject(content) as { repairedTranscript?: unknown };
+  if (typeof parsed.repairedTranscript !== "string") {
+    throw new Error("transcript repair response is invalid");
+  }
+  const validatedText = validateTranscriptRepair(
+    input.deterministicHint,
+    parsed.repairedTranscript,
+  );
+  const repairedText =
+    validatedText === input.answer.trim() &&
+    input.deterministicHint !== input.answer.trim()
+      ? input.deterministicHint
+      : validatedText;
+  return {
+    repairedText,
+    applied: repairedText !== input.answer.trim(),
+    method:
+      repairedText === input.answer.trim()
+        ? "raw"
+        : repairedText === input.deterministicHint
+          ? "deterministic"
+          : "model",
+    model: repairedText === input.deterministicHint ? null : input.model,
+    promptVersion: TRANSCRIPT_REPAIR_PROMPT_VERSION,
+    inputTokens:
+      typeof body.usage?.prompt_tokens === "number"
+        ? body.usage.prompt_tokens
+        : null,
+    outputTokens:
+      typeof body.usage?.completion_tokens === "number"
+        ? body.usage.completion_tokens
+        : null,
+  };
+}
+
+export function buildTranscriptRepairRequestBody(input: {
+  model: string;
+  question: string;
+  rubric: string[];
+  rawTranscript: string;
+  deterministicHint: string;
+}) {
+  const providerOptions = input.model.startsWith("deepseek-")
+    ? { thinking: { type: "disabled" as const } }
+    : {};
+  return {
+    model: input.model,
+    ...providerOptions,
+    response_format: { type: "json_object" as const },
+    messages: [
+      {
+        role: "system",
+        content: [
+          "你是中文数据分析面试的语音转写校对器，不是回答生成器。",
+          "只修复明显的语音识别错误：同音字、漏掉的百分号、标点和中英混合专业术语。",
+          "必须保持原句顺序、观点、因果关系、数字和否定含义；不得补充新知识、步骤、结论或例子。",
+          "题目和量表只用于辨认术语，不代表候选人说过其中内容。",
+          "不能确定时保留原文。不要润色表达，不要删除口误或重复。",
+          "只输出JSON对象：{\"repairedTranscript\":\"...\"}。",
+        ].join("\n"),
+      },
+      {
+        role: "user",
+        content: JSON.stringify({
+          question: input.question,
+          rubricTerms: input.rubric,
+          rawTranscript: input.rawTranscript,
+          conservativeLocalHint: input.deterministicHint,
+        }),
+      },
+    ],
+  };
+}
+
+export function validateTranscriptRepair(
+  source: string,
+  candidate: string,
+): string {
+  const left = source.trim();
+  const right = candidate.trim();
+  if (!right || right.length > 20_000) {
+    throw new Error("transcript repair is empty or too long");
+  }
+  const ratio = right.length / Math.max(1, left.length);
+  if (ratio < 0.72 || ratio > 1.28) {
+    throw new Error("transcript repair changed too much text");
+  }
+  const sourceNumbers = (left.match(/\d+(?:[.。]\d+)?/g) ?? []).map(
+    (value) => value.replace("。", "."),
+  );
+  const candidateNumbers = (right.match(/\d+(?:[.。]\d+)?/g) ?? []).map(
+    (value) => value.replace("。", "."),
+  );
+  if (JSON.stringify(sourceNumbers) !== JSON.stringify(candidateNumbers)) {
+    throw new Error("transcript repair changed numeric evidence");
+  }
+  const negation = /不|没|无|未|非/g;
+  if (
+    JSON.stringify(left.match(negation) ?? []) !==
+    JSON.stringify(right.match(negation) ?? [])
+  ) {
+    throw new Error("transcript repair changed negation evidence");
+  }
+  if (characterSimilarity(left, right) < 0.68) {
+    throw new Error("transcript repair is not traceable to the source");
+  }
+  return right;
+}
+
+function characterSimilarity(left: string, right: string): number {
+  if (left === right) return 1;
+  if (!left || !right) return 0;
+  const leftPairs = characterPairs(left);
+  const rightPairs = characterPairs(right);
+  let overlap = 0;
+  for (const [pair, count] of leftPairs) {
+    overlap += Math.min(count, rightPairs.get(pair) ?? 0);
+  }
+  const leftCount = [...leftPairs.values()].reduce((sum, count) => sum + count, 0);
+  const rightCount = [...rightPairs.values()].reduce((sum, count) => sum + count, 0);
+  return (2 * overlap) / Math.max(1, leftCount + rightCount);
+}
+
+function characterPairs(value: string): Map<string, number> {
+  const compact = value.replace(/\s+/g, "");
+  const pairs = new Map<string, number>();
+  if (compact.length === 1) pairs.set(compact, 1);
+  for (let index = 0; index < compact.length - 1; index += 1) {
+    const pair = compact.slice(index, index + 2);
+    pairs.set(pair, (pairs.get(pair) ?? 0) + 1);
+  }
+  return pairs;
 }
 
 async function callRubricModel(input: {
@@ -507,12 +749,15 @@ export function buildRubricMessages(input: {
 }
 
 function parseRubricPass(content: string): RubricPass {
+  return parseJsonObject(content) as RubricPass;
+}
+
+function parseJsonObject(content: string): Record<string, unknown> {
   const trimmed = content
     .trim()
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/\s*```$/, "");
-  const parsed = JSON.parse(trimmed) as RubricPass;
-  return parsed;
+  return JSON.parse(trimmed) as Record<string, unknown>;
 }
 
 function validatePass(pass: RubricPass, criterionCount: number): void {
@@ -546,6 +791,12 @@ function sumNullable(
   right: number | null,
 ): number | null {
   return left === null || right === null ? null : left + right;
+}
+
+function sumNullableMany(values: Array<number | null>): number | null {
+  return values.every((value): value is number => value !== null)
+    ? values.reduce((total, value) => total + value, 0)
+    : null;
 }
 
 function round(value: number, precision = 4): number {

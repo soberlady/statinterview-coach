@@ -2104,6 +2104,82 @@ a {
   background: var(--white);
 }
 
+.transcript-audit-card {
+  margin-top: 18px;
+  padding: 34px;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: var(--white);
+}
+
+.transcript-audit-card .policy-audit-heading {
+  grid-template-columns: 1fr;
+}
+
+.transcript-audit-list {
+  display: grid;
+  gap: 14px;
+  margin-top: 28px;
+}
+
+.transcript-audit-item {
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--paper);
+}
+
+.transcript-audit-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--teal);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.transcript-audit-item h3 {
+  margin: 10px 0 14px;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.transcript-copy {
+  padding: 15px;
+  border-radius: 12px;
+  background: var(--white);
+}
+
+.transcript-copy strong,
+.transcript-audit-item summary {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.transcript-copy p {
+  margin: 7px 0 0;
+  font-size: 12px;
+  line-height: 1.75;
+  white-space: pre-wrap;
+}
+
+.transcript-audit-item details {
+  margin-top: 12px;
+}
+
+.transcript-audit-item summary {
+  cursor: pointer;
+}
+
+.transcript-copy.raw {
+  margin-top: 10px;
+  border: 1px dashed var(--line);
+  background: transparent;
+  color: var(--muted);
+}
+
 .policy-audit-heading {
   display: grid;
   grid-template-columns: 1fr 250px;
@@ -2971,6 +3047,10 @@ a {
   }
 
   .policy-audit-card {
+    padding: 24px 18px;
+  }
+
+  .transcript-audit-card {
     padding: 24px 18px;
   }
 
