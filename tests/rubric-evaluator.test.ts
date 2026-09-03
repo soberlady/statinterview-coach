@@ -126,6 +126,7 @@ test("transcript hint helps interpretation but cannot become evidence", () => {
 
   assert.match(system, /不能引用转写理解辅助/);
   assert.match(system, /冲突时，以回答原文为准/);
+  assert.match(system, /不得用于补全原文中缺失的否定词/);
   assert.equal(user.candidateAnswer, "留存率是30");
   assert.equal(user.transcriptScoringHint, "留存率是30%");
 });
