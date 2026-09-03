@@ -65,6 +65,24 @@ def test_scoring_hint_restores_missing_percent_in_rate_context_only() -> None:
     assert prepare_transcript_for_scoring("样本量为30", question) == "样本量为30"
 
 
+def test_scoring_hint_restores_question_percentage_interval_only() -> None:
+    question = "留存率为30%，95%置信区间为[27%，33%]，请解释。"
+
+    assert prepare_transcript_for_scoring(
+        "真实值落在27到33之间，样本量为30",
+        question,
+    ) == "真实值落在27%到33%之间，样本量为30"
+
+
+def test_scoring_hint_does_not_invent_unmentioned_percentage() -> None:
+    question = "留存率为30%，95%置信区间为[27%，33%]，请解释。"
+
+    assert prepare_transcript_for_scoring(
+        "样本量增加到100",
+        question,
+    ) == "样本量增加到100"
+
+
 def test_scoring_hint_normalizes_mixed_language_identifiers() -> None:
     hint = prepare_transcript_for_scoring(
         "用 user ID 分组，再用 row number 和 ROC AUC 评估。",
@@ -83,3 +101,30 @@ def test_accent_aliases_are_normalized_only_when_question_provides_context() -> 
 
     assert contextual == "先用 ROW_NUMBER，再看 ROC-AUC 和 Pandas。"
     assert prepare_transcript_for_scoring(raw, "请解释置信区间。") == raw
+
+
+def test_python_pronunciation_aliases_use_question_context() -> None:
+    raw = "使用Pendas的chuncsize分块，再用HypeQ或SQLate处理。"
+
+    assert prepare_transcript_for_scoring(
+        raw,
+        "一个20GB CSV无法装入内存，如何用Python完成？",
+    ) == "使用Pandas的chunksize分块，再用heapq或SQLite处理。"
+    assert prepare_transcript_for_scoring(raw, "请解释置信区间。") == raw
+
+
+def test_bonferroni_alias_uses_multiple_testing_context() -> None:
+    assert prepare_transcript_for_scoring(
+        "可以使用Boforronai校正控制风险。",
+        "同时观察20个指标时如何控制多重比较误判？",
+    ) == "可以使用Bonferroni校正控制风险。"
+
+
+def test_funnel_near_homophones_require_explicit_step_context() -> None:
+    raw = "同意连续时间窗口内按浏览架构支付排序并统计去除用户数。"
+
+    assert prepare_transcript_for_scoring(
+        raw,
+        "事件表记录浏览、加购、支付，如何计算用户漏斗？",
+    ) == "同一连续时间窗口内按浏览、加购、支付排序并统计去重用户数。"
+    assert prepare_transcript_for_scoring(raw, "如何解释置信区间？") == raw

@@ -26,7 +26,43 @@ _TERM_REPLACEMENTS = (
         re.compile(r"\b(?:roc|rock|r\s*o\s*c)[\s_-]*a\s*u\s*c\b", re.I),
     ),
     ("PR-AUC", re.compile(r"\bpr[\s_-]*auc\b", re.I)),
-    ("Pandas", re.compile(r"\bpandas?\b", re.I)),
+    (
+        "Pandas",
+        re.compile(
+            r"(?<![a-z0-9])(?:pandas?|pendas?|panda)(?![a-z0-9])",
+            re.I,
+        ),
+    ),
+    (
+        "Bonferroni",
+        re.compile(
+            r"(?<![a-z0-9])(?:bonferroni|bof+or+on+a?i|bonfer+on+i)"
+            r"(?![a-z0-9])",
+            re.I,
+        ),
+    ),
+    (
+        "chunksize",
+        re.compile(
+            r"(?<![a-z0-9])(?:chunksize|chuncsize|chunk[\s_-]*size)"
+            r"(?![a-z0-9])",
+            re.I,
+        ),
+    ),
+    (
+        "heapq",
+        re.compile(
+            r"(?<![a-z0-9])(?:heapq|hypeq|heap[\s_-]*q)(?![a-z0-9])",
+            re.I,
+        ),
+    ),
+    (
+        "SQLite",
+        re.compile(
+            r"(?<![a-z0-9])(?:sqlite|sqlate|sql[\s_-]*lite)(?![a-z0-9])",
+            re.I,
+        ),
+    ),
     ("A/B 测试", re.compile(r"\ba\s*(?:/|斜杠|和)?\s*b\s*(?:test|测试)?\b", re.I)),
 )
 
@@ -59,13 +95,55 @@ def prepare_transcript_for_scoring(raw: str, question_text: str) -> str:
             r"\1\3%",
             hint,
         )
+        hint = _restore_question_percentages(hint, question_text)
 
     compact_question = re.sub(r"[\s_-]", "", question_text).lower()
+    term_context = f"{compact_question} {_contextual_term_family(question_text)}"
     for canonical, pattern in _TERM_REPLACEMENTS:
         compact_canonical = re.sub(r"[\s_-]", "", canonical).lower()
-        if compact_canonical in compact_question:
+        if compact_canonical in term_context:
             hint = pattern.sub(canonical, hint)
+
+    if all(term in question_text for term in ("浏览", "加购", "支付")):
+        hint = re.sub(r"浏览\s*架构\s*支付", "浏览、加购、支付", hint)
+        hint = re.sub(r"去除用户数", "去重用户数", hint)
+        hint = re.sub(r"同意连续时间窗口", "同一连续时间窗口", hint)
     return re.sub(r" {2,}", " ", hint).strip()
+
+
+def _restore_question_percentages(hint: str, question_text: str) -> str:
+    """Restore a spoken percentage range using exact values in the question."""
+
+    percent_values = set(
+        re.findall(r"(?<![\d.])(\d+(?:\.\d+)?)\s*%", question_text)
+    )
+    if not percent_values:
+        return hint
+
+    range_pattern = re.compile(
+        r"(?<![\d.])(\d+(?:\.\d+)?)\s*(到|至|和|与|[-—~～])\s*"
+        r"(\d+(?:\.\d+)?)(?![\d.])"
+    )
+
+    def restore_range(match: re.Match[str]) -> str:
+        left, separator, right = match.groups()
+        if left not in percent_values or right not in percent_values:
+            return match.group(0)
+        return f"{left}%{separator}{right}%"
+
+    return range_pattern.sub(restore_range, hint)
+
+
+def _contextual_term_family(question_text: str) -> str:
+    """Return canonical terms enabled by explicit question-domain context."""
+
+    families: list[str] = []
+    lowered = question_text.lower()
+    if any(term in lowered for term in ("python", "csv", "分块", "内存")):
+        families.append("pandas chunksize heapq sqlite")
+    if any(term in question_text for term in ("多重比较", "误判", "p值", "p 值")):
+        families.append("bonferroni")
+    return " ".join(families)
 
 
 def _spoken_number_to_arabic(value: str) -> str:
