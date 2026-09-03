@@ -22,9 +22,14 @@ def test_same_conversation_item_is_updated_instead_of_duplicated() -> None:
     buffer = CommittedTranscriptBuffer()
 
     buffer.add("item-1", "窗口函数")
+    first_revision = buffer.revision
     buffer.add("item-1", "使用窗口函数按品类分组")
 
     assert buffer.text == "使用窗口函数按品类分组"
+    assert buffer.revision == first_revision + 1
+
+    buffer.add("item-1", "使用窗口函数按品类分组")
+    assert buffer.revision == first_revision + 1
 
 
 def test_transcript_confidence_tracks_committed_fragments() -> None:
@@ -42,10 +47,12 @@ def test_clear_starts_a_new_question_transcript() -> None:
     buffer = CommittedTranscriptBuffer()
     buffer.add("item-1", "第一题回答")
 
+    before_clear = buffer.revision
     buffer.clear()
     buffer.add("item-2", "第二题回答")
 
     assert buffer.text == "第二题回答"
+    assert buffer.revision == before_clear + 2
 
 
 def test_scoring_hint_restores_spoken_percent_without_changing_raw() -> None:

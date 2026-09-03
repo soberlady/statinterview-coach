@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Mapping, Protocol
 
@@ -18,6 +19,9 @@ class TranscriptBuffer(Protocol):
 
     @property
     def confidence(self) -> float | None: ...
+
+    @property
+    def revision(self) -> int: ...
 
 
 class VoiceTurnRuntime(Protocol):
@@ -40,6 +44,44 @@ class VoiceTurnTransportError(RuntimeError):
 PostTurn = Callable[[dict[str, Any]], Awaitable[VoiceApiResponse]]
 LoadAuthoritativeState = Callable[[], Awaitable[Mapping[str, Any]]]
 CompleteInterview = Callable[[], Awaitable[None]]
+
+
+async def wait_for_transcript_stability(
+    runtime: VoiceTurnRuntime,
+    *,
+    quiet_seconds: float,
+    max_wait_seconds: float = 45.0,
+    poll_seconds: float = 0.1,
+) -> bool:
+    """Wait until no committed transcript fragment arrives for a quiet period.
+
+    LiveKit may finalize several conversation items during one long spoken
+    answer. Submitting on the first item can clear half an answer and assign
+    its continuation to the next question. The monotonic buffer revision lets
+    the tool reset its quiet timer whenever another item arrives.
+    """
+
+    quiet_seconds = max(0.0, quiet_seconds)
+    max_wait_seconds = max(0.0, max_wait_seconds)
+    poll_seconds = max(0.01, min(poll_seconds, max(quiet_seconds, 0.01)))
+    loop = asyncio.get_running_loop()
+    started_at = loop.time()
+    stable_since = started_at
+    revision = runtime.transcript_buffer.revision
+
+    while True:
+        now = loop.time()
+        if now - stable_since >= quiet_seconds:
+            return True
+        if now - started_at >= max_wait_seconds:
+            return False
+        await asyncio.sleep(
+            min(poll_seconds, quiet_seconds - (now - stable_since))
+        )
+        current_revision = runtime.transcript_buffer.revision
+        if current_revision != revision:
+            revision = current_revision
+            stable_since = loop.time()
 
 
 async def process_voice_answer(

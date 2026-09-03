@@ -191,6 +191,7 @@ class CommittedTranscriptBuffer:
     """Keep committed user messages in arrival order without duplicating IDs."""
 
     _items: dict[str, tuple[str, float | None]] = field(default_factory=dict)
+    _revision: int = 0
 
     def add(
         self,
@@ -205,7 +206,10 @@ class CommittedTranscriptBuffer:
                 if isinstance(confidence, (int, float))
                 else None
             )
-            self._items[item_id] = (normalized, bounded_confidence)
+            value = (normalized, bounded_confidence)
+            if self._items.get(item_id) != value:
+                self._items[item_id] = value
+                self._revision += 1
 
     @property
     def text(self) -> str:
@@ -216,5 +220,13 @@ class CommittedTranscriptBuffer:
         values = [value for _, value in self._items.values() if value is not None]
         return round(sum(values) / len(values), 6) if values else None
 
+    @property
+    def revision(self) -> int:
+        """Monotonic signal used to detect late transcript fragments."""
+
+        return self._revision
+
     def clear(self) -> None:
-        self._items.clear()
+        if self._items:
+            self._items.clear()
+            self._revision += 1

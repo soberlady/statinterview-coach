@@ -7,6 +7,7 @@ from statinterview_agent.voice_turn import (
     VoiceApiResponse,
     VoiceTurnTransportError,
     process_voice_answer,
+    wait_for_transcript_stability,
 )
 
 
@@ -20,6 +21,51 @@ class Runtime:
     transcript_buffer: CommittedTranscriptBuffer = field(
         default_factory=CommittedTranscriptBuffer
     )
+
+
+def test_transcript_stability_resets_when_a_late_fragment_arrives() -> None:
+    runtime = Runtime()
+    runtime.transcript_buffer.add("item-1", "先排除数据链路问题")
+
+    async def scenario() -> tuple[bool, float]:
+        loop = asyncio.get_running_loop()
+        started_at = loop.time()
+        waiting = asyncio.create_task(
+            wait_for_transcript_stability(
+                runtime,
+                quiet_seconds=0.04,
+                max_wait_seconds=0.2,
+                poll_seconds=0.005,
+            )
+        )
+        await asyncio.sleep(0.02)
+        runtime.transcript_buffer.add("item-2", "再排查业务变化")
+        return await waiting, loop.time() - started_at
+
+    stable, elapsed = asyncio.run(scenario())
+
+    assert stable is True
+    assert elapsed >= 0.055
+    assert runtime.transcript_buffer.text == (
+        "先排除数据链路问题 再排查业务变化"
+    )
+
+
+def test_transcript_stability_times_out_without_clearing_answer() -> None:
+    runtime = Runtime()
+    runtime.transcript_buffer.add("item-1", "这是一段仍在继续的回答")
+
+    stable = asyncio.run(
+        wait_for_transcript_stability(
+            runtime,
+            quiet_seconds=0.1,
+            max_wait_seconds=0.03,
+            poll_seconds=0.005,
+        )
+    )
+
+    assert stable is False
+    assert runtime.transcript_buffer.text == "这是一段仍在继续的回答"
 
 
 def test_success_preserves_verbatim_evidence_and_advances_question() -> None:
