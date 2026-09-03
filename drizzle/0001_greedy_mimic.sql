@@ -1,0 +1,1 @@
+ALTER TABLE `interview_turns` ADD `scoring_answer_text` text;

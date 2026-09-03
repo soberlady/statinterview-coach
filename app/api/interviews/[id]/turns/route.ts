@@ -245,12 +245,29 @@ export async function POST(request: Request, context: RouteContext) {
         ? evaluateGuidedDemoAnswer(question, answerText)
         : await evaluateAnswerWithFallback(question, answerText, {
             transcriptScoringHint,
+            enableTranscriptRepair: inputMode === "voice",
           });
     const evaluation = guardEvaluationForTranscriptConfidence(
       rawEvaluation,
       transcriptConfidence,
       scorerTranscriptConfidenceThreshold(),
     );
+    const scoringAnswerText =
+      evaluation.semantic?.transcriptRepair?.applied
+        ? evaluation.semantic.transcriptRepair.repairedText ?? null
+        : null;
+    const persistedEvaluation = evaluation.semantic?.transcriptRepair
+      ? {
+          ...evaluation,
+          semantic: {
+            ...evaluation.semantic,
+            transcriptRepair: {
+              ...evaluation.semantic.transcriptRepair,
+              repairedText: undefined,
+            },
+          },
+        }
+      : evaluation;
     const now = new Date().toISOString();
     const turnId = `turn_${crypto.randomUUID()}`;
     const turnValues: typeof interviewTurns.$inferInsert = {
@@ -262,11 +279,12 @@ export async function POST(request: Request, context: RouteContext) {
       skill: question.skill,
       questionType: question.questionType,
       answerText: answerText.trim(),
+      scoringAnswerText,
       inputMode,
       status: "completed",
       transcriptConfidence,
       evidence: jsonString(evaluation.evidence, "evidence", 32 * 1024),
-      evaluation: jsonString(evaluation, "evaluation", 32 * 1024),
+      evaluation: jsonString(persistedEvaluation, "evaluation", 32 * 1024),
       reliability: evaluation.reliability,
       startedAt,
       completedAt,
@@ -296,6 +314,7 @@ export async function POST(request: Request, context: RouteContext) {
       questionId: turnValues.questionId ?? null,
       questionType: turnValues.questionType ?? "adaptive",
       answerText: turnValues.answerText ?? "",
+      scoringAnswerText: turnValues.scoringAnswerText ?? null,
       inputMode: turnValues.inputMode ?? "voice",
       status: turnValues.status ?? "completed",
       transcriptConfidence,
@@ -457,6 +476,9 @@ export async function POST(request: Request, context: RouteContext) {
               ),
               answerText: sql<string>`${turnValues.answerText}`.as(
                 "answer_text",
+              ),
+              scoringAnswerText: sql<string | null>`${turnValues.scoringAnswerText ?? null}`.as(
+                "scoring_answer_text",
               ),
               inputMode: sql<string>`${turnValues.inputMode}`.as("input_mode"),
               status: sql<string>`${turnValues.status}`.as("status"),

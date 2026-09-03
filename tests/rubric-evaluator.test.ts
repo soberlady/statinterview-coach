@@ -3,10 +3,12 @@ import test from "node:test";
 import {
   buildRubricMessages,
   buildRubricRequestBody,
+  buildTranscriptRepairRequestBody,
   combineRubricPasses,
   guardEvaluationForTranscriptConfidence,
   scorerFailureTelemetry,
   selectScorerApiKey,
+  validateTranscriptRepair,
 } from "../app/lib/rubric-evaluator";
 import {
   evaluateAnswer,
@@ -129,6 +131,41 @@ test("transcript hint helps interpretation but cannot become evidence", () => {
   assert.match(system, /不得用于补全原文中缺失的否定词/);
   assert.equal(user.candidateAnswer, "留存率是30");
   assert.equal(user.transcriptScoringHint, "留存率是30%");
+});
+
+test("transcript repair is constrained to ASR correction", () => {
+  const body = buildTranscriptRepairRequestBody({
+    model: "deepseek-v4-flash",
+    question: "正样本只占0.5%，如何选择评价指标？",
+    rubric: ["解释精确率、召回率和PR-AUC"],
+    rawTranscript: "中央本只占0.5，使用PRR",
+    deterministicHint: "正样本只占0.5%，使用PRR",
+  });
+  const system = body.messages[0].content;
+  const user = JSON.parse(body.messages[1].content);
+
+  assert.deepEqual(body.thinking, { type: "disabled" });
+  assert.match(system, /不得补充新知识/);
+  assert.match(system, /保持原句顺序/);
+  assert.equal(user.rawTranscript, "中央本只占0.5，使用PRR");
+});
+
+test("transcript repair preserves numeric and negative evidence", () => {
+  assert.equal(
+    validateTranscriptRepair(
+      "正样本只占0.5%，不建议直接上线，使用PRR",
+      "正样本只占0.5%，不建议直接上线，使用PR-AUC",
+    ),
+    "正样本只占0.5%，不建议直接上线，使用PR-AUC",
+  );
+  assert.throws(
+    () => validateTranscriptRepair("提升5%，不建议上线", "提升15%，不建议上线"),
+    /numeric evidence/,
+  );
+  assert.throws(
+    () => validateTranscriptRepair("不建议上线", "建议上线"),
+    /negation evidence/,
+  );
 });
 
 test("low voice transcript confidence forces verification", () => {

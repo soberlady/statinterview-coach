@@ -29,6 +29,14 @@ type Evaluation = {
   strengths?: string[];
   gaps?: string[];
   disclaimer?: string;
+  semantic?: {
+    transcriptRepair?: {
+      applied: boolean;
+      method: "raw" | "deterministic" | "model";
+      model: string | null;
+      promptVersion: string;
+    };
+  };
 };
 
 type Turn = {
@@ -38,6 +46,8 @@ type Turn = {
   skill: string;
   questionType: string;
   answerText: string;
+  scoringAnswerText: string | null;
+  inputMode: string;
   reliability: Reliability | null;
   evaluation: Evaluation;
 };
@@ -568,6 +578,55 @@ export function ReportView({ interviewId }: { interviewId: string }) {
           </div>
         </article>
       </section>
+
+      {report.turns.some((turn) => turn.inputMode === "voice") ? (
+        <section className="transcript-audit-card">
+          <div className="policy-audit-heading">
+            <div>
+              <p className="card-index">TRANSCRIPT AUDIT</p>
+              <h2>语音转写与评分辅助文本</h2>
+              <p>
+                评分辅助文本只校正近音词、百分号、标点和专业术语；
+                原始转写永久保留，并仍是评分证据的唯一引用来源。
+              </p>
+            </div>
+          </div>
+          <div className="transcript-audit-list">
+            {report.turns
+              .filter((turn) => turn.inputMode === "voice")
+              .map((turn) => {
+                const repair = turn.evaluation.semantic?.transcriptRepair;
+                return (
+                  <article className="transcript-audit-item" key={turn.id}>
+                    <div className="transcript-audit-meta">
+                      <span>
+                        第 {turn.sequenceNumber} 题 · {labels[turn.skill] ?? turn.skill}
+                      </span>
+                      <span>
+                        {repair?.method === "model"
+                          ? "模型辅助校对"
+                          : repair?.method === "deterministic"
+                            ? "规则辅助校对"
+                            : "原始转写未改动"}
+                      </span>
+                    </div>
+                    <h3>{turn.questionText}</h3>
+                    <div className="transcript-copy repaired">
+                      <strong>评分辅助文本</strong>
+                      <p>{turn.scoringAnswerText ?? turn.answerText}</p>
+                    </div>
+                    <details>
+                      <summary>查看原始语音转写</summary>
+                      <div className="transcript-copy raw">
+                        <p>{turn.answerText}</p>
+                      </div>
+                    </details>
+                  </article>
+                );
+              })}
+          </div>
+        </section>
+      ) : null}
 
       <section className="policy-audit-card">
         <div className="policy-audit-heading">

@@ -60,6 +60,7 @@ export const interviewTurns = sqliteTable(
     skill: text("skill").notNull(),
     questionType: text("question_type").notNull().default("adaptive"),
     answerText: text("answer_text").notNull().default(""),
+    scoringAnswerText: text("scoring_answer_text"),
     inputMode: text("input_mode").notNull().default("voice"),
     status: text("status").notNull().default("completed"),
     transcriptConfidence: real("transcript_confidence"),

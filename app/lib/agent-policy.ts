@@ -66,6 +66,13 @@ export type AnswerEvaluation = {
         evidence: string[];
       }>;
     };
+    transcriptRepair?: {
+      applied: boolean;
+      method: "raw" | "deterministic" | "model";
+      model: string | null;
+      promptVersion: string;
+      repairedText?: string;
+    };
   };
   telemetry?: {
     model: string;

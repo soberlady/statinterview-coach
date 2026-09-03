@@ -40,6 +40,7 @@ from .voice_turn import (
     VoiceApiResponse,
     VoiceTurnTransportError,
     process_voice_answer,
+    wait_for_transcript_stability,
 )
 
 load_dotenv(".env.local")
@@ -73,6 +74,7 @@ class VoiceRuntime:
     sequence_number: int
     current_question: dict[str, Any] | None
     minimum_transcript_confidence: float = 0.72
+    transcript_stability_seconds: float = 4.0
     low_confidence_retries: int = 0
     transcript_buffer: CommittedTranscriptBuffer = field(
         default_factory=CommittedTranscriptBuffer
@@ -98,6 +100,7 @@ class StatInterviewVoiceAgent(Agent):
 规则：
 一、一次只问一个问题，表达简短、自然，不给标准答案或暗示。
 二、候选人完成一次回答后，必须调用 submit_current_answer，且每轮只调用一次。
+二点一、短暂停顿不代表回答结束。候选人仍在继续说时保持安静，不得催促、清空转写或切换题目。
 三、工具保存的是 LiveKit 的最终原始转写，不得改写、总结或美化候选人证据。
 四、工具返回 CONTINUE 时，只做一句简短承接，然后原样朗读 spoken_question；不要读取或复述其他字段。
 五、工具返回 COMPLETE 时，告知诊断已完成并引导候选人查看网页报告。
@@ -123,6 +126,21 @@ class StatInterviewVoiceAgent(Agent):
 
         runtime = context.userdata
         async with runtime.submit_lock:
+            stable = await wait_for_transcript_stability(
+                runtime,
+                quiet_seconds=runtime.transcript_stability_seconds,
+            )
+            if not stable:
+                return json.dumps(
+                    {
+                        "status": "WAITING_FOR_MORE",
+                        "instruction": (
+                            "候选人的回答仍在继续。保持安静并继续聆听，"
+                            "不要清空转写、提交答案或朗读下一题。"
+                        ),
+                    },
+                    ensure_ascii=False,
+                )
             result = await process_voice_answer(
                 runtime,
                 post_turn=lambda payload: _post_voice_turn(
@@ -178,6 +196,7 @@ async def statinterview_session(ctx: JobContext) -> None:
         sequence_number=int(progress.get("completedTurns", 0)) + 1,
         current_question=initial.get("nextQuestion"),
         minimum_transcript_confidence=_minimum_transcript_confidence(),
+        transcript_stability_seconds=_transcript_stability_seconds(),
     )
     ctx.log_context_fields = {
         "room": ctx.room.name,
@@ -218,8 +237,8 @@ async def statinterview_session(ctx: JobContext) -> None:
         ),
         turn_handling={
             "endpointing": {
-                "min_delay": 0.8,
-                "max_delay": 3.0,
+                "min_delay": 1.5,
+                "max_delay": 6.0,
             }
         },
         stt_context_options={
@@ -285,6 +304,15 @@ def _minimum_transcript_confidence() -> float:
     except ValueError:
         logger.warning("invalid STT confidence threshold; using 0.72")
         return 0.72
+
+
+def _transcript_stability_seconds() -> float:
+    raw = os.environ.get("STATINTERVIEW_TRANSCRIPT_STABILITY_SECONDS", "4.0")
+    try:
+        return min(8.0, max(1.0, float(raw)))
+    except ValueError:
+        logger.warning("invalid transcript stability delay; using 4.0")
+        return 4.0
 
 
 async def _load_next_question(
