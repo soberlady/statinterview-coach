@@ -27,6 +27,9 @@ test("keeps the production product copy and safety boundary", async () => {
   assert.match(setup, /进入引导演示/);
   assert.match(setup, /合成回答/);
   assert.match(interview, /暂停并退出/);
+  assert.match(interview, /voiceAutoStartAttemptedRef/);
+  assert.match(interview, /切换到文本诊断/);
+  assert.match(interview, /系统会自动判断你是否说完/);
   assert.match(interview, /RECOVERING/);
   assert.match(interview, /DETERMINISTIC DEMO/);
   assert.match(report, /确定性合成夹具/);

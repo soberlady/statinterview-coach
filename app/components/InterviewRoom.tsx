@@ -5,6 +5,7 @@ import {
   FormEvent,
   useCallback,
   useEffect,
+  useEffectEvent,
   useMemo,
   useRef,
   useState,
@@ -146,6 +147,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   const voiceAgentIdentityRef = useRef<string | null>(null);
   const voiceAgentReadyTimerRef = useRef<number | null>(null);
   const voiceAgentLostRecordedRef = useRef(false);
+  const voiceAutoStartAttemptedRef = useRef(false);
 
   useEffect(() => {
     voiceQuestionTextRef.current = question?.text ?? "";
@@ -329,7 +331,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
             voiceTranscriptSavedRef.current = true;
             setVoiceTranscriptStatus("saved");
             setVoiceMessage(
-              "本题回答已保存。Agent 正在准备追问或下一题；听完后请重新开启麦克风。",
+              "本题回答已保存。Agent 正在准备追问或下一题。",
             );
           }
         }
@@ -894,6 +896,22 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     setVoiceMessage("语音连接已结束，可以继续使用文本通道。");
   }
 
+  const startVoiceInterviewEvent = useEffectEvent(startVoiceInterview);
+
+  useEffect(() => {
+    if (
+      isLoading ||
+      interviewMode !== "diagnostic" ||
+      !question ||
+      voiceAutoStartAttemptedRef.current
+    ) {
+      return;
+    }
+
+    voiceAutoStartAttemptedRef.current = true;
+    void startVoiceInterviewEvent();
+  }, [interviewMode, isLoading, question]);
+
   if (isLoading) {
     return (
       <main className="completion-shell">
@@ -1158,14 +1176,14 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
                   onClick={finishVoiceAnswer}
                   disabled={voiceStatus !== "connected"}
                 >
-                  我已回答完
+                  手动结束本题
                 </button>
                 <button
                   className="quiet-button"
                   type="button"
                   onClick={stopVoiceInterview}
                 >
-                  退出语音模式
+                  切换到文本诊断
                 </button>
               </div>
               <div className="voice-transcript" aria-live="polite">
@@ -1183,7 +1201,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
                 </div>
                 <p>
                   {voiceTranscript ||
-                    "开始回答后，识别出的文字会显示在这里。说完请点击“我已回答完”，不要直接退出语音模式。"}
+                    "开始回答后，识别出的文字会显示在这里。系统会自动判断你是否说完；如遇长停顿或嘈杂环境，可点击“手动结束本题”。"}
                 </p>
               </div>
             </section>

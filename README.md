@@ -1,128 +1,103 @@
 # StatInterview Coach
 
 [![CI](https://github.com/soberlady/statinterview-coach/actions/workflows/ci.yml/badge.svg)](https://github.com/soberlady/statinterview-coach/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Live demo](https://img.shields.io/badge/live-demo-0f766e.svg)](https://statinterview-coach-cn.keen-grass-7274.chatgpt.site/showcase)
 
-An uncertainty-aware, adaptive interview training agent for Chinese data
-analysis internships. It asks two public anchors, freezes two JD-directed
-baseline questions, then selects three posterior-adaptive questions. When
-evidence is weak, it inserts at most two bounded verifications or abstains
-instead of inventing a confident score.
+**面向中文数据分析岗位的、不确定性感知的自适应面试训练 Agent。**
 
-> This is a training product, not a hiring predictor. It evaluates answer
-> content only and does not score faces, voices, accents, emotions, or gender.
-> The public portfolio demo is a read-only deterministic replay with synthetic
-> data. The full data-bearing deployment remains owner-only; per-user
-> authorization is required before any future shared beta.
+StatInterview Coach does more than generate questions and a final score. It
+maintains an explicit ability state, chooses the next approved question under
+a fixed interview budget, verifies weak evidence, and preserves a replayable
+decision trail from raw answer to final report.
 
-## Live demo
+[Try the 3-minute public demo](https://statinterview-coach-cn.keen-grass-7274.chatgpt.site/showcase)
+· [Architecture](docs/ARCHITECTURE.md)
+· [Evaluation](docs/EVALUATION.md)
+· [Interview guide](docs/INTERVIEW_GUIDE.md)
 
-**[Open the 3-minute interactive demo](https://statinterview-coach-cn.keen-grass-7274.chatgpt.site/showcase)**
+<p align="center">
+  <img src="public/og.png" alt="StatInterview Coach public portfolio demo" width="900" />
+</p>
 
-The public route demonstrates `VERIFY -> ABSTAIN -> ACCEPT`, posterior updates,
-adaptive question ranking and deterministic policy replay. It runs entirely on
-fixed synthetic fixtures: no login, model call, database write, microphone or
-candidate data is involved. The deployment Worker redirects data-bearing pages
-and rejects every operational interview API. Clone the repository to run the
-complete text/voice system locally.
+## What makes it an Agent
 
-## What works now
-
-- complete text interview flow with refresh-safe checkpoints and
-  pause/resume recovery, including the finalizing-to-report edge case;
-- one-click `guided_demo` path that deterministically demonstrates
-  `VERIFY -> ABSTAIN -> ACCEPT`, adaptive selection and report replay without
-  external model calls; every fixture score is visibly synthetic and demo
-  sessions cannot enter user-feedback data;
-- 24-question Chinese data-analysis bank with weighted rubrics;
-- two comparable public anchors, two frozen JD-directed baselines and three
-  deterministic posterior-adaptive questions;
-- bounded reliability verification and explicit `ABSTAIN`;
-- evidence-linked reports, uncertainty display, and user feedback collection;
-- D1 persistence for sessions, turns, skill states, Agent events and feedback;
-- standalone Python policy, scorer-evaluation and voice helpers with 88 tests;
-- browser LiveKit token/room flow plus a LiveKit 1.6 voice worker that stores
-  committed transcript fragments verbatim, restores the authoritative current
-  question on reconnect and uses Mandarin-first synthesis;
-- transport-independent voice-turn controller with deterministic fault
-  injection for short transcripts, timeouts, rejected writes, stale
-  checkpoints, malformed success responses and finalization failures;
-- privacy-bounded voice observability with connection and
-  transcript-to-checkpoint p50/p95 in the evidence report;
-- final per-session LiveKit Inference usage export with model-level token,
-  duration and character accounting, explicit pricing coverage and a
-  versioned marginal list-price estimate; independently configured semantic
-  scorer token costs join the same completed-interview total;
-- shared Python/TypeScript golden fixtures for posterior and utility parity;
-- deterministic decision replay with a SHA-256 policy fingerprint, invariant
-  checks and top-three counterfactual question rankings;
-- strict semantic-scoring inference plus a frozen double-label evaluation
-  pipeline with grouped bootstrap and risk-coverage checks; the checked-in
-  12-answer fixture is synthetic and the formal scorer gate is `NOT_READY`;
-  release metrics are restricted to one frozen run on `locked_test`;
-- reproducible fixed/random/adaptive policy benchmark and in-product
-  experiment page;
-- deployable vinext/Cloudflare Sites web application.
-- isolated public portfolio mode with a browser-only interactive replay and a
-  Worker-level deny boundary around interview, report, history and voice APIs;
-
-Without a semantic model key, the web app enters a transparent fallback mode:
-it measures observable answer structure and domain-term coverage, labels the
-result, and never writes that structure-only score into the ability posterior.
-When an OpenAI-compatible scorer is configured, two role-separated passes from
-the configured model score every weighted rubric criterion; only verbatim
-answer excerpts count as evidence, and reviewer disagreement lowers
-reliability.
-
-## Why this is not another “AI interviewer”
-
-Most demos generate questions and a final score. This project makes the
-decision policy inspectable:
-
-1. two public anchors establish a comparable baseline;
-2. two JD-directed baseline questions freeze role coverage before answers can
-   influence the route;
-3. a simplified Rasch posterior stores both ability and uncertainty;
-4. expected-value selection blends uncertainty, difficulty, JD relevance,
-   coverage and time;
-5. reliability is derived from observable evidence signals, not an LLM's
-   self-reported confidence;
-6. every answer, transition, decision reason and checkpoint is persisted;
-7. reports link conclusions back to exact answer excerpts;
-8. the complete question path can be replayed from persisted turns to detect
-   a question that was approved by the bank but not selected by the policy.
-
-## Architecture
-
-```mermaid
-flowchart LR
-  UI["Web / LiveKit room"] --> API["Interview API"]
-  LK["LiveKit Agent worker"] --> API
-  API --> QB["Approved question bank"]
-  API --> EDGE["Edge policy mirror"]
-  EDGE --> D1["D1: turns, state, events"]
-  PY["Python policy kernel"] -. parity tests .-> EDGE
-  D1 --> REPORT["Evidence report"]
-```
-
-The Python kernel is the canonical algorithm implementation. The TypeScript
-edge mirror keeps the private web demo deployable on Cloudflare. Shared golden
-fixtures verify posterior updates, uncertainty summaries, information gain and
-utility signals in both implementations.
+| Capability | Implementation |
+| --- | --- |
+| Adaptive decisions | Two public anchors, two frozen JD-directed baselines, then three posterior-adaptive questions selected with uncertainty, information gain, relevance, coverage, difficulty and time constraints. |
+| Reliability control | Weak or conflicting evidence triggers a bounded approved follow-up or `ABSTAIN`; an LLM's self-reported confidence is never trusted. |
+| Auditable execution | Every answer, state transition, ranking and checkpoint is persisted. Reports replay the complete path, verify five invariants and fingerprint the policy trace with SHA-256. |
+| Realtime voice | LiveKit browser audio and a Python Agents worker preserve final raw transcripts, wait for transcript stability, recover checkpoints and fall back safely to text. |
+| Evidence-bound scoring | Two role-separated rubric passes may repair obvious ASR errors for scoring, while quoted evidence must remain a verbatim substring of the original answer. |
 
 ## Measured result
 
-`experiments/run_policy_benchmark.py` runs a deterministic, paired synthetic
-benchmark. With seed `20260730`, 4,000 simulated candidates and the same
+In a deterministic paired simulation of **4,000 candidates** under the same
 seven-question budget, the three-stage adaptive policy reduced job-weighted
-MAE by 3.83% versus the fixed sequence (paired absolute difference 95%
-interval: `[-0.0312, -0.0223]`). The 90% posterior interval covered 90.0% of simulated
-latent abilities.
+MAE by **3.83%** versus a fixed sequence. The paired absolute-difference 95%
+interval was `[-0.0312, -0.0223]`, and the 90% posterior interval covered
+90.0% of simulated latent abilities.
 
-The effect varies by role profile and is largest for the data-engineering
-profile. This supports a narrow claim: the policy allocates limited follow-up
-questions more efficiently under its simulation assumptions. It does not
-prove hiring validity or real-user learning impact. See the in-product `/lab`
-page and [experiment report](docs/EXPERIMENT_RESULTS.md).
+This is evidence about the frozen simulation and implementation—not proof of
+hiring validity or real-user learning impact. The effect varies by job profile,
+and the formal human-data scorer gate remains `NOT_READY`. See the
+[experiment report](docs/EXPERIMENT_RESULTS.md) and
+[release checklist](docs/RELEASE_CHECKLIST.md).
+
+## System flow
+
+```mermaid
+flowchart LR
+  C["Candidate: text or voice"] --> UI["Interview UI"]
+  UI --> API["Interview API"]
+  LK["LiveKit Agent worker"] --> API
+  API --> EVAL["Evidence evaluator"]
+  EVAL --> REL{"Reliability policy"}
+  REL -->|ACCEPT| BAYES["Bayesian ability update"]
+  REL -->|VERIFY| FOLLOW["Approved follow-up"]
+  REL -->|ABSTAIN| KEEP["Keep prior state"]
+  BAYES --> SELECT["Constrained question selector"]
+  FOLLOW --> EVAL
+  KEEP --> SELECT
+  SELECT --> D1["D1 checkpoint + audit trace"]
+  D1 --> REPORT["Evidence-linked report"]
+```
+
+The Python kernel is the canonical policy implementation. A TypeScript edge
+mirror keeps the web application deployable on Cloudflare; shared golden
+fixtures check posterior updates, information gain and utility parity between
+the two implementations.
+
+## What works now
+
+- end-to-end Chinese text and LiveKit voice interview flows with text fallback;
+- 24 approved data-analysis questions with weighted rubrics;
+- refresh-safe D1 checkpoints, pause/resume recovery and atomic turn writes;
+- deterministic adaptive selection, bounded verification and explicit
+  `ABSTAIN`;
+- evidence-linked reports with uncertainty, top-three counterfactual rankings,
+  policy replay and tamper detection;
+- auditable ASR repair that preserves raw transcripts and protects numeric,
+  percentage, negation and causal evidence;
+- model, latency and marginal-cost telemetry for voice and semantic scoring;
+- 99 Python Agent tests plus TypeScript parity, rendered-output, fault-injection
+  and local D1 end-to-end coverage;
+- a one-click synthetic guided path and an isolated read-only public showcase;
+- a clean-checkout GitHub Actions gate that rebuilds all frozen evidence.
+
+Without a semantic model key, the application enters a labeled structure-only
+fallback that cannot update the ability posterior. With an OpenAI-compatible
+scorer, two role-separated passes score each rubric criterion; reviewer
+disagreement lowers reliability.
+
+## Public demo and safety boundary
+
+The public demo replays `VERIFY -> ABSTAIN -> ACCEPT`, posterior updates,
+adaptive rankings and decision audit entirely from fixed synthetic fixtures.
+It performs no model calls, database writes, microphone access or candidate
+data collection. Operational interview APIs are blocked at the Worker boundary.
+The complete data-bearing deployment remains owner-only until per-user
+authorization and the human-study release gates are complete.
 
 ## Local development
 
