@@ -94,6 +94,33 @@ def test_scoring_hint_does_not_invent_unmentioned_percentage() -> None:
     ) == "样本量增加到100"
 
 
+def test_scoring_hint_restores_observed_missing_percent_phrases() -> None:
+    question = "留存率为30%，95%置信区间为[27%，33%]，请解释。"
+
+    assert prepare_transcript_for_scoring(
+        "在九十五的置信水平下，真实值落在27到 33之间。",
+        question,
+    ) == "在95%的置信水平下，真实值落在27%到33%之间。"
+
+
+def test_scoring_hint_restores_observed_decimal_percent_phrases() -> None:
+    question = "正样本只占0.5%，模型准确率达到99.5%，如何判断？"
+
+    assert prepare_transcript_for_scoring(
+        "正样本仅占零点五，99。5的准确率没有参考价值。",
+        question,
+    ) == "正样本仅占0.5%，99.5%的准确率没有参考价值。"
+
+
+def test_scoring_hint_keeps_unrelated_question_numbers_unchanged() -> None:
+    question = "留存率为30%，95%置信区间为[27%，33%]，请解释。"
+
+    assert prepare_transcript_for_scoring(
+        "样本量增加到95，观察27到33天。",
+        question,
+    ) == "样本量增加到95，观察27到33天。"
+
+
 def test_scoring_hint_normalizes_mixed_language_identifiers() -> None:
     hint = prepare_transcript_for_scoring(
         "用 user ID 分组，再用 row number 和 ROC AUC 评估。",

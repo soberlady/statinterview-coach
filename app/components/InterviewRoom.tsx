@@ -135,6 +135,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   const remoteAudioRef = useRef<HTMLDivElement | null>(null);
   const voiceTranscriptSegmentsRef = useRef(new Map<string, string>());
   const voiceTranscriptSavedRef = useRef(false);
+  const voiceQuestionTextRef = useRef("");
   const voiceCompletedTurnsRef = useRef(0);
   const voiceSessionIdRef = useRef<string | null>(null);
   const voiceSessionStartedAtRef = useRef<number | null>(null);
@@ -145,6 +146,10 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   const voiceAgentIdentityRef = useRef<string | null>(null);
   const voiceAgentReadyTimerRef = useRef<number | null>(null);
   const voiceAgentLostRecordedRef = useRef(false);
+
+  useEffect(() => {
+    voiceQuestionTextRef.current = question?.text ?? "";
+  }, [question]);
 
   const recordVoiceEvent = useCallback(
     (event: VoiceEventInput) => {
@@ -535,7 +540,10 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
               voiceTranscriptSegmentsRef.current.values(),
             ).join(" ");
             setVoiceTranscript(
-              normalizeVoiceTranscriptForDisplay(rawTranscript),
+              normalizeVoiceTranscriptForDisplay(
+                rawTranscript,
+                voiceQuestionTextRef.current,
+              ),
             );
             setVoiceTranscriptStatus(isFinal ? "final" : "interim");
             if (isFinal) {
