@@ -13,6 +13,7 @@ _PERCENT_LABELS = (
     "留存率|点击率|转化率|准确率|召回率|概率|比例|占比|"
     "置信水平|显著性水平"
 )
+_SPOKEN_NUMBER_PATTERN = r"[负正零〇一二两三四五六七八九十百点\d.。．]+"
 _TERM_REPLACEMENTS = (
     ("user_id", re.compile(r"\buser\s*(?:underscore|下划线|[_ -])?\s*id\b", re.I)),
     ("product_id", re.compile(r"\bproduct\s*(?:underscore|下划线|[_ -])?\s*id\b", re.I)),
@@ -121,24 +122,29 @@ def prepare_transcript_for_scoring(raw: str, question_text: str) -> str:
 
 
 def _restore_question_percentages(hint: str, question_text: str) -> str:
-    """Restore a spoken percentage range using exact values in the question."""
+    """Restore only percentage values that are explicit in the question."""
 
-    percent_values = set(
-        re.findall(r"(?<![\d.])(\d+(?:\.\d+)?)\s*%", question_text)
-    )
+    percent_values = {
+        _canonical_number(value)
+        for value in re.findall(
+            r"(?<![\d.])(\d+(?:\.\d+)?)\s*[%％]", question_text
+        )
+    }
     if not percent_values:
         return hint
 
     range_pattern = re.compile(
-        r"(?<![\d.])(\d+(?:\.\d+)?)\s*(到|至|和|与|[-—~～])\s*"
-        r"(\d+(?:\.\d+)?)(?![\d.])"
+        rf"({_SPOKEN_NUMBER_PATTERN})\s*(到|至|和|与|[-—~～])\s*"
+        rf"({_SPOKEN_NUMBER_PATTERN})(?=\s*(?:之间|区间|范围))"
     )
 
     def restore_range(match: re.Match[str]) -> str:
         left, separator, right = match.groups()
-        if left not in percent_values or right not in percent_values:
+        left_value = _question_percentage(left, percent_values)
+        right_value = _question_percentage(right, percent_values)
+        if left_value is None or right_value is None:
             return match.group(0)
-        return f"{left}%{separator}{right}%"
+        return f"{left_value}%{separator}{right_value}%"
 
     hint = range_pattern.sub(restore_range, hint)
     bare_range_pattern = re.compile(
@@ -147,11 +153,52 @@ def _restore_question_percentages(hint: str, question_text: str) -> str:
 
     def restore_bare_range(match: re.Match[str]) -> str:
         left, right = match.groups()
-        if left not in percent_values or right not in percent_values:
+        left_value = _question_percentage(left, percent_values)
+        right_value = _question_percentage(right, percent_values)
+        if left_value is None or right_value is None:
             return match.group(0)
-        return f"{left}%到{right}%"
+        return f"{left_value}%到{right_value}%"
 
-    return bare_range_pattern.sub(restore_bare_range, hint)
+    hint = bare_range_pattern.sub(restore_bare_range, hint)
+    leading_label_pattern = re.compile(
+        rf"((?:{_PERCENT_LABELS}|占)(?:为|是|约为|大约为|仅为|仅占)?\s*)"
+        rf"({_SPOKEN_NUMBER_PATTERN})(?!\s*[%\d])"
+    )
+
+    def restore_after_label(match: re.Match[str]) -> str:
+        prefix, spoken = match.groups()
+        value = _question_percentage(spoken, percent_values)
+        return match.group(0) if value is None else f"{prefix}{value}%"
+
+    hint = leading_label_pattern.sub(restore_after_label, hint)
+    trailing_label_pattern = re.compile(
+        rf"({_SPOKEN_NUMBER_PATTERN})(\s*的?\s*(?:{_PERCENT_LABELS}))"
+    )
+
+    def restore_before_label(match: re.Match[str]) -> str:
+        spoken, suffix = match.groups()
+        value = _question_percentage(spoken, percent_values)
+        return match.group(0) if value is None else f"{value}%{suffix}"
+
+    return trailing_label_pattern.sub(restore_before_label, hint)
+
+
+def _question_percentage(
+    spoken: str, percent_values: set[str]
+) -> str | None:
+    normalized = _spoken_number_to_arabic(
+        spoken.replace("。", ".").replace("．", ".")
+    )
+    canonical = _canonical_number(normalized)
+    return canonical if canonical in percent_values else None
+
+
+def _canonical_number(value: str) -> str:
+    try:
+        number = float(value)
+    except ValueError:
+        return value
+    return str(int(number)) if number.is_integer() else str(number)
 
 
 def _contextual_term_family(question_text: str) -> str:

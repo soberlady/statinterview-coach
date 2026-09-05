@@ -22,11 +22,88 @@ const SMALL_UNITS: Readonly<Record<string, number>> = {
 const SPOKEN_PERCENTAGE =
   /百分之\s*([负正零〇一二两三四五六七八九十百千万亿点\d.]+)/g;
 
-export function normalizeVoiceTranscriptForDisplay(text: string): string {
-  return text.replace(SPOKEN_PERCENTAGE, (original, spoken: string) => {
-    const normalized = spokenNumberToArabic(spoken);
-    return normalized === null ? original : normalized + "%";
-  });
+const SPOKEN_NUMBER =
+  "[负正零〇一二两三四五六七八九十百千万亿点\\d.。．]+";
+const PERCENT_RATE_LABEL =
+  "留存率|点击率|转化率|准确率|召回率|概率|比例|占比|置信水平|显著性水平";
+
+export function normalizeVoiceTranscriptForDisplay(
+  text: string,
+  questionText = "",
+): string {
+  let normalizedText = text.replace(
+    SPOKEN_PERCENTAGE,
+    (original, spoken: string) => {
+      const normalized = spokenNumberToArabic(spoken);
+      return normalized === null ? original : normalized + "%";
+    },
+  );
+
+  const questionPercentages = extractQuestionPercentages(questionText);
+  if (!questionPercentages.size) return normalizedText;
+
+  normalizedText = normalizedText.replace(/(?<=\d)[。．](?=\d)/g, ".");
+  const rangePattern = new RegExp(
+    `(${SPOKEN_NUMBER})\\s*(到|至|和|与|[-—~～])\\s*(${SPOKEN_NUMBER})(?=\\s*(?:之间|区间|范围))`,
+    "g",
+  );
+  normalizedText = normalizedText.replace(
+    rangePattern,
+    (original, left: string, separator: string, right: string) => {
+      const leftPercent = questionPercentage(left, questionPercentages);
+      const rightPercent = questionPercentage(right, questionPercentages);
+      return leftPercent === null || rightPercent === null
+        ? original
+        : `${leftPercent}%${separator}${rightPercent}%`;
+    },
+  );
+
+  const leadingLabelPattern = new RegExp(
+    `((?:${PERCENT_RATE_LABEL}|占)(?:为|是|约为|大约为|仅为|仅占)?\\s*)(${SPOKEN_NUMBER})(?!\\s*[%\\d])`,
+    "g",
+  );
+  normalizedText = normalizedText.replace(
+    leadingLabelPattern,
+    (original, prefix: string, spoken: string) => {
+      const percentage = questionPercentage(spoken, questionPercentages);
+      return percentage === null ? original : `${prefix}${percentage}%`;
+    },
+  );
+
+  const trailingLabelPattern = new RegExp(
+    `(${SPOKEN_NUMBER})(\\s*的?\\s*(?:${PERCENT_RATE_LABEL}))`,
+    "g",
+  );
+  return normalizedText.replace(
+    trailingLabelPattern,
+    (original, spoken: string, suffix: string) => {
+      const percentage = questionPercentage(spoken, questionPercentages);
+      return percentage === null ? original : `${percentage}%${suffix}`;
+    },
+  );
+}
+
+function extractQuestionPercentages(questionText: string): Set<string> {
+  return new Set(
+    Array.from(questionText.matchAll(/(\d+(?:\.\d+)?)\s*[%％]/g), (match) =>
+      canonicalNumber(match[1]),
+    ),
+  );
+}
+
+function questionPercentage(
+  spoken: string,
+  questionPercentages: ReadonlySet<string>,
+): string | null {
+  const normalized = spokenNumberToArabic(spoken.replace(/[。．]/g, "."));
+  if (normalized === null) return null;
+  const canonical = canonicalNumber(normalized);
+  return questionPercentages.has(canonical) ? canonical : null;
+}
+
+function canonicalNumber(value: string): string {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? String(numeric) : value;
 }
 
 function spokenNumberToArabic(value: string): string | null {
