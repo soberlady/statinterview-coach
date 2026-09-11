@@ -1,7 +1,10 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { interviews } from "@/db/schema";
-import { createLiveKitVoiceCredentials } from "@/app/lib/livekit-token";
+import {
+  createLiveKitVoiceCredentials,
+  preDispatchLiveKitVoiceAgent,
+} from "@/app/lib/livekit-token";
 import {
   ApiError,
   errorResponse,
@@ -51,12 +54,31 @@ export async function POST(_request: Request, context: RouteContext) {
       );
     }
 
-    return jsonResponse(await createLiveKitVoiceCredentials({
+    const credentials = await createLiveKitVoiceCredentials({
       serverUrl,
       apiKey,
       apiSecret,
       interviewId,
-    }));
+    });
+    let agentPreDispatched = false;
+    try {
+      await preDispatchLiveKitVoiceAgent({
+        serverUrl,
+        apiKey,
+        apiSecret,
+        interviewId,
+        voiceSessionId: credentials.voiceSessionId,
+        roomName: credentials.roomName,
+      });
+      agentPreDispatched = true;
+    } catch {
+      // The token retains a room-creation dispatch, so voice can still connect.
+      console.warn(
+        "LiveKit Agent pre-dispatch failed; falling back to token dispatch.",
+      );
+    }
+
+    return jsonResponse({ ...credentials, agentPreDispatched });
   } catch (error) {
     return errorResponse(error);
   }

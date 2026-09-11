@@ -168,6 +168,11 @@ type Report = {
         p50Ms: number | null;
         p95Ms: number | null;
       };
+      agentReadyLatency: {
+        count: number;
+        p50Ms: number | null;
+        p95Ms: number | null;
+      };
       transcriptToCommitLatency: {
         count: number;
         p50Ms: number | null;
@@ -470,12 +475,22 @@ export function ReportView({ interviewId }: { interviewId: string }) {
                 {report.metrics.voiceTelemetry.sessionCount} 次成功连接
               </span>
               <span>
-                连接 p50 {formatLatency(
+                面试官就绪 p50 {formatLatency(
+                  report.metrics.voiceTelemetry.agentReadyLatency.p50Ms,
+                )}
+              </span>
+              <span>
+                面试官就绪 p95 {formatLatency(
+                  report.metrics.voiceTelemetry.agentReadyLatency.p95Ms,
+                )}
+              </span>
+              <span>
+                房间与麦克风 p50 {formatLatency(
                   report.metrics.voiceTelemetry.connectionLatency.p50Ms,
                 )}
               </span>
               <span>
-                连接 p95 {formatLatency(
+                房间与麦克风 p95 {formatLatency(
                   report.metrics.voiceTelemetry.connectionLatency.p95Ms,
                 )}
               </span>

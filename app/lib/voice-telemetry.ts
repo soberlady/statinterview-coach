@@ -17,6 +17,7 @@ export type VoiceTelemetrySummary = {
   finalTranscriptSegmentCount: number;
   committedTurnCount: number;
   connectionLatency: LatencySummary;
+  agentReadyLatency: LatencySummary;
   transcriptToCommitLatency: LatencySummary;
 };
 
@@ -53,6 +54,9 @@ export function summarizeVoiceTelemetry(
     ).length,
     committedTurnCount: committed.length,
     connectionLatency: summarizeLatencies(connected),
+    agentReadyLatency: summarizeLatencies(
+      events.filter((event) => event.eventType === "voice.agent_ready"),
+    ),
     transcriptToCommitLatency: summarizeLatencies(committed),
   };
 }

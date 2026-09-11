@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createLiveKitVoiceCredentials } from "../app/lib/livekit-token";
+import {
+  createLiveKitVoiceCredentials,
+  liveKitHttpUrl,
+  preDispatchLiveKitVoiceAgent,
+} from "../app/lib/livekit-token";
 
 test("voice token is reconnect-safe and explicitly dispatches the Agent", async () => {
   const credentials = await createLiveKitVoiceCredentials({
@@ -11,6 +15,7 @@ test("voice token is reconnect-safe and explicitly dispatches the Agent", async 
     participantIdentity: "candidate-fixture",
     voiceSessionId: "voice-fixture",
   });
+
   const payload = decodeJwt(credentials.participantToken);
   const video = payload.video as Record<string, unknown>;
   const roomConfig = payload.roomConfig as {
@@ -57,6 +62,45 @@ test("each reconnect uses a fresh room for a new Agent dispatch", async () => {
   assert.notEqual(first.roomName, second.roomName);
   assert.match(first.roomName, /^statinterview--int_fixture--[0-9a-f-]{36}$/);
   assert.match(second.roomName, /^statinterview--int_fixture--[0-9a-f-]{36}$/);
+});
+
+test("Agent pre-dispatch starts the worker before the participant joins", async () => {
+  const calls: unknown[][] = [];
+  const result = await preDispatchLiveKitVoiceAgent(
+    {
+      serverUrl: "wss://example.livekit.cloud",
+      apiKey: "api-key",
+      apiSecret: "api-secret",
+      interviewId: "int_fixture",
+      voiceSessionId: "voice-fixture",
+      roomName: "room-fixture",
+    },
+    (host, apiKey, apiSecret) => {
+      calls.push([host, apiKey, apiSecret]);
+      return {
+        async createDispatch(...args: unknown[]) {
+          calls.push(args);
+          return { id: "dispatch-fixture" } as never;
+        },
+      };
+    },
+  );
+
+  assert.deepEqual(calls[0], [
+    "https://example.livekit.cloud",
+    "api-key",
+    "api-secret",
+  ]);
+  assert.deepEqual(calls[1], [
+    "room-fixture",
+    "statinterview-coach",
+    {
+      metadata:
+        '{"interviewId":"int_fixture","voiceSessionId":"voice-fixture","transport":"browser_voice"}',
+    },
+  ]);
+  assert.deepEqual(result, { id: "dispatch-fixture" });
+  assert.equal(liveKitHttpUrl("ws://localhost:7880/"), "http://localhost:7880");
 });
 
 function decodeJwt(token: string): Record<string, unknown> {

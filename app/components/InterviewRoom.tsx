@@ -93,6 +93,7 @@ type VoiceTokenResponse = ApiErrorBody & {
   participantIdentity?: string;
   roomName?: string;
   voiceSessionId?: string;
+  agentPreDispatched?: boolean;
 };
 
 type VoiceTranscriptStatus = "waiting" | "interim" | "final" | "saved";
@@ -498,10 +499,19 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     setVoiceMessage("正在申请麦克风并连接实时面试官…");
 
     try {
-      const response = await fetch(
+      const tokenPromise = fetch(
         `/api/interviews/${interviewId}/voice-token`,
         { method: "POST" },
-      );
+      ).then((response) => ({ response, completedAt: performance.now() }));
+      const sdkPromise = import("livekit-client").then((sdk) => ({
+        sdk,
+        completedAt: performance.now(),
+      }));
+      const [tokenResult, sdkResult] = await Promise.all([
+        tokenPromise,
+        sdkPromise,
+      ]);
+      const { response } = tokenResult;
       const credentials = (await response.json()) as VoiceTokenResponse;
       if (
         !response.ok ||
@@ -521,7 +531,8 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       requestedVoiceSessionId = credentials.voiceSessionId;
       voiceSessionIdRef.current = credentials.voiceSessionId;
 
-      const { Room, RoomEvent, Track } = await import("livekit-client");
+      const { Room, RoomEvent, Track } = sdkResult.sdk;
+      let roomConnectedAt: number | null = null;
       const room = new Room({
         adaptiveStream: true,
         dynacast: true,
@@ -638,6 +649,10 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
             voiceSessionId: credentials.voiceSessionId,
             roomName: credentials.roomName,
             agentIdentity: participant.identity,
+            roomConnectedToAgentAudioMs:
+              roomConnectedAt === null
+                ? null
+                : Math.max(0, Math.round(readyAt - roomConnectedAt)),
           },
         });
         recordVoiceEvent({
@@ -759,13 +774,17 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       });
 
       voiceRoomRef.current = room;
+      const roomConnectStartedAt = performance.now();
       await room.connect(
         credentials.serverUrl,
         credentials.participantToken,
         VOICE_ROOM_CONNECT_OPTIONS,
       );
-      await room.startAudio();
-      await room.localParticipant.setMicrophoneEnabled(true);
+      roomConnectedAt = performance.now();
+      await Promise.all([
+        room.startAudio(),
+        room.localParticipant.setMicrophoneEnabled(true),
+      ]);
       const connectedAt = performance.now();
       voiceSessionStartedAtRef.current = connectedAt;
       recordVoiceEvent({
@@ -777,6 +796,27 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
           roomName: credentials.roomName,
           completedTurnsAtConnect: progress.completedTurns,
           measurement: "token-request-to-microphone-published",
+          tokenRequestMs: Math.max(
+            0,
+            Math.round(tokenResult.completedAt - connectionStartedAt),
+          ),
+          sdkLoadMs: Math.max(
+            0,
+            Math.round(sdkResult.completedAt - connectionStartedAt),
+          ),
+          prerequisitesMs: Math.max(
+            0,
+            Math.round(roomConnectStartedAt - connectionStartedAt),
+          ),
+          roomConnectMs: Math.max(
+            0,
+            Math.round(roomConnectedAt - roomConnectStartedAt),
+          ),
+          audioAndMicrophoneMs: Math.max(
+            0,
+            Math.round(connectedAt - roomConnectedAt),
+          ),
+          agentPreDispatched: credentials.agentPreDispatched === true,
         },
       });
       setInputChannel("voice");
@@ -790,7 +830,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
           transitionVoiceStatus(current, "ROOM_CONNECTED"),
         );
         setVoiceMessage(
-          "语音房间已连接，正在唤醒云端面试官；首次连接通常需要 10–20 秒。",
+          "语音房间已连接，正在等待云端面试官；常驻实例通常数秒，冷启动可能需要约 30 秒。",
         );
         voiceAgentReadyTimerRef.current = window.setTimeout(() => {
           if (
