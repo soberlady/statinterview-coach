@@ -365,6 +365,7 @@ try {
   let selection = await requestJson(
     `/api/interviews/${interviewId}/next-question`,
   );
+  assert.equal(selection.lastCompletedAnswer, null);
   assert.notEqual(selection.nextQuestion.id, "statistics_ml_001");
   const rejectedOutOfOrder = await fetch(
     `${baseUrl}/api/interviews/${interviewId}/turns`,
@@ -412,6 +413,7 @@ try {
       sequenceNumber <= 10,
       "interview exceeded the bounded turn budget",
     );
+    const submittedQuestionText = selection.nextQuestion.text;
     const completedAt = new Date().toISOString();
     selection = await requestJson(
       `/api/interviews/${interviewId}/turns`,
@@ -427,6 +429,13 @@ try {
         }),
       },
     );
+    const checkpoint = await requestJson(`/api/interviews/${interviewId}/next-question`);
+    assert.deepEqual(checkpoint.lastCompletedAnswer, {
+      sequenceNumber,
+      questionText: submittedQuestionText,
+      answerText: richAnswer,
+    });
+    assert.equal(checkpoint.progress.completedTurns, sequenceNumber);
     sequenceNumber += 1;
   }
 
@@ -583,6 +592,43 @@ try {
   );
   assert.equal(adaptiveSteps.length, 3);
   assert.ok(adaptiveSteps.every((step) => step.ranking.length === 3));
+
+  // Independent voice fixture: diagnostic metadata must never affect ability state.
+  const voiceFixture = await requestJson("/api/interviews", {
+    method: "POST", body: JSON.stringify(interviewPayload),
+  });
+  const voiceId = voiceFixture.interview.id;
+  const voiceQuestion = await requestJson(`/api/interviews/${voiceId}/next-question`);
+  await requestJson(`/api/interviews/${voiceId}/turns`, {
+    method: "POST", body: JSON.stringify({
+      sequenceNumber: 1, questionId: voiceQuestion.nextQuestion.id,
+      answerText: richAnswer, inputMode: "voice",
+    }),
+  });
+  const beforeDiagnostics = (await requestJson(`/api/interviews/${voiceId}/report`)).report;
+  assert.equal(beforeDiagnostics.metrics.voiceTranscriptDiagnostics.unmeasuredTurns, 1);
+  const browserCheckpoint = {
+    eventType: "voice.turn_committed",
+    payload: { voiceSessionId: "e2e-transcript", transcriptBufferVersion: 2,
+      fromCompletedTurns: 0, toCompletedTurns: 1, transcriptCharacters: 20 },
+  };
+  await requestJson(`/api/interviews/${voiceId}/events`, {
+    method: "POST", body: JSON.stringify(browserCheckpoint),
+  });
+  const afterDiagnostics = (await requestJson(`/api/interviews/${voiceId}/report`)).report;
+  assert.deepEqual(afterDiagnostics.metrics.voiceTranscriptDiagnostics.turns, [{
+    sequenceNumber: 1, savedCharacters: richAnswer.length,
+    browserCharacters: 20, status: "DISPLAY_SHORTER", reason: "COMPARABLE",
+  }]);
+  assert.equal(afterDiagnostics.turns[0].answerText, richAnswer);
+  assert.deepEqual(afterDiagnostics.skillStates, beforeDiagnostics.skillStates);
+  assert.equal(afterDiagnostics.policyAudit.fingerprint, beforeDiagnostics.policyAudit.fingerprint);
+  await requestJson(`/api/interviews/${voiceId}/events`, {
+    method: "POST", body: JSON.stringify({ ...browserCheckpoint,
+      payload: { ...browserCheckpoint.payload, transcriptCharacters: 25 } }),
+  });
+  const conflictDiagnostics = (await requestJson(`/api/interviews/${voiceId}/report`)).report;
+  assert.equal(conflictDiagnostics.metrics.voiceTranscriptDiagnostics.turns[0].reason, "CONFLICTING_CHECKPOINTS");
 
   const scorerRequestsBeforeDemo = scorerRequestCount;
   const demoCreated = await requestJson("/api/interviews", {

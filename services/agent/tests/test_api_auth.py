@@ -1,4 +1,4 @@
-from statinterview_agent.livekit_worker import _api_request_headers
+from statinterview_agent.api_auth import api_request_headers as _api_request_headers
 
 
 def test_api_auth_is_absent_for_local_development(monkeypatch) -> None:

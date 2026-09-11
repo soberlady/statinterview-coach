@@ -244,7 +244,7 @@ export async function POST(request: Request, context: RouteContext) {
       interview.mode === GUIDED_DEMO_MODE
         ? evaluateGuidedDemoAnswer(question, answerText)
         : await evaluateAnswerWithFallback(question, answerText, {
-            transcriptScoringHint,
+            transcriptScoringHint: transcriptScoringHint ?? undefined,
             enableTranscriptRepair: inputMode === "voice",
           });
     const evaluation = guardEvaluationForTranscriptConfidence(

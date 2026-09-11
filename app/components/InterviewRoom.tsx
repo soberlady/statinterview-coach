@@ -20,6 +20,8 @@ import {
   voiceStatusHeading,
   type VoiceStatus,
 } from "@/app/lib/voice-readiness";
+import { TRANSCRIPT_BUFFER_VERSION } from "@/app/lib/voice-transcript-diagnostics";
+import { VoiceTranscriptBuffer } from "@/app/lib/voice-transcript-buffer";
 import { normalizeVoiceTranscriptForDisplay } from "@/app/lib/voice-transcript-display";
 
 type PublicQuestion = {
@@ -62,6 +64,12 @@ type ApiErrorBody = {
   };
 };
 
+type SavedVoiceAnswer = {
+  sequenceNumber: number;
+  questionText: string;
+  answerText: string;
+};
+
 type NextQuestionResponse = ApiErrorBody & {
   interview?: {
     status: string;
@@ -69,6 +77,7 @@ type NextQuestionResponse = ApiErrorBody & {
     mode: string;
   };
   nextQuestion?: PublicQuestion | null;
+  lastCompletedAnswer?: SavedVoiceAnswer | null;
   decision?: AgentDecision;
   progress?: Progress;
   demo?: GuidedDemoPayload | null;
@@ -127,6 +136,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   const [inputChannel, setInputChannel] = useState<"text" | "voice">("text");
   const [voiceStatus, setVoiceStatus] = useState<VoiceStatus>("idle");
   const [voiceTranscript, setVoiceTranscript] = useState("");
+  const [savedVoiceAnswer, setSavedVoiceAnswer] = useState<SavedVoiceAnswer | null>(null);
   const [voiceTranscriptStatus, setVoiceTranscriptStatus] =
     useState<VoiceTranscriptStatus>("waiting");
   const [voiceMessage, setVoiceMessage] = useState(
@@ -134,8 +144,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   );
   const voiceRoomRef = useRef<import("livekit-client").Room | null>(null);
   const remoteAudioRef = useRef<HTMLDivElement | null>(null);
-  const voiceTranscriptSegmentsRef = useRef(new Map<string, string>());
-  const voiceTranscriptSavedRef = useRef(false);
+  const voiceTranscriptBufferRef = useRef(new VoiceTranscriptBuffer());
   const voiceQuestionTextRef = useRef("");
   const voiceCompletedTurnsRef = useRef(0);
   const voiceSessionIdRef = useRef<string | null>(null);
@@ -292,6 +301,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         );
         const result = (await response.json()) as NextQuestionResponse;
         if (!response.ok || cancelled) return;
+        if (result.lastCompletedAnswer) setSavedVoiceAnswer(result.lastCompletedAnswer);
         if (result.progress) {
           setProgress(result.progress);
           if (
@@ -319,16 +329,17 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
                   fromCompletedTurns: previousCompletedTurns,
                   toCompletedTurns: result.progress.completedTurns,
                   nextQuestionId: result.nextQuestion?.id ?? null,
-                  transcriptCharacters: Array.from(
-                    voiceTranscriptSegmentsRef.current.values(),
-                  ).join(" ").length,
+                  transcriptCharacters: voiceTranscriptBufferRef.current.text.length,
+                  transcriptBufferVersion: TRANSCRIPT_BUFFER_VERSION,
                   measurement: "final-transcript-to-browser-checkpoint",
                 },
               });
             }
             voiceCompletedTurnsRef.current = result.progress.completedTurns;
             voiceFinalTranscriptAtRef.current = null;
-            voiceTranscriptSavedRef.current = true;
+            voiceTranscriptBufferRef.current.checkpoint();
+            voiceQuestionTextRef.current = result.nextQuestion?.text ?? "";
+            setVoiceTranscript("");
             setVoiceTranscriptStatus("saved");
             setVoiceMessage(
               "本题回答已保存。Agent 正在准备追问或下一题。",
@@ -470,8 +481,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     setVoiceStatus((current) => transitionVoiceStatus(current, "START"));
     setVoiceTranscript("");
     setVoiceTranscriptStatus("waiting");
-    voiceTranscriptSegmentsRef.current.clear();
-    voiceTranscriptSavedRef.current = false;
+    voiceTranscriptBufferRef.current = new VoiceTranscriptBuffer();
     voiceCompletedTurnsRef.current = progress.completedTurns;
     voiceSessionIdRef.current = null;
     voiceSessionStartedAtRef.current = null;
@@ -519,58 +529,41 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       room.registerTextStreamHandler(
         "lk.transcription",
         async (reader, participantInfo) => {
+          if (participantInfo.identity !== credentials.participantIdentity) return;
+          const buffer = voiceTranscriptBufferRef.current;
+          const sequenceNumber = voiceCompletedTurnsRef.current + 1;
+          const questionText = voiceQuestionTextRef.current;
+          const isActive = () => voiceRoomRef.current === room &&
+            voiceTranscriptBufferRef.current === buffer &&
+            voiceCompletedTurnsRef.current + 1 === sequenceNumber;
+          const attributes = reader.info.attributes ?? {};
+          const segmentId = attributes["lk.segment_id"] ?? reader.info.id;
+          const isFinal = attributes["lk.transcription_final"] === "true";
           try {
-            const text = (await reader.readAll()).trim();
-            if (
-              !text ||
-              participantInfo.identity !== credentials.participantIdentity
-            ) {
-              return;
-            }
-
-            if (voiceTranscriptSavedRef.current) {
-              voiceTranscriptSegmentsRef.current.clear();
-              voiceTranscriptSavedRef.current = false;
-            }
-            const attributes = reader.info.attributes ?? {};
-            const segmentId =
-              attributes["lk.segment_id"] ?? reader.info.id;
-            const isFinal =
-              attributes["lk.transcription_final"] === "true";
-            voiceTranscriptSegmentsRef.current.set(segmentId, text);
-            const rawTranscript = Array.from(
-              voiceTranscriptSegmentsRef.current.values(),
-            ).join(" ");
-            setVoiceTranscript(
-              normalizeVoiceTranscriptForDisplay(
-                rawTranscript,
-                voiceQuestionTextRef.current,
-              ),
-            );
+            const text = await buffer.consume(reader, segmentId, isFinal, (rawTranscript) => {
+              setVoiceTranscript(normalizeVoiceTranscriptForDisplay(rawTranscript, questionText));
+              setVoiceTranscriptStatus("interim");
+              setVoiceMessage("正在识别你的回答；片段更新不代表本题已结束。");
+            }, isActive);
+            if (!text || !isActive()) return;
             setVoiceTranscriptStatus(isFinal ? "final" : "interim");
             if (isFinal) {
               voiceFinalTranscriptAtRef.current ??= performance.now();
               recordVoiceEvent({
                 eventType: "voice.transcript_final",
                 idempotencyKey:
-                  `client:voice:${credentials.voiceSessionId}:transcript:` +
-                  segmentId.slice(0, 64),
+                  `client:voice:${credentials.voiceSessionId}:transcript:` + segmentId.slice(0, 64),
                 payload: {
                   voiceSessionId: credentials.voiceSessionId,
-                  sequenceNumber: voiceCompletedTurnsRef.current + 1,
+                  sequenceNumber,
                   segmentId,
                   transcriptCharacters: text.length,
                 },
               });
             }
-            setVoiceMessage(
-              isFinal
-                ? "已生成最终转写，Agent 正在保存回答并选择下一步。"
-                : "正在识别你的回答……",
-            );
           } catch {
-            setVoiceMessage(
-              "转写显示暂时中断；语音连接仍在运行，请继续完成回答。",
+            if (isActive()) setVoiceMessage(
+              "实时文字暂时未更新；语音连接仍在运行，保存后可展开核对完整文本。",
             );
           }
         },
@@ -1188,12 +1181,12 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
               </div>
               <div className="voice-transcript" aria-live="polite">
                 <div>
-                  <span>你的语音转写</span>
+                  <span>本题实时转写</span>
                   <strong>
                     {voiceTranscriptStatus === "saved"
-                      ? "回答已保存"
+                      ? "上一轮已保存"
                       : voiceTranscriptStatus === "final"
-                        ? "最终转写"
+                        ? "片段已识别"
                         : voiceTranscriptStatus === "interim"
                           ? "正在识别"
                           : "等待回答"}
@@ -1203,6 +1196,13 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
                   {voiceTranscript ||
                     "开始回答后，识别出的文字会显示在这里。系统会自动判断你是否说完；如遇长停顿或嘈杂环境，可点击“手动结束本题”。"}
                 </p>
+                {savedVoiceAnswer && (
+                  <details>
+                    <summary>第 {savedVoiceAnswer.sequenceNumber} 轮已保存转写（{savedVoiceAnswer.answerText.length} 字符，展开核对）</summary>
+                    <p>{savedVoiceAnswer.questionText}</p>
+                    <p>{savedVoiceAnswer.answerText}</p>
+                  </details>
+                )}
               </div>
             </section>
           )}

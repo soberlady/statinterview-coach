@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { VoiceTranscriptDiagnostics } from "./VoiceTranscriptDiagnostics";
+import type { VoiceTranscriptDiagnostics as TranscriptDiagnostics } from "@/app/lib/voice-transcript-diagnostics";
 import { useEffect, useMemo, useState } from "react";
 
 type Reliability = "HIGH" | "MEDIUM" | "LOW";
@@ -154,6 +156,7 @@ type Report = {
       pricingVersions: string[];
       allowancesApplied: false;
     };
+    voiceTranscriptDiagnostics?: TranscriptDiagnostics;
     voiceTelemetry: {
       sessionCount: number;
       reconnectCount: number;
@@ -450,6 +453,9 @@ export function ReportView({ interviewId }: { interviewId: string }) {
       ) : null}
 
       <section className="report-grid">
+        {report.metrics.voiceTranscriptDiagnostics && (
+          <VoiceTranscriptDiagnostics diagnostics={report.metrics.voiceTranscriptDiagnostics} />
+        )}
         {report.metrics.voiceTelemetry.sessionCount > 0 ? (
           <article className="report-card report-card-wide">
             <div className="section-heading">
@@ -493,7 +499,7 @@ export function ReportView({ interviewId }: { interviewId: string }) {
               </span>
             </div>
             <p className="report-caption">
-              当前样本包含 {report.metrics.voiceTelemetry.committedTurnCount} 个已保存语音回答、
+              当前样本包含 {report.metrics.voiceTelemetry.committedTurnCount} 条浏览器保存检查点记录、
               {report.metrics.voiceTelemetry.finalTranscriptSegmentCount} 个最终转写片段和
               {report.metrics.voiceTelemetry.failedConnectionCount} 次连接失败。样本量不足时只展示原始观测，不做质量结论。
               推理费用按观测用量与版本化目录价估算，不扣除免费额度，

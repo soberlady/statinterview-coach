@@ -786,13 +786,6 @@ function validatePass(pass: RubricPass, criterionCount: number): void {
   pass.criteria = ordered;
 }
 
-function sumNullable(
-  left: number | null,
-  right: number | null,
-): number | null {
-  return left === null || right === null ? null : left + right;
-}
-
 function sumNullableMany(values: Array<number | null>): number | null {
   return values.every((value): value is number => value !== null)
     ? values.reduce((total, value) => total + value, 0)
@@ -820,7 +813,7 @@ async function scorerEnvironment(): Promise<
   let workerEnvironment: Record<string, unknown> = {};
   try {
     const workerModule = await import("cloudflare:workers");
-    workerEnvironment = workerModule.env as Record<string, unknown>;
+    workerEnvironment = Object.fromEntries(Object.entries(workerModule.env));
   } catch {
     // Unit tests and standalone inference can run outside Cloudflare.
   }

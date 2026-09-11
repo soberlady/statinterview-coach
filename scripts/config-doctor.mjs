@@ -42,7 +42,7 @@ export function inspectConfiguration(
       return false;
     }
     if (count !== names.length) {
-      add("error", `${label}_PARTIAL`, `${label} must set all of: ${names.join(", ")}.`);
+      add("error", `${label}_PARTIAL`, `${label} is partially configured. Missing: ${names.filter((name) => !configured(name)).join(", ")}.`);
       return false;
     }
     add("ok", `${label}_CONFIGURED`, `${label} is fully configured.`);

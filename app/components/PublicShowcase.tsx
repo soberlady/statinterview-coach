@@ -1,6 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import demo from "@/content/agent-demo.json";
+
+const weakTurn = demo.trace[0];
+const verificationTurn = demo.trace[1];
+const firstAdaptive = demo.audit.steps.find((step) => step.questionType === "adaptive")!;
+const acceptedTurn = demo.trace[firstAdaptive.sequenceNumber - 2];
+const replayComplete = Object.values(demo.audit.invariants).every(Boolean);
 
 type PublicShowcaseProps = {
   relativeMaeReduction: number;
@@ -19,36 +26,29 @@ const stageCopy = [
   {
     eyebrow: "STEP 1 · RAW EVIDENCE",
     title: "先故意提交一条证据不足的回答",
-    question:
-      "一次 A/B 实验的核心指标显著上涨，你会如何判断是否可以全量发布？",
-    answer:
-      "我会先看最终指标有没有上涨；如果上涨就认为方案有效，暂时不检查样本偏差、指标口径或其他条件。",
+    question: weakTurn.questionText,
+    answer: weakTurn.answer,
     action: "提交合成弱回答",
   },
   {
     eyebrow: "STEP 2 · VERIFY",
     title: "Agent 不直接给低分，而是提出一次有边界的追问",
-    question:
-      "请只补充说明：显著上涨之外，你至少会检查哪两项发布条件？",
-    answer:
-      "我暂时只能重复上一轮结论，没有新的数据、计算过程或可核验的判断标准可以补充。",
+    question: verificationTurn.questionText,
+    answer: verificationTurn.answer,
     action: "提交限定追问回答",
   },
   {
     eyebrow: "STEP 3 · ABSTAIN",
     title: "追问后仍无证据，系统拒绝更新能力状态",
-    question: "为什么不把这次回答直接记为“能力较差”？",
-    answer:
-      "低质量转写、题意误解和真实知识缺口可能产生相同表象。证据不足时保留先验，比制造一个自信的错误分数更安全。",
+    question: verificationTurn.questionText,
+    answer: verificationTurn.answer,
     action: "载入一条完整证据回答",
   },
   {
     eyebrow: "STEP 4 · ACCEPT + ADAPT",
     title: "可靠证据更新后验，下一题由信息价值决定",
-    question:
-      "面对 SQL 权重更高的岗位，有限题量应该优先测量哪个能力缺口？",
-    answer:
-      "回答覆盖口径校验、随机化检查、置信区间、护栏指标和发布阈值，证据可逐句定位，因此允许更新能力后验。",
+    question: acceptedTurn.questionText,
+    answer: acceptedTurn.answer,
     action: "查看完整决策回放",
   },
   {
@@ -56,7 +56,7 @@ const stageCopy = [
     title: "最终结论可以回到每道题、每条证据和每次选择",
     question: "这不是又一个只会生成问题和总分的 AI 面试官吗？",
     answer:
-      "区别在于决策可重放：系统保存后验、候选题效用分解、可靠性动作和检查点，并用指纹验证报告路径没有被篡改。",
+      "区别在于决策可重放：系统保存后验、候选题效用分解、可靠性动作和检查点，通过策略重放检查选题一致性，指纹用于比较同一版本的决策轨迹。",
     action: "重新体验",
   },
 ] as const;
@@ -137,7 +137,7 @@ export function PublicShowcase({
           ))}
           <div className="showcase-boundary">
             <strong>演示边界</strong>
-            <p>展示真实状态机设计，数值和回答为固定夹具，不代表真人测评效果。</p>
+            <p>回答与分数为合成夹具；选题、能力状态、回放与指纹由同一版本的策略代码计算，不代表真人测评效果。</p>
           </div>
         </aside>
 
@@ -194,7 +194,7 @@ function DecisionPanel({ stage }: { stage: number }) {
     return (
       <div className="showcase-decision verify">
         <div><span>可靠性动作</span><strong>VERIFY</strong></div>
-        <p>仅提到“指标上涨”，缺少随机化、口径、区间与护栏证据。允许一次批准题库内的限定追问。</p>
+        <p>{weakTurn.reason}</p>
         <code>posterior_update = blocked</code>
       </div>
     );
@@ -203,7 +203,7 @@ function DecisionPanel({ stage }: { stage: number }) {
     return (
       <div className="showcase-decision abstain">
         <div><span>可靠性动作</span><strong>ABSTAIN</strong></div>
-        <p>验证预算已经使用，仍然没有新增可核验证据。保留上一时刻后验，不制造能力结论。</p>
+        <p>{verificationTurn.reason}</p>
         <code>posterior(t+1) = posterior(t)</code>
       </div>
     );
@@ -211,23 +211,26 @@ function DecisionPanel({ stage }: { stage: number }) {
   if (stage === 2) {
     return (
       <div className="showcase-ability-panel">
-        <Ability label="实验与因果" before={50} after={50} note="拒绝更新" />
-        <Ability label="SQL 与 Python" before={50} after={50} note="等待证据" />
+        <Ability label={verificationTurn.skillLabel} before={verificationTurn.before.mean} after={verificationTurn.after.mean} note="证据不足，保留先验" />
+        <p>追问后仍缺少依据，能力均值和不确定性均保持不变。</p>
       </div>
     );
   }
   return (
     <div className="showcase-adaptive-grid">
       <div className="showcase-ability-panel">
-        <Ability label="实验与因果" before={50} after={68} note="证据已接受" />
-        <Ability label="SQL 与 Python" before={50} after={57} note="不确定性最高" />
+        <Ability label={acceptedTurn.skillLabel} before={acceptedTurn.before.mean} after={acceptedTurn.after.mean} note="合成证据已接受" />
+        <p>后验不确定性：{acceptedTurn.before.uncertainty.toFixed(3)} → {acceptedTurn.after.uncertainty.toFixed(3)}</p>
       </div>
       <div className="showcase-ranking">
         <span>NEXT QUESTION UTILITY</span>
         <ol>
-          <li><strong>SQL 口径与重复行</strong><em>0.842</em></li>
-          <li><strong>实验护栏指标</strong><em>0.716</em></li>
-          <li><strong>分类阈值选择</strong><em>0.503</em></li>
+          {firstAdaptive.ranking.map((candidate) => (
+            <li key={candidate.questionId}>
+              <strong>{candidate.questionText}</strong>
+              <em>{candidate.utility.toFixed(3)}</em>
+            </li>
+          ))}
         </ol>
       </div>
     </div>
@@ -249,9 +252,9 @@ function Ability({
     <div className="showcase-ability">
       <div><strong>{label}</strong><span>{note}</span></div>
       <div className="showcase-ability-track">
-        <i style={{ width: `${after}%` }} />
+        <i style={{ width: `${Math.max(0, Math.min(100, ((after + 3) / 6) * 100))}%` }} />
       </div>
-      <small>{before} → {after}</small>
+      <small>能力均值 θ：{before.toFixed(3)} → {after.toFixed(3)}（范围 −3 至 3）</small>
     </div>
   );
 }
@@ -261,22 +264,22 @@ function ReplayPanel({ relativeMaeReduction }: { relativeMaeReduction: number })
     <div className="showcase-replay">
       <div className="showcase-replay-status">
         <span>POLICY REPLAY</span>
-        <strong>7 / 7 决策一致</strong>
-        <p>问题顺序、可靠性动作和能力更新均能从持久化证据确定性重建。</p>
+        <strong>{demo.audit.summary.matchingSelections} / {demo.audit.summary.replayedTurns} 决策一致</strong>
+        <p>将合成回答按存储记录格式在内存中重放，选题路径可确定性重建。此示例不连接数据库。</p>
       </div>
       <div className="showcase-replay-grid">
-        <article><span>验证追问</span><strong>1</strong><small>bounded</small></article>
-        <article><span>拒绝更新</span><strong>1</strong><small>abstained</small></article>
-        <article><span>自适应决策</span><strong>2</strong><small>replayed</small></article>
+        <article><span>验证追问</span><strong>{demo.audit.summary.verificationDecisions}</strong><small>bounded</small></article>
+        <article><span>拒绝更新</span><strong>{demo.trace.filter((turn) => turn.action === "ABSTAIN").length}</strong><small>abstained</small></article>
+        <article><span>自适应决策</span><strong>{demo.audit.summary.adaptiveDecisions}</strong><small>replayed</small></article>
         <article><span>模拟 MAE</span><strong>-{relativeMaeReduction.toFixed(2)}%</strong><small>vs fixed</small></article>
       </div>
       <div className="showcase-fingerprint">
         <span>SHA-256 POLICY FINGERPRINT</span>
-        <code>86f57c4473a14644…</code>
-        <strong>✓ invariant checks passed</strong>
+        <code title={demo.fingerprint}>{demo.fingerprint.slice(0, 24)}…</code>
+        <strong>{replayComplete ? "✓ invariant checks passed" : "Replay checks failed"}</strong>
       </div>
       <p className="showcase-replay-note">
-        结论边界：该结果验证工程机制与模拟假设，不证明招聘有效性或真人学习收益。
+        替换为另一道题库内合法题目：{demo.tamperCheck.detected ? "已检测到策略偏离" : "未检测到偏离"}。指纹不是数字签名；合成回放不证明招聘有效性或真人学习收益。
       </p>
     </div>
   );

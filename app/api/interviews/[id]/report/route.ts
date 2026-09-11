@@ -12,6 +12,7 @@ import {
   replayInterviewPolicy,
 } from "@/app/lib/decision-audit";
 import { summarizeCostTelemetry } from "@/app/lib/cost-telemetry";
+import { diagnoseVoiceTranscripts } from "@/app/lib/voice-transcript-diagnostics";
 import { summarizeVoiceTelemetry } from "@/app/lib/voice-telemetry";
 import scoringBenchmark from "@/content/scoring-benchmark.json";
 import { ApiError, errorResponse, jsonResponse, parseJsonText } from "../../../_lib/http";
@@ -156,6 +157,15 @@ export async function GET(_request: Request, context: RouteContext) {
                 ),
           costTelemetry,
           voiceTelemetry,
+          voiceTranscriptDiagnostics: diagnoseVoiceTranscripts(
+            turnRows,
+            eventRows.map((event) => ({
+              eventType: event.eventType,
+              latencyMs: event.latencyMs,
+              payload: parseJsonText<Record<string, unknown>>(event.payload, {}),
+            })),
+            eventRows.length >= 2_000,
+          ),
         },
         policyAudit: {
           ...policyAudit,

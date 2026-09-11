@@ -1,8 +1,9 @@
 # StatInterview Agent Kernel
 
-This directory contains the deterministic decision core for StatInterview. It
-does **not** connect to an LLM, speech provider, LiveKit, a database, or any
-secret-bearing service. Those adapters can be added around this package later.
+This package contains the deterministic decision core and an optional LiveKit
+voice adapter. The kernel and its tests run with `.[dev]` without importing
+media SDKs or loading env files. The `livekit_worker` module requires the
+`voice` extra and connects to the configured speech and interview services.
 
 The kernel currently provides:
 
@@ -98,7 +99,8 @@ answer length, scorer disagreement, score proximity to a decision threshold,
 and schema validity.
 
 A low-reliability result requests at most one verification for the current
-question and at most three per interview. When the budget is exhausted, the
+question with a configurable session budget (the kernel budget model defaults to three;
+the deployed TypeScript session policy caps verification turns at two). When the budget is exhausted, the
 kernel returns `ABSTAIN` rather than inventing a score.
 
 ## State machine

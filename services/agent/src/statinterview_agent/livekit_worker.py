@@ -31,6 +31,7 @@ from livekit.agents import (
 )
 from livekit.agents.llm.tool_context import ToolFlag
 
+from .api_auth import api_request_headers as _api_request_headers
 from .voice_cost import estimate_livekit_inference_cost
 from .voice_room import resolve_interview_id, resolve_voice_session_id
 from .voice_speech import build_opening_prompt, prepare_question_for_speech
@@ -47,25 +48,6 @@ load_dotenv(".env.local")
 load_dotenv()
 
 logger = logging.getLogger(__name__)
-
-def _api_request_headers() -> dict[str, str]:
-    """Return an optional bearer header for an owner-only API deployment."""
-
-    token = os.environ.get(
-        "STATINTERVIEW_API_AUTH_BEARER_TOKEN", ""
-    ).strip()
-    header_name = os.environ.get(
-        "STATINTERVIEW_API_AUTH_HEADER", "OAI-Sites-Authorization"
-    ).strip()
-    if not token:
-        return {}
-    if not header_name:
-        raise ValueError(
-            "STATINTERVIEW_API_AUTH_HEADER cannot be empty when an API "
-            "auth token is configured"
-        )
-    return {header_name: f"Bearer {token}"}
-
 
 @dataclass
 class VoiceRuntime:

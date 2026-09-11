@@ -1,0 +1,2 @@
+# Keep generated demo evidence byte-identical on Windows and Linux.
+/content/agent-demo.json text eol=lf

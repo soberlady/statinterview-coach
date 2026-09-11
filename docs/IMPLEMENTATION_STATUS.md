@@ -1,6 +1,6 @@
 # Implementation status
 
-Updated: 2026-08-30
+Updated: 2026-09-08
 
 ## Complete
 
@@ -14,7 +14,7 @@ Updated: 2026-08-30
   questions, bounded verification and abstention;
 - versioned per-turn checkpoints and resume endpoint;
 - evidence-linked report based on persisted data;
-- Python deterministic policy kernel, scorer evaluator and voice helpers with 78 passing
+- Python deterministic policy kernel, scorer evaluator and voice helpers with 99 passing
   tests;
 - shared Python/TypeScript golden parity fixtures for posterior and utility
   signals;
@@ -90,6 +90,36 @@ Updated: 2026-08-30
   APIs and redirects interview/report pages without changing the owner-only
   full deployment behavior.
 
+## Voice display diagnostics (2026-09-08, local source)
+
+- Browser streams render incremental deltas and isolate saved-turn buffers.
+- The latest persisted answer is available separately from live display text.
+- Reports compare per-turn stored lengths with versioned browser checkpoints;
+  missing, legacy, conflicting and capped telemetry stays unmeasured.
+- Diagnostic counts do not represent ASR accuracy and cannot affect policy or ability state.
+- Synthetic unit and API integration coverage is included; deployment and a fresh
+  human voice regression are separate outstanding release steps.
+
+## Portfolio and verification improvements (2026-09-08)
+
+- Credential-free `npm run demo:agent` executes the production edge policy
+  with labeled fixture scores: eight turns, three adaptive decisions, complete
+  replay and approved-question tamper detection.
+- Public showcase values and fingerprint come from the generated trace;
+  CI detects stale artifacts instead of relying on hand-entered display values.
+- Full TypeScript checking now participates in the machine gate, with
+  Wrangler-generated runtime types and consistent LiveKit SDK imports.
+- Pure API authentication tests no longer import the optional native voice SDK.
+  CI separately checks the worker with pinned production voice dependencies.
+- `verify:code` separates code verification from optional deployment
+  credential preflight, while `verify` retains both gates.
+- Chinese project and next-step guides give reviewers a runnable example,
+  source map, claim boundaries and an application preparation checklist.
+
+These are source changes. Check actual GitHub CI and deployment status before
+claiming they are published. Local unit tests do not validate the native voice
+runtime; the current Windows machine blocks a LiveKit native DLL import.
+
 ## Human-dependent next steps
 
 1. run the frozen 30-session voice protocol and publish measured latency,
@@ -116,7 +146,8 @@ protocol. The browser remains fully usable through the text channel.
 
 ## Access boundary
 
-The current Sites release remains owner-only. Per-user ownership and service
+The full data-bearing Sites deployment remains owner-only. A separate public
+read-only showcase exposes synthetic data only. Per-user ownership and service
 authentication must be added before a public beta; until then the project
 should be described as a private interview demo and offline experiment system,
 not a multi-tenant public service.

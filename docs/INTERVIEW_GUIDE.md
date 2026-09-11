@@ -3,6 +3,10 @@
 This document keeps the project explainable by one student. Do not memorize
 marketing language; be able to derive and modify the decisions below.
 
+Chinese readers: [项目导读与简历写法](PROJECT_GUIDE_ZH.md) ·
+[投递前行动清单](NEXT_STEPS_ZH.md). For a deterministic terminal demo, run
+`npm run demo:agent`; it executes the edge policy with fixture scores.
+
 ## 90-second project introduction
 
 > I built StatInterview Coach, an adaptive interview-training Agent for Chinese
@@ -18,7 +22,7 @@ marketing language; be able to derive and modify the decisions below.
 > updating ability. The web flow, D1 checkpoints, evidence report and LiveKit
 > browser/worker boundary are implemented. The final report deterministically
 > replays every decision, decomposes the top candidate utilities and generates
-> a SHA-256 policy fingerprint; a counterfactual test proves that a legal but
+> a SHA-256 reproducibility fingerprint; a counterfactual test proves that a legal but
 > non-selected question is detected. I also wrote Python and TypeScript parity
 > fixtures and a reproducible 4,000-candidate simulation. Under the
 > stated assumptions, adaptive selection reduced job-weighted MAE by 3.83%
@@ -128,7 +132,7 @@ be generalized beyond the frozen simulation.
 >   that stores final raw transcripts and delegates scoring/selection to the
 >   policy API.
 > - Added a secret-safe configuration preflight, deployment health endpoint and
->   one-command CI gate; 78 Python tests plus TypeScript, rendered-output and
+>   one-command CI gate; 99 Python tests plus TypeScript, rendered-output and
 >   local D1 end-to-end tests cover recovery and policy-tamper failure paths.
 
 Do not write “production-grade voice system,” “validated hiring predictor,” or

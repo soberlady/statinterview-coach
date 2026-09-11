@@ -1,5 +1,4 @@
-import { RoomAgentDispatch, RoomConfiguration } from "@livekit/protocol";
-import { AccessToken } from "livekit-server-sdk";
+import { AccessToken, RoomAgentDispatch, RoomConfiguration } from "livekit-server-sdk";
 
 export async function createLiveKitVoiceCredentials(input: {
   serverUrl: string;
