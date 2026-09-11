@@ -46,3 +46,7 @@ next-env.d.ts
 # and aggregate reports belong in source control.
 /evaluation/scoring/private/
 /evaluation/scoring/predictions/
+
+# Local session notes and temporary files must never be published.
+/.tmp/
+/docs/SESSION_HANDOFF.md

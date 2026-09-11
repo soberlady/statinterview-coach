@@ -75,7 +75,8 @@ test("ships a read-only synthetic portfolio demo", async () => {
   assert.match(showcase, /只读 · 合成数据 · 不保存/);
   assert.match(showcase, /VERIFY/);
   assert.match(showcase, /ABSTAIN/);
-  assert.match(showcase, /7 \/ 7 决策一致/);
+  assert.match(showcase, /demo\.audit\.summary\.matchingSelections/);
+  assert.match(showcase, /demo\.fingerprint/);
   assert.match(guard, /block-api/);
   assert.match(worker, /PUBLIC_SHOWCASE_READ_ONLY/);
   assert.match(worker, /STATINTERVIEW_PUBLIC_SHOWCASE/);

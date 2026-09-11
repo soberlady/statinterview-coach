@@ -244,6 +244,7 @@ function buildCompleteSession(): {
       skill: question.skill,
       questionType: question.questionType,
       answerText: richAnswer,
+      scoringAnswerText: null,
       inputMode: "text",
       status: "completed",
       transcriptConfidence: null,

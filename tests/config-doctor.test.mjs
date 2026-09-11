@@ -20,6 +20,8 @@ test("partial LiveKit configuration fails without leaking values", () => {
   assert.equal(report.ok, false);
   assert.ok(report.checks.some((check) => check.code === "LIVEKIT_PARTIAL"));
   assert.equal(JSON.stringify(report).includes(secret), false);
+  assert.equal(report.checks.find((check) => check.code === "LIVEKIT_PARTIAL").message,
+    "LIVEKIT is partially configured. Missing: LIVEKIT_URL, LIVEKIT_API_KEY.");
 });
 
 test("complete voice and scorer configuration passes", () => {

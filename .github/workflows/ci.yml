@@ -28,8 +28,10 @@ jobs:
           cache-dependency-path: services/agent/pyproject.toml
       - run: npm ci
       - run: python -m pip install --upgrade pip
-      - run: python -m pip install -e "./services/agent[voice,dev]"
+      - run: python -m pip install -e "./services/agent[dev]"
       - run: npm run verify
+      - name: Install pinned production voice dependencies
+        run: python -m pip install -r services/agent/requirements.txt
       - name: Validate voice worker imports with production extras
         run: python -c "import statinterview_agent.livekit_worker"
       - name: Verify generated evidence is reproducible

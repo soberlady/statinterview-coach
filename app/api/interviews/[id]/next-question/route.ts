@@ -61,7 +61,14 @@ export async function GET(_request: Request, context: RouteContext) {
         turn.status === "completed" && turn.questionType !== "verification",
     ).length;
 
+    const lastCompletedTurn = turns.filter((turn) => turn.status === "completed").at(-1);
+
     return jsonResponse({
+      lastCompletedAnswer: lastCompletedTurn ? {
+        sequenceNumber: lastCompletedTurn.sequenceNumber,
+        questionText: lastCompletedTurn.questionText,
+        answerText: lastCompletedTurn.answerText,
+      } : null,
       interview: serializeInterview(interview),
       nextQuestion: decision.nextQuestion
         ? toPublicQuestion(decision.nextQuestion)

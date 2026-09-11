@@ -14,11 +14,37 @@ decision trail from raw answer to final report.
 [Try the 3-minute public demo](https://statinterview-coach-cn.keen-grass-7274.chatgpt.site/showcase)
 · [Architecture](docs/ARCHITECTURE.md)
 · [Evaluation](docs/EVALUATION.md)
+· [中文项目导读](docs/PROJECT_GUIDE_ZH.md)
+· [投递前行动清单](docs/NEXT_STEPS_ZH.md)
 · [Interview guide](docs/INTERVIEW_GUIDE.md)
+· [语音排障案例](docs/VOICE_DISPLAY_DIAGNOSTICS_ZH.md)
 
 <p align="center">
   <img src="public/og.png" alt="StatInterview Coach public portfolio demo" width="900" />
 </p>
+
+## Run the Agent in two minutes
+
+After cloning, install the locked Node.js dependencies and run the real edge
+policy against labeled synthetic answers:
+
+```sh
+npm ci
+npm run demo:agent
+```
+
+No API key, Python, database or microphone is needed for this demo. Initial
+installation requires internet access. The run produces **8/8 matching
+selections**, **3 adaptive decisions**, preserved posteriors for
+`VERIFY / ABSTAIN`, and detection of an approved but policy-inconsistent
+replacement question. The evaluator uses synthetic fixture scores; selection,
+posterior updates and replay execute the production TypeScript policy.
+
+The public showcase reads the same [generated trace](content/agent-demo.json),
+including its calculated rankings and fingerprint. Run
+`npm run demo:agent -- --check` to verify that the artifact matches the code.
+For a Chinese walkthrough and source-reading map, start with
+[中文项目导读](docs/PROJECT_GUIDE_ZH.md).
 
 ## What makes it an Agent
 
@@ -28,7 +54,7 @@ decision trail from raw answer to final report.
 | Reliability control | Weak or conflicting evidence triggers a bounded approved follow-up or `ABSTAIN`; an LLM's self-reported confidence is never trusted. |
 | Auditable execution | Every answer, state transition, ranking and checkpoint is persisted. Reports replay the complete path, verify five invariants and fingerprint the policy trace with SHA-256. |
 | Realtime voice | LiveKit browser audio and a Python Agents worker preserve final raw transcripts, wait for transcript stability, recover checkpoints and fall back safely to text. |
-| Evidence-bound scoring | Two role-separated rubric passes may repair obvious ASR errors for scoring, while quoted evidence must remain a verbatim substring of the original answer. |
+| Evidence-bound scoring | A bounded ASR repair pass precedes two role-separated rubric scoring passes, while quoted evidence must remain a verbatim substring of the original answer. |
 
 ## Measured result
 
@@ -63,10 +89,10 @@ flowchart LR
   D1 --> REPORT["Evidence-linked report"]
 ```
 
-The Python kernel is the canonical policy implementation. A TypeScript edge
-mirror keeps the web application deployable on Cloudflare; shared golden
-fixtures check posterior updates, information gain and utility parity between
-the two implementations.
+The Python kernel defines the policy mathematics and supports experiments.
+The TypeScript policy runs the web API on Cloudflare. Shared golden fixtures
+check posterior updates, information gain and utility parity; they do not
+claim full session-policy equivalence across both implementations.
 
 ## What works now
 
@@ -104,7 +130,7 @@ authorization and the human-study release gates are complete.
 Prerequisites: Node.js `>=22.13`, Python `>=3.11`.
 
 ```powershell
-npm install
+npm ci
 npm run db:local
 npm run dev
 ```
@@ -152,10 +178,18 @@ npm run verify
 
 `doctor` validates configuration groups and deployment files without printing
 secret values. `verify` is the clean-checkout gate used by GitHub Actions: it
-validates content, builds the app, runs Python/TypeScript/rendered-output tests,
+validates content, checks all TypeScript types, builds the app, runs
+Python/TypeScript/rendered-output tests,
 exercises the local D1 API end to end and regenerates all frozen synthetic
 evidence. `/api/health` provides a non-secret database/question-bank/policy
 readiness check for a running deployment.
+
+If optional local credentials are only partially configured, `doctor` will
+fail. Use `npm run verify:code` to run the complete code gate without the
+configuration preflight; deployment readiness still requires `doctor`.
+`verify:code` does not isolate the process from local environment files.
+Install the Python test dependencies first:
+`python -m pip install -e "./services/agent[dev]"`.
 
 See [architecture](docs/ARCHITECTURE.md),
 [evaluation plan](docs/EVALUATION.md),

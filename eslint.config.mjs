@@ -15,6 +15,7 @@ const eslintConfig = defineConfig([
     "out/**",
     "outputs/**",
     "work/**",
+    ".tmp/**",
     "coverage/**",
     "**/.pytest_cache/**",
     "**/__pycache__/**",

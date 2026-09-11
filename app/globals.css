@@ -3111,3 +3111,10 @@ a {
     padding: 30px;
   }
 }
+
+.transcript-comparison-scroll { overflow-x: auto; }
+.transcript-comparison-scroll:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.transcript-comparison-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+.transcript-comparison-table caption { text-align: left; padding: 0.75rem 0; }
+.transcript-comparison-table th, .transcript-comparison-table td { text-align: left; padding: 0.75rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+.transcript-comparison-table small { display: block; margin-top: 0.25rem; font-size: 0.875rem; }

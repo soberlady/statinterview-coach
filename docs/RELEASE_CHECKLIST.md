@@ -11,12 +11,13 @@ following:
 
 - configuration shape and browser-secret preflight;
 - 24-question bank validation;
-- lint and production build;
+- lint, full TypeScript checking with generated Worker types, and production build;
 - Python policy, scoring, cost, transcript and voice-turn tests;
 - TypeScript policy parity, telemetry, replay and guided-demo tests;
 - local D1 end-to-end flow, including `/api/health`, rollback, stale-checkpoint
   recovery, pause/resume and policy tamper detection;
-- deterministic regeneration of policy, scorer and voice evidence artifacts.
+- deterministic regeneration of policy, scorer, voice and Agent demo evidence artifacts;
+- separate production voice dependency install and worker import smoke check in CI.
 
 GitHub Actions runs the same gate on every push and pull request and verifies
 that generation leaves the repository unchanged.
@@ -35,6 +36,9 @@ that generation leaves the repository unchanged.
 - Confirm `/` redirects to `/showcase`.
 - Confirm `/api/interviews` and `/api/interviews/:id/voice-token` return
   `403 PUBLIC_SHOWCASE_READ_ONLY`.
+- Confirm `/showcase` reads the generated Agent trace (8/8 replay and three
+  adaptive decisions for the frozen scenario), and its fingerprint matches
+  `content/agent-demo.json`.
 - Confirm `/showcase` uses only fixed synthetic browser state and writes no
   interview, transcript or feedback records.
 - Keep the full data-bearing deployment owner-only.
