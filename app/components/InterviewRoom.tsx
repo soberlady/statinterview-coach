@@ -463,7 +463,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       await updateLifecycle("PAUSED");
       await voiceRoomRef.current?.disconnect();
       voiceRoomRef.current = null;
-      router.push("/");
+      router.push(`/report/${interviewId}`);
     } catch (pauseError) {
       setError(
         pauseError instanceof Error
@@ -1034,7 +1034,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
           onClick={exitAndPause}
           disabled={isSaving || isExiting}
         >
-          {isExiting ? "正在保存…" : "暂停并退出"}
+          {isExiting ? "正在保存…" : "暂停并查看阶段报告"}
         </button>
       </header>
 

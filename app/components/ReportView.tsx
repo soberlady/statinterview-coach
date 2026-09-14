@@ -397,12 +397,19 @@ export function ReportView({ interviewId }: { interviewId: string }) {
           <span className="brand-mark">S</span>
           <strong>StatInterview</strong>
         </Link>
-        <span>诊断报告 · {interviewId.slice(0, 12)}</span>
+        <span>
+          {report.interview.status === "PAUSED" ? "阶段报告" : "诊断报告"} ·{" "}
+          {interviewId.slice(0, 12)}
+        </span>
       </header>
 
       <section className="report-hero">
         <div>
-          <p className="eyebrow">证据型能力诊断</p>
+          <p className="eyebrow">
+            {report.interview.status === "PAUSED"
+              ? "暂停检查点 · 阶段性证据"
+              : "证据型能力诊断"}
+          </p>
           <h1>
             {report.assessmentStatus === "INSUFFICIENT_EVIDENCE"
               ? `已完成 ${report.metrics.completedTurns} 轮回答，语义能力证据尚未建立。`
@@ -431,8 +438,16 @@ export function ReportView({ interviewId }: { interviewId: string }) {
             {nextSkillGaps[0] ??
               "用不同场景回测当前判断，继续降低能力估计的不确定性。"}
           </p>
-          <Link className="primary-button" href="/">
-            创建专项训练 <span>→</span>
+          <Link
+            className="primary-button"
+            href={
+              report.interview.status === "PAUSED"
+                ? `/interview/${interviewId}`
+                : "/"
+            }
+          >
+            {report.interview.status === "PAUSED" ? "继续面试" : "创建专项训练"}{" "}
+            <span>→</span>
           </Link>
         </div>
       </section>
