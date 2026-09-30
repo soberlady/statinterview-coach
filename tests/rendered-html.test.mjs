@@ -17,10 +17,10 @@ test("keeps the production product copy and safety boundary", async () => {
     readFile(new URL("app/lab/page.tsx", projectRoot), "utf8"),
   ]);
 
-  assert.match(page, /不凑题数/);
-  assert.match(page, /Private research build/);
+  assert.match(page, /准备一次/);
+  assert.match(page, /个人练习空间/);
   assert.doesNotMatch(page, /Public beta/);
-  assert.match(setup, /开始诊断/);
+  assert.match(setup, /开始语音练习/);
   assert.doesNotMatch(setup, /开始文本诊断/);
   assert.match(voiceReadiness, /实时面试官已就绪/);
   assert.match(voiceReadiness, /正在等待实时面试官/);

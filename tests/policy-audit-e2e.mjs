@@ -544,6 +544,7 @@ try {
     finalTranscriptSegmentCount: 1,
     committedTurnCount: 1,
     connectionLatency: { count: 2, p50Ms: 1_150, p95Ms: 1_375 },
+    agentReadyLatency: { count: 0, p50Ms: null, p95Ms: null },
     transcriptToCommitLatency: {
       count: 1,
       p50Ms: 1_200,

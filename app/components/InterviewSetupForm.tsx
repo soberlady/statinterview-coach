@@ -78,10 +78,9 @@ export function InterviewSetupForm() {
     <aside className="setup-panel" aria-labelledby="setup-title">
       <div className="setup-heading">
         <div>
-          <p>开始一次诊断</p>
-          <h2 id="setup-title">创建你的面试</h2>
+          <p>本次练习</p>
+          <h2 id="setup-title">你想准备什么岗位？</h2>
         </div>
-        <span>约 20 分钟</span>
       </div>
 
       <form onSubmit={handleSubmit}>
@@ -99,7 +98,7 @@ export function InterviewSetupForm() {
           岗位描述
           <textarea
             name="jobDescription"
-            placeholder="粘贴 JD；系统会提取岗位能力权重"
+            placeholder="粘贴岗位要求，例如负责业务指标分析、A/B 实验设计及 SQL 数据提取。至少 20 个字。"
             rows={5}
             minLength={20}
             required
@@ -107,10 +106,10 @@ export function InterviewSetupForm() {
         </label>
 
         <label>
-          你的背景
+          你的学习与项目经历
           <textarea
             name="candidateBackground"
-            placeholder="例如：应用统计研一，掌握 Python、SQL 和基础机器学习"
+            placeholder="例如：应用统计研二，使用过 Python、SQL，做过用户留存分析项目。至少 10 个字。"
             rows={3}
             minLength={10}
             required
@@ -119,19 +118,13 @@ export function InterviewSetupForm() {
 
         <div className="form-row">
           <label>
-            诊断时长
+            练习时长
             <select name="durationMinutes" defaultValue="20">
               <option value="15">15 分钟</option>
               <option value="20">20 分钟</option>
             </select>
           </label>
-          <label className="checkbox-field">
-            <input type="checkbox" name="cameraEnabled" />
-            <span>
-          预留摄像头
-              <small>仅用于沉浸感，不参与评分</small>
-            </span>
-          </label>
+          <p className="microphone-note">进入面试后，请允许浏览器使用麦克风。</p>
         </div>
 
         {error ? (
@@ -145,13 +138,14 @@ export function InterviewSetupForm() {
           type="submit"
           disabled={submittingKind !== null}
         >
-          {submittingKind === "diagnostic" ? "正在创建…" : "开始诊断"}
-          <span aria-hidden="true">→</span>
+          {submittingKind === "diagnostic" ? "正在准备面试…" : "开始语音练习"}
         </button>
 
-        <div className="guided-demo-launch">
+        <details className="setup-demo">
+          <summary>想先熟悉流程？</summary>
+          <div className="guided-demo-launch">
           <div>
-            <strong>面试现场稳定演示</strong>
+            <strong>用示例回答体验一次</strong>
             <small>合成回答 · 固定评分 · 不调用外部模型</small>
           </div>
           <button
@@ -162,7 +156,8 @@ export function InterviewSetupForm() {
           >
             {submittingKind === "demo" ? "正在准备…" : "进入引导演示"}
           </button>
-        </div>
+          </div>
+        </details>
 
         <p className="form-note">
           继续即表示你同意本次练习使用回答文本生成诊断报告。默认不保存原始录音。

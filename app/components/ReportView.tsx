@@ -391,7 +391,7 @@ export function ReportView({ interviewId }: { interviewId: string }) {
   ];
 
   return (
-    <main className="report-shell">
+    <main className="practice-ui report-shell">
       <header className="report-header">
         <Link className="brand compact" href="/">
           <span className="brand-mark">S</span>
@@ -410,11 +410,12 @@ export function ReportView({ interviewId }: { interviewId: string }) {
               ? "暂停检查点 · 阶段性证据"
               : "证据型能力诊断"}
           </p>
-          <h1>
+          <h1>{report.interview.status === "PAUSED" ? "阶段性练习报告" : "本次练习报告"}</h1>
+          <p>
             {report.assessmentStatus === "INSUFFICIENT_EVIDENCE"
               ? `已完成 ${report.metrics.completedTurns} 轮回答，语义能力证据尚未建立。`
               : `完成 ${report.metrics.completedTurns} 轮回答，其中 ${report.metrics.acceptedTurns} 轮进入能力后验。`}
-          </h1>
+          </p>
           <p>
             这不是录用预测。每项结论都来自已保存的回答证据；
             低可靠性回答不会直接改变能力状态。
@@ -428,7 +429,6 @@ export function ReportView({ interviewId }: { interviewId: string }) {
                   : "语义量表评估"}
             </span>
             <span>{report.metrics.verificationTurns} 次可靠性追问</span>
-            <span>{report.metrics.eventCount} 条 Agent 事件</span>
           </div>
         </div>
         <div className="report-summary">
@@ -446,8 +446,7 @@ export function ReportView({ interviewId }: { interviewId: string }) {
                 : "/"
             }
           >
-            {report.interview.status === "PAUSED" ? "继续面试" : "创建专项训练"}{" "}
-            <span>→</span>
+            {report.interview.status === "PAUSED" ? "继续面试" : "再练一次"}
           </Link>
         </div>
       </section>
@@ -460,7 +459,7 @@ export function ReportView({ interviewId }: { interviewId: string }) {
         </aside>
       ) : view.usesFallback ? (
         <aside className="evaluation-notice">
-          当前站点未配置语义模型密钥，因此采用结构化降级评估：只测量回答长度、
+          本次包含结构化降级评估：只测量回答长度、
           领域术语和推理结构。这些反馈不会写入能力后验。配置模型后可启用实验性量表评分；
           正式离线门禁通过前，不会把它宣称为已验证评分器。
         </aside>
@@ -473,6 +472,8 @@ export function ReportView({ interviewId }: { interviewId: string }) {
       ) : null}
 
       <section className="report-grid">
+        <details className="report-technical report-card-wide">
+          <summary>查看语音质量与连接记录</summary>
         {report.metrics.voiceTranscriptDiagnostics && (
           <VoiceTranscriptDiagnostics diagnostics={report.metrics.voiceTranscriptDiagnostics} />
         )}
@@ -539,10 +540,11 @@ export function ReportView({ interviewId }: { interviewId: string }) {
           </article>
         ) : null}
 
+        </details>
         <article className="report-card report-card-wide">
           <div className="section-heading">
             <div>
-              <p className="card-index">ABILITY MAP</p>
+              <p className="card-index">能力概览</p>
               <h2>能力状态与证据可靠性</h2>
             </div>
             <span className="legend">分数仅作训练参考</span>
@@ -664,7 +666,8 @@ export function ReportView({ interviewId }: { interviewId: string }) {
         </section>
       ) : null}
 
-      <section className="policy-audit-card">
+      <details className="policy-audit-card">
+        <summary>查看 Agent 决策与回放</summary>
         <div className="policy-audit-heading">
           <div>
             <p className="card-index">AGENT DECISION AUDIT</p>
@@ -847,7 +850,7 @@ export function ReportView({ interviewId }: { interviewId: string }) {
           </strong>
           <p>{report.policyAudit.finalDecision.reason}</p>
         </div>
-      </section>
+      </details>
 
       {view.usesDemoFixture ? (
         <section className="feedback-card demo-feedback-boundary">

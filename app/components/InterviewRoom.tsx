@@ -1011,7 +1011,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   const isGuidedDemo = interviewMode === "guided_demo";
 
   return (
-    <main className="room-shell">
+    <main className="practice-ui room-shell">
       <div className="remote-audio" ref={remoteAudioRef} />
       <header className="room-header">
         <Link className="brand compact" href="/">
@@ -1019,11 +1019,10 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
           <strong>StatInterview</strong>
         </Link>
         <div className="room-session">
-          <span className="live-dot" />
           {isGuidedDemo
             ? "合成引导演示"
             : inputChannel === "voice"
-              ? "LiveKit 实时语音"
+              ? "语音练习"
               : "文本通道"} ·
           自动检查点
           <strong>{elapsedLabel}</strong>
@@ -1040,9 +1039,9 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
 
       <section className="room-layout">
         <aside className="room-progress">
-          <p className="card-index">DIAGNOSTIC FLOW</p>
-          <h2>能力诊断</h2>
-          <p>两道公共锚点保证可比，两道 JD 定向基线覆盖岗位重点，三道自适应题减少最大的不确定性。</p>
+          <p className="card-index">本次练习</p>
+          <h2>回答进度</h2>
+          <p>7 道主问题，按需追问。每轮回答后保存进度。</p>
           <ol>
             {flowLabels.map((label, index) => (
               <li
@@ -1090,9 +1089,6 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
           ) : null}
 
           <div className="agent-presence">
-            <div className="agent-orb" aria-hidden="true">
-              <span />
-            </div>
             <div>
               <strong>AI 面试官</strong>
               <small>{questionTypeLabel(question.questionType)}</small>
@@ -1175,20 +1171,13 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
                   disabled={isSaving}
                 >
                   {isSaving ? "评估并选题中…" : "提交回答"}
-                  <span>→</span>
                 </button>
               </div>
             </form>
           ) : (
             <section className="voice-console" aria-live="polite">
-              <div className="voice-pulse" aria-hidden="true">
-                <i />
-                <i />
-                <i />
-                <i />
-              </div>
               <div className="voice-copy">
-                <span>LIVEKIT VOICE CHANNEL</span>
+                <span>语音连接</span>
                 <strong>{voiceStatusHeading(voiceStatus)}</strong>
                 <p>{voiceMessage}</p>
               </div>
@@ -1248,9 +1237,8 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
           )}
         </section>
 
-        <aside className="signal-panel">
-          <p className="card-index">LIVE SIGNALS</p>
-          <h2>决策信号</h2>
+        <details className="signal-panel">
+          <summary>查看 Agent 决策过程</summary>
           <div className="signal-item">
             <span>上一轮可引用证据</span>
             <strong>
@@ -1279,7 +1267,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
                 "每轮都会保存原回答、评估证据、能力更新和下一题选择原因。"}
             </p>
           </div>
-        </aside>
+        </details>
       </section>
     </main>
   );

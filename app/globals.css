@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./practice.css";
 
 :root {
   --paper: #f4f1e8;
