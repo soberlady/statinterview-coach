@@ -33,6 +33,7 @@ test("voice token is reconnect-safe and explicitly dispatches the Agent", async 
   assert.equal(video.roomJoin, true);
   assert.equal(video.canPublish, true);
   assert.equal(video.canSubscribe, true);
+  assert.equal(video.canPublishData, true);
   assert.equal(
     roomConfig.agents?.[0]?.agentName,
     "statinterview-coach",

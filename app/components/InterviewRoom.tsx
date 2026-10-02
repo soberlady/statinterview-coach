@@ -131,6 +131,12 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isExiting, setIsExiting] = useState(false);
+  const [isFinishingVoice, setIsFinishingVoice] = useState(false);
+  const [isRepeatingQuestion, setIsRepeatingQuestion] = useState(false);
+  const [voiceDraft, setVoiceDraft] = useState<{ questionId: string; text: string } | null>(null);
+  const voiceFinishTimerRef = useRef<number | null>(null);
+  const voiceFinishQuestionRef = useRef<string | null>(null);
+  const voiceConnectingRef = useRef(false);
   const [error, setError] = useState("");
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [startedAt, setStartedAt] = useState(() => new Date().toISOString());
@@ -147,6 +153,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   const remoteAudioRef = useRef<HTMLDivElement | null>(null);
   const voiceTranscriptBufferRef = useRef(new VoiceTranscriptBuffer());
   const voiceQuestionTextRef = useRef("");
+  const voiceQuestionIdRef = useRef<string | null>(null);
   const voiceCompletedTurnsRef = useRef(0);
   const voiceSessionIdRef = useRef<string | null>(null);
   const voiceSessionStartedAtRef = useRef<number | null>(null);
@@ -161,6 +168,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
 
   useEffect(() => {
     voiceQuestionTextRef.current = question?.text ?? "";
+    voiceQuestionIdRef.current = question?.id ?? null;
   }, [question]);
 
   const recordVoiceEvent = useCallback(
@@ -279,6 +287,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
 
   useEffect(() => {
     return () => {
+      if (voiceFinishTimerRef.current !== null) window.clearTimeout(voiceFinishTimerRef.current);
       if (voiceAgentReadyTimerRef.current !== null) {
         window.clearTimeout(voiceAgentReadyTimerRef.current);
       }
@@ -337,9 +346,23 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
               });
             }
             voiceCompletedTurnsRef.current = result.progress.completedTurns;
+            if (voiceFinishQuestionRef.current) {
+              voiceFinishQuestionRef.current = null;
+              if (voiceFinishTimerRef.current !== null) window.clearTimeout(voiceFinishTimerRef.current);
+              voiceFinishTimerRef.current = null;
+              setIsFinishingVoice(false);
+              const activeRoom = voiceRoomRef.current;
+              if (activeRoom && result.nextQuestion) {
+                void activeRoom.localParticipant.setMicrophoneEnabled(true).then(() => {
+                  if (voiceRoomRef.current === activeRoom) setVoiceStatus("connected");
+                }).catch(() => setVoiceMessage("回答已保存，请点击开启麦克风继续。"));
+              }
+            }
             voiceFinalTranscriptAtRef.current = null;
             voiceTranscriptBufferRef.current.checkpoint();
             voiceQuestionTextRef.current = result.nextQuestion?.text ?? "";
+            voiceQuestionIdRef.current = result.nextQuestion?.id ?? null;
+            setAnswer("");
             setVoiceTranscript("");
             setVoiceTranscriptStatus("saved");
             setVoiceMessage(
@@ -475,6 +498,8 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   }
 
   async function startVoiceInterview() {
+    if (voiceConnectingRef.current || isSaving || isFinishingVoice) return;
+    voiceConnectingRef.current = true;
     const connectionStartedAt = performance.now();
     const clientAttemptId = crypto.randomUUID();
     let requestedVoiceSessionId: string | null = null;
@@ -499,9 +524,29 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     setVoiceMessage("正在申请麦克风并连接实时面试官…");
 
     try {
+      // Every switch back to voice starts a new room, never a stale muted session.
+      const previousRoom = voiceRoomRef.current;
+      voiceRoomRef.current = null;
+      if (previousRoom) await previousRoom.disconnect();
+      const checkpointResponse = await fetch(`/api/interviews/${interviewId}/next-question`, { cache: "no-store", signal: AbortSignal.timeout(10_000) });
+      const checkpoint = (await checkpointResponse.json()) as NextQuestionResponse;
+      if (!checkpointResponse.ok) throw new Error("无法同步当前题目，请稍后重连语音。");
+      if (!checkpoint.nextQuestion) {
+        setQuestion(null);
+        setPhase("COMPLETED");
+        setVoiceStatus("idle");
+        return;
+      }
+      setQuestion(checkpoint.nextQuestion);
+      voiceQuestionTextRef.current = checkpoint.nextQuestion.text;
+      voiceQuestionIdRef.current = checkpoint.nextQuestion.id;
+      if (checkpoint.progress) {
+        setProgress(checkpoint.progress);
+        voiceCompletedTurnsRef.current = checkpoint.progress.completedTurns;
+      }
       const tokenPromise = fetch(
         `/api/interviews/${interviewId}/voice-token`,
-        { method: "POST" },
+        { method: "POST", signal: AbortSignal.timeout(20_000) },
       ).then((response) => ({ response, completedAt: performance.now() }));
       const sdkPromise = import("livekit-client").then((sdk) => ({
         sdk,
@@ -622,12 +667,14 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         voiceRoomRef.current = null;
         voiceAgentReadyRef.current = false;
         setVoiceStatus((current) => transitionVoiceStatus(current, "FAIL"));
+        preserveVoiceDraft();
         setInputChannel("text");
         setVoiceMessage(message);
         void room.disconnect();
       };
 
       room.on(RoomEvent.TrackSubscribed, (track, _publication, participant) => {
+        if (voiceRoomRef.current !== room) return;
         if (track.kind !== Track.Kind.Audio) return;
         const element = track.attach();
         element.dataset.livekitRemoteAudio = "true";
@@ -669,7 +716,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
           transitionVoiceStatus(current, "AGENT_AUDIO_RECEIVED"),
         );
         setVoiceMessage(
-          "面试官音频已到达。回答结束后停顿，系统会保存最终转写并选择下一题。",
+          "面试官已连接。如未听到题目，请点击重新读题。回答结束后停顿，或手动结束本题。",
         );
       });
       room.on(
@@ -695,11 +742,18 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         );
       });
       room.on(RoomEvent.Reconnecting, () => {
+        if (voiceRoomRef.current !== room) return;
         voiceReconnectStartedAtRef.current = performance.now();
         setVoiceStatus((current) => transitionVoiceStatus(current, "START"));
         setVoiceMessage("网络正在重连；恢复远端音频前不会显示为已就绪。请稍候…");
       });
+      room.on(RoomEvent.AudioPlaybackStatusChanged, () => {
+        if (voiceRoomRef.current === room && !room.canPlaybackAudio) {
+          setVoiceMessage("浏览器尚未允许播放声音，请点击重新读题以恢复播放。");
+        }
+      });
       room.on(RoomEvent.Reconnected, () => {
+        if (voiceRoomRef.current !== room) return;
         const reconnectStartedAt = voiceReconnectStartedAtRef.current;
         recordVoiceEvent({
           eventType: "voice.reconnected",
@@ -762,6 +816,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         }
         voiceRoomRef.current = null;
         voiceAgentReadyRef.current = false;
+        preserveVoiceDraft();
         setVoiceStatus((current) =>
           transitionVoiceStatus(current, expected ? "STOP" : "FAIL"),
         );
@@ -886,6 +941,47 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
           ? voiceError.message
           : "实时语音连接失败，请继续使用文本通道。",
       );
+    } finally {
+      voiceConnectingRef.current = false;
+    }
+  }
+
+  function preserveVoiceDraft() {
+    const text = voiceTranscriptBufferRef.current.text;
+    if (text.trim() && voiceQuestionIdRef.current) {
+      setVoiceDraft({ questionId: voiceQuestionIdRef.current, text });
+      setAnswer((current) => current.trim() ? current : text);
+    }
+    if (voiceFinishTimerRef.current !== null) window.clearTimeout(voiceFinishTimerRef.current);
+    voiceFinishTimerRef.current = null;
+    voiceFinishQuestionRef.current = null;
+    setIsFinishingVoice(false);
+  }
+
+  async function sendVoiceControl(action: "finish" | "repeat") {
+    const room = voiceRoomRef.current;
+    const identity = voiceAgentIdentityRef.current;
+    if (!room || !identity || !question) throw new Error("面试官尚未就绪，请重新连接语音。");
+    await room.startAudio();
+    const response = JSON.parse(await room.localParticipant.performRpc({
+      destinationIdentity: identity,
+      method: "statinterview.control",
+      payload: JSON.stringify({ action, questionId: question.id, sequenceNumber: voiceCompletedTurnsRef.current + 1 }),
+      responseTimeout: 10_000,
+    })) as { status: string };
+    if (response.status !== "ACCEPTED") throw new Error("面试官正在处理上一条指令，请稍后核对题目再试。");
+  }
+
+  async function repeatVoiceQuestion() {
+    if (isRepeatingQuestion || isFinishingVoice) return;
+    setIsRepeatingQuestion(true);
+    try {
+      await sendVoiceControl("repeat");
+      setVoiceMessage("已请求重新朗读当前题目；若仍无声音，请重新连接语音。");
+    } catch {
+      setVoiceMessage("未能恢复读题，请点击重新连接语音。未保存转写可先切换文本核对。");
+    } finally {
+      setIsRepeatingQuestion(false);
     }
   }
 
@@ -895,7 +991,12 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       return;
     }
     const shouldEnable = voiceStatus === "muted";
-    await room.localParticipant.setMicrophoneEnabled(shouldEnable);
+    try {
+      await room.localParticipant.setMicrophoneEnabled(shouldEnable);
+    } catch {
+      setVoiceMessage("麦克风切换失败，请检查浏览器权限，或重新连接语音。转写不会清空。");
+      return;
+    }
     setVoiceStatus((current) =>
       transitionVoiceStatus(current, shouldEnable ? "UNMUTE" : "MUTE"),
     );
@@ -908,25 +1009,60 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
 
   async function finishVoiceAnswer() {
     const room = voiceRoomRef.current;
-    if (!room || voiceStatus !== "connected") return;
-    setVoiceMessage("正在结束本题收音并生成最终转写，请稍候……");
-    await new Promise((resolve) => window.setTimeout(resolve, 500));
-    await room.localParticipant.setMicrophoneEnabled(false);
-    setVoiceStatus("muted");
+    if (!room || !question || isFinishingVoice || voiceFinishQuestionRef.current || (voiceStatus !== "connected" && voiceStatus !== "muted")) return;
+    voiceFinishQuestionRef.current = question.id;
+    setIsFinishingVoice(true);
+    setVoiceMessage("正在提交本题最终转写，等待保存确认…");
+    voiceFinishTimerRef.current = window.setTimeout(() => {
+      voiceFinishTimerRef.current = null;
+      setIsFinishingVoice(false);
+      setVoiceMessage("45 秒内未确认保存。转写仍保留，请切换文本核对并提交，或重新连接语音；不要重复回答已保存的题目。");
+    }, 45_000);
+    try {
+      await sendVoiceControl("finish");
+      if (voiceRoomRef.current === room && voiceFinishQuestionRef.current) {
+        await room.localParticipant.setMicrophoneEnabled(false);
+        setVoiceStatus("muted");
+      }
+    } catch {
+      if (voiceFinishTimerRef.current !== null) window.clearTimeout(voiceFinishTimerRef.current);
+      voiceFinishTimerRef.current = null;
+      voiceFinishQuestionRef.current = null;
+      setIsFinishingVoice(false);
+      setVoiceMessage("结束指令未确认，转写仍保留。请切换文本核对提交，或重新连接语音后重试。");
+    }
   }
 
   async function stopVoiceInterview() {
+    preserveVoiceDraft();
     if (voiceAgentReadyTimerRef.current !== null) {
       window.clearTimeout(voiceAgentReadyTimerRef.current);
       voiceAgentReadyTimerRef.current = null;
     }
     voiceExpectedDisconnectRef.current = true;
-    await voiceRoomRef.current?.disconnect();
+    const previousRoom = voiceRoomRef.current;
     voiceRoomRef.current = null;
+    await previousRoom?.disconnect();
     setInputChannel("text");
     voiceAgentReadyRef.current = false;
     setVoiceStatus((current) => transitionVoiceStatus(current, "STOP"));
-    setVoiceMessage("语音连接已结束，可以继续使用文本通道。");
+    setVoiceMessage("已切换文本。未保存转写已保留，请核对后提交；开启麦克风不等于重新连接面试官。");
+    try {
+      const response = await fetch(`/api/interviews/${interviewId}/next-question`, { cache: "no-store", signal: AbortSignal.timeout(10_000) });
+      const state = (await response.json()) as NextQuestionResponse;
+      if (!response.ok) return;
+      if (state.progress) setProgress(state.progress);
+      if (state.nextQuestion) {
+        if (state.nextQuestion.id !== question?.id) setAnswer("");
+        setQuestion(state.nextQuestion);
+        setPhase(stageForQuestion(state.nextQuestion.questionType));
+      } else {
+        setQuestion(null);
+        setPhase("COMPLETED");
+      }
+    } catch {
+      setError("当前题目同步失败，转写已保留。提交时系统会检查题号，避免重复保存。");
+    }
   }
 
   const startVoiceInterviewEvent = useEffectEvent(startVoiceInterview);
@@ -1118,7 +1254,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
                     className="channel-switch"
                     type="button"
                     onClick={startVoiceInterview}
-                    disabled={voiceStatus === "connecting"}
+                    disabled={voiceStatus === "connecting" || isSaving}
                   >
                     {voiceStatus === "connecting"
                       ? "正在连接…"
@@ -1159,6 +1295,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
                 rows={7}
                 disabled={isSaving}
               />
+              {voiceDraft ? <details><summary>查看切换前保留的语音转写</summary><p>{voiceDraft.text}</p><small>请确认对应题目后使用，不会自动提交。</small></details> : null}
               <div className="composer-footer">
                 <span>{answer.trim().length} 字</span>
                 {error ? <p role="alert">{error}</p> : null}
@@ -1187,7 +1324,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
                   type="button"
                   onClick={toggleMicrophone}
                   disabled={
-                    voiceStatus !== "connected" && voiceStatus !== "muted"
+                    isFinishingVoice || (voiceStatus !== "connected" && voiceStatus !== "muted")
                   }
                 >
                   {voiceStatus === "muted" ? "开启麦克风" : "静音"}
@@ -1196,9 +1333,15 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
                   className="primary-button compact-button"
                   type="button"
                   onClick={finishVoiceAnswer}
-                  disabled={voiceStatus !== "connected"}
+                  disabled={isFinishingVoice || voiceFinishQuestionRef.current !== null || (voiceStatus !== "connected" && voiceStatus !== "muted")}
                 >
-                  手动结束本题
+                  {isFinishingVoice ? "正在保存本题…" : voiceFinishQuestionRef.current ? "等待保存确认" : "手动结束本题"}
+                </button>
+                <button className="secondary-button" type="button" onClick={repeatVoiceQuestion} disabled={isFinishingVoice || isRepeatingQuestion || !["connected", "muted"].includes(voiceStatus)}>
+                  {isRepeatingQuestion ? "正在请求读题…" : "重新读题"}
+                </button>
+                <button className="quiet-button" type="button" onClick={async () => { preserveVoiceDraft(); await startVoiceInterview(); }} disabled={isFinishingVoice || voiceStatus === "connecting" || voiceStatus === "waiting_agent"}>
+                  重新连接语音
                 </button>
                 <button
                   className="quiet-button"

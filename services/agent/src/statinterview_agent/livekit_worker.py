@@ -17,6 +17,7 @@ from typing import Any
 
 import httpx
 from dotenv import load_dotenv
+from livekit import rtc
 from livekit.agents import (
     Agent,
     AgentServer,
@@ -33,6 +34,7 @@ from livekit.agents.llm.tool_context import ToolFlag
 
 from .api_auth import api_request_headers as _api_request_headers
 from .voice_cost import estimate_livekit_inference_cost
+from .voice_control import matches_question, question_snapshot
 from .voice_room import resolve_interview_id, resolve_voice_session_id
 from .voice_speech import build_opening_prompt, prepare_question_for_speech
 from .voice_terms import build_question_keyterms
@@ -107,7 +109,10 @@ class StatInterviewVoiceAgent(Agent):
         """
 
         runtime = context.userdata
+        expected = question_snapshot(runtime)
         async with runtime.submit_lock:
+            if not matches_question(runtime, expected):
+                return json.dumps({"status": "ALREADY_HANDLED", "instruction": "该回答已处理，保持安静，不再提交或重复读题。"}, ensure_ascii=False)
             stable = await wait_for_transcript_stability(
                 runtime,
                 quiet_seconds=runtime.transcript_stability_seconds,
@@ -247,6 +252,68 @@ async def statinterview_session(ctx: JobContext) -> None:
                 event.item.transcript_confidence,
             )
 
+    # A pre-dispatched agent can start before the browser joins. Do not speak
+    # the opening question into an empty room.
+    await ctx.connect()
+    candidate = await ctx.wait_for_participant()
+
+    control_tasks: set[asyncio.Task[Any]] = set()
+
+    async def run_control(payload: dict[str, Any]) -> None:
+        try:
+            async with runtime.submit_lock:
+                if not matches_question(runtime, payload):
+                    return  # Automatic submission won the race; never submit the next question.
+                if payload["action"] == "finish":
+                    session.interrupt()
+                    await session.commit_user_turn(transcript_timeout=5.0, skip_reply=True)
+                    stable = await wait_for_transcript_stability(
+                        runtime, quiet_seconds=runtime.transcript_stability_seconds,
+                        max_wait_seconds=10.0,
+                    )
+                    if not stable:
+                        return  # Browser timeout keeps the draft and offers recovery.
+                    result = await process_voice_answer(
+                        runtime,
+                        post_turn=lambda value: _post_voice_turn(runtime, value),
+                        load_authoritative_state=lambda: _load_authoritative_for_turn(runtime),
+                        complete_interview=lambda: _complete_for_turn(runtime),
+                    )
+                    session.update_options(keyterms=build_question_keyterms(
+                        str((runtime.current_question or {}).get("text", ""))
+                    ))
+                    if result.get("status") == "COMPLETE":
+                        session.say("本次练习已完成，请回到网页查看报告。")
+                    elif result.get("spoken_question"):
+                        session.say(result["spoken_question"])
+                    else:
+                        session.say("这段回答尚未保存，请在网页核对转写后继续回答，或切换文字提交。")
+                else:
+                    session.interrupt()
+                    session.say(prepare_question_for_speech(runtime.current_question["text"]))
+        except Exception:
+            # Never log answer content or credentials on the control path.
+            logger.warning("voice control failed", extra={"interview_id": runtime.interview_id})
+
+    @ctx.room.local_participant.register_rpc_method("statinterview.control")
+    async def control(data: rtc.RpcInvocationData) -> str:
+        if data.caller_identity != candidate.identity:
+            raise rtc.RpcError(1403, "Not the session participant")
+        try:
+            payload = json.loads(data.payload)
+        except (ValueError, TypeError):
+            raise rtc.RpcError(1400, "Invalid control")
+        if not isinstance(payload, dict) or payload.get("action") not in {"finish", "repeat"}:
+            raise rtc.RpcError(1400, "Invalid control")
+        if not matches_question(runtime, payload):
+            return json.dumps({"status": "STALE"})
+        if control_tasks:
+            return json.dumps({"status": "BUSY"})
+        task = asyncio.create_task(run_control(payload))
+        control_tasks.add(task)
+        task.add_done_callback(control_tasks.discard)
+        return json.dumps({"status": "ACCEPTED"})
+
     await session.start(
         room=ctx.room,
         agent=StatInterviewVoiceAgent(runtime.current_question),
@@ -266,8 +333,6 @@ async def statinterview_session(ctx: JobContext) -> None:
         )
 
     ctx.add_shutdown_callback(export_final_usage)
-    await ctx.connect()
-
     if runtime.current_question:
         session.say(
             build_opening_prompt(

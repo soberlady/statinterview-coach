@@ -80,7 +80,7 @@ export async function createLiveKitVoiceCredentials(input: {
     roomJoin: true,
     canPublish: true,
     canSubscribe: true,
-    canPublishData: false,
+    canPublishData: true, // Question-bound finish/repeat RPC to this room's Agent.
   });
   token.roomConfig = new RoomConfiguration({
     agents: [
