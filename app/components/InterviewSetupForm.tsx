@@ -118,7 +118,7 @@ export function InterviewSetupForm() {
 
         <div className="form-row">
           <label>
-            练习时长
+            选题时间预算
             <select name="durationMinutes" defaultValue="20">
               <option value="15">15 分钟</option>
               <option value="20">20 分钟</option>
@@ -126,6 +126,11 @@ export function InterviewSetupForm() {
           </label>
           <p className="microphone-note">进入面试后，请允许浏览器使用麦克风。</p>
         </div>
+        <p className="setup-help">15 / 20 分钟用于选题时估算时间成本，不是倒计时。两档均为 7 道主问题，按需追问；实际用时包含回答、等待和评分，可能更长。</p>
+        <details className="setup-demo">
+          <summary>填写的信息怎样影响题目？</summary>
+          <p className="setup-help">前 2 道是固定公共题；中间 2 道按岗位关键词匹配，经历用于难度和场景选择；后 3 道结合回答表现自适应选题。当前从题库选题，不会针对具体项目自由生成问题，也不因背景直接加分。</p>
+        </details>
 
         {error ? (
           <p className="form-error" role="alert">

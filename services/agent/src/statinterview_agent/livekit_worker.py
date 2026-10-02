@@ -42,6 +42,7 @@ from .voice_transcript import CommittedTranscriptBuffer
 from .voice_turn import (
     VoiceApiResponse,
     VoiceTurnTransportError,
+    recover_pending_answer,
     process_voice_answer,
     wait_for_transcript_stability,
 )
@@ -60,6 +61,10 @@ class VoiceRuntime:
     minimum_transcript_confidence: float = 0.72
     transcript_stability_seconds: float = 4.0
     low_confidence_retries: int = 0
+    last_transcript_at: float | None = None
+    processing_stage: str = "listening"
+    submission_pending: bool = False
+    last_recovery_check: float = 0.0
     transcript_buffer: CommittedTranscriptBuffer = field(
         default_factory=CommittedTranscriptBuffer
     )
@@ -111,13 +116,17 @@ class StatInterviewVoiceAgent(Agent):
         runtime = context.userdata
         expected = question_snapshot(runtime)
         async with runtime.submit_lock:
+            if runtime.submission_pending:
+                return json.dumps({"status": "SAVE_PENDING", "instruction": "请在网页核对保存状态，必要时切换文本提交；不要自动重试或要求重新口述。"}, ensure_ascii=False)
             if not matches_question(runtime, expected):
                 return json.dumps({"status": "ALREADY_HANDLED", "instruction": "该回答已处理，保持安静，不再提交或重复读题。"}, ensure_ascii=False)
+            runtime.processing_stage = "transcribing"
             stable = await wait_for_transcript_stability(
                 runtime,
                 quiet_seconds=runtime.transcript_stability_seconds,
             )
             if not stable:
+                runtime.processing_stage = "listening"
                 return json.dumps(
                     {
                         "status": "WAITING_FOR_MORE",
@@ -139,6 +148,8 @@ class StatInterviewVoiceAgent(Agent):
                 complete_interview=lambda: _complete_for_turn(runtime),
             )
             next_question = runtime.current_question
+            runtime.submission_pending = result.get("status") == "SAVE_PENDING"
+            runtime.processing_stage = "saved" if result.get("status") in {"CONTINUE", "COMPLETE", "RESYNCED"} else "recovery"
             context.session.update_options(
                 keyterms=build_question_keyterms(
                     str(next_question.get("text", ""))
@@ -246,6 +257,9 @@ async def statinterview_session(ctx: JobContext) -> None:
             return
         transcript = (event.item.text_content or "").strip()
         if transcript:
+            runtime.last_transcript_at = asyncio.get_running_loop().time()
+            if runtime.processing_stage == "saved":
+                runtime.processing_stage = "listening"
             runtime.transcript_buffer.add(
                 event.item.id,
                 transcript,
@@ -265,13 +279,18 @@ async def statinterview_session(ctx: JobContext) -> None:
                 if not matches_question(runtime, payload):
                     return  # Automatic submission won the race; never submit the next question.
                 if payload["action"] == "finish":
+                    if runtime.submission_pending:
+                        runtime.processing_stage = "recovery"
+                        return
+                    runtime.processing_stage = "transcribing"
                     session.interrupt()
                     await session.commit_user_turn(transcript_timeout=5.0, skip_reply=True)
                     stable = await wait_for_transcript_stability(
-                        runtime, quiet_seconds=runtime.transcript_stability_seconds,
+                        runtime, quiet_seconds=0.5,
                         max_wait_seconds=10.0,
                     )
                     if not stable:
+                        runtime.processing_stage = "recovery"
                         return  # Browser timeout keeps the draft and offers recovery.
                     result = await process_voice_answer(
                         runtime,
@@ -282,6 +301,8 @@ async def statinterview_session(ctx: JobContext) -> None:
                     session.update_options(keyterms=build_question_keyterms(
                         str((runtime.current_question or {}).get("text", ""))
                     ))
+                    runtime.processing_stage = "saved" if result.get("status") in {"CONTINUE", "COMPLETE", "RESYNCED"} else "recovery"
+                    runtime.submission_pending = result.get("status") == "SAVE_PENDING"
                     if result.get("status") == "COMPLETE":
                         session.say("本次练习已完成，请回到网页查看报告。")
                     elif result.get("spoken_question"):
@@ -292,8 +313,36 @@ async def statinterview_session(ctx: JobContext) -> None:
                     session.interrupt()
                     session.say(prepare_question_for_speech(runtime.current_question["text"]))
         except Exception:
+            runtime.processing_stage = "recovery"
             # Never log answer content or credentials on the control path.
             logger.warning("voice control failed", extra={"interview_id": runtime.interview_id})
+
+    async def reconcile_pending() -> None:
+        async with runtime.submit_lock:
+            if not runtime.submission_pending:
+                return
+            result = await recover_pending_answer(
+                runtime, lambda: _load_authoritative_for_turn(runtime), "SAVE_NOT_CONFIRMED",
+            )
+            if result["status"] in {"RESYNCED", "COMPLETE"}:
+                runtime.submission_pending = False
+                runtime.processing_stage = "saved"
+                session.update_options(keyterms=build_question_keyterms(
+                    str((runtime.current_question or {}).get("text", ""))
+                ))
+                session.say(result.get("spoken_question") or "回答已保存，请回到网页查看报告。")
+
+    @ctx.room.local_participant.register_rpc_method("statinterview.status")
+    async def status(data: rtc.RpcInvocationData) -> str:
+        if data.caller_identity != candidate.identity:
+            raise rtc.RpcError(1403, "Not the session participant")
+        now = asyncio.get_running_loop().time()
+        if runtime.submission_pending and not control_tasks and now - runtime.last_recovery_check >= 5:
+            runtime.last_recovery_check = now
+            task = asyncio.create_task(reconcile_pending())
+            control_tasks.add(task)
+            task.add_done_callback(control_tasks.discard)
+        return json.dumps({**question_snapshot(runtime), "stage": runtime.processing_stage})
 
     @ctx.room.local_participant.register_rpc_method("statinterview.control")
     async def control(data: rtc.RpcInvocationData) -> str:
@@ -320,6 +369,11 @@ async def statinterview_session(ctx: JobContext) -> None:
     )
 
     async def export_final_usage(shutdown_reason: str) -> None:
+        pending_controls = list(control_tasks)
+        for task in pending_controls:
+            task.cancel()
+        if pending_controls:
+            await asyncio.gather(*pending_controls, return_exceptions=True)
         # AgentSession also closes itself during job shutdown. Calling the
         # public idempotent close method here guarantees that pending STT/TTS
         # metrics are flushed before the final cumulative snapshot is read.
@@ -390,12 +444,15 @@ async def _post_voice_turn(
         f"{runtime.interview_id}/turns"
     )
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            response = await client.post(
+        runtime.processing_stage = "scoring"
+        # Repair (15s) + parallel scoring (20s) + persistence/network margin.
+        # An outer deadline also bounds connect/write/read time together.
+        async with httpx.AsyncClient(timeout=httpx.Timeout(50.0, connect=10.0)) as client:
+            response = await asyncio.wait_for(client.post(
                 endpoint,
                 json=payload,
                 headers=_api_request_headers(),
-            )
+            ), timeout=55.0)
         body: dict[str, Any] = {}
         if response.status_code < 400:
             parsed = response.json()
@@ -403,7 +460,7 @@ async def _post_voice_turn(
                 raise ValueError("turn response must be an object")
             body = parsed
         return VoiceApiResponse(response.status_code, body)
-    except (httpx.RequestError, ValueError) as error:
+    except (httpx.RequestError, ValueError, asyncio.TimeoutError) as error:
         logger.warning(
             "turn submission transport or response failed",
             exc_info=True,
@@ -416,11 +473,11 @@ async def _load_authoritative_for_turn(
     runtime: VoiceRuntime,
 ) -> dict[str, Any]:
     try:
-        return await _load_next_question(
+        return await asyncio.wait_for(_load_next_question(
             runtime.api_base_url,
             runtime.interview_id,
-        )
-    except (httpx.HTTPError, ValueError) as error:
+        ), timeout=10.0)
+    except (httpx.HTTPError, ValueError, asyncio.TimeoutError) as error:
         logger.warning(
             "turn conflict resync failed",
             exc_info=True,

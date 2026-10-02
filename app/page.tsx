@@ -22,7 +22,7 @@ export default function Home() {
           <h1 id="practice-title">准备一次<br />数据分析面试。</h1>
           <p className="preparation-description">带上你想申请的岗位，练习把思路说清楚。</p>
           <dl className="practice-facts">
-            <div><dt>练习时间</dt><dd>15–20 分钟</dd></div>
+            <div><dt>时间预算</dt><dd>15 / 20 分钟，用于选题参考</dd></div>
             <div><dt>回答方式</dt><dd>语音优先，也可切换文本</dd></div>
             <div><dt>面试过程</dt><dd>7 道主问题，按需补充追问</dd></div>
           </dl>

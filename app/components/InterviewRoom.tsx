@@ -23,6 +23,7 @@ import {
 import { TRANSCRIPT_BUFFER_VERSION } from "@/app/lib/voice-transcript-diagnostics";
 import { VoiceTranscriptBuffer } from "@/app/lib/voice-transcript-buffer";
 import { normalizeVoiceTranscriptForDisplay } from "@/app/lib/voice-transcript-display";
+import { parseVoiceProcessing, voiceProcessingLabels, VOICE_SAVE_CONFIRM_TIMEOUT_MS, type VoiceProcessingStage } from "@/app/lib/voice-processing";
 
 type PublicQuestion = {
   id: string;
@@ -132,6 +133,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   const [isSaving, setIsSaving] = useState(false);
   const [isExiting, setIsExiting] = useState(false);
   const [isFinishingVoice, setIsFinishingVoice] = useState(false);
+  const [voiceProcessingStage, setVoiceProcessingStage] = useState<VoiceProcessingStage>("listening");
   const [isRepeatingQuestion, setIsRepeatingQuestion] = useState(false);
   const [voiceDraft, setVoiceDraft] = useState<{ questionId: string; text: string } | null>(null);
   const voiceFinishTimerRef = useRef<number | null>(null);
@@ -307,7 +309,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       try {
         const response = await fetch(
           `/api/interviews/${interviewId}/next-question`,
-          { cache: "no-store", signal: controller.signal },
+          { cache: "no-store", signal: AbortSignal.any([controller.signal, AbortSignal.timeout(10_000)]) },
         );
         const result = (await response.json()) as NextQuestionResponse;
         if (!response.ok || cancelled) return;
@@ -365,6 +367,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
             setAnswer("");
             setVoiceTranscript("");
             setVoiceTranscriptStatus("saved");
+            setVoiceProcessingStage("saved");
             setVoiceMessage(
               "本题回答已保存。Agent 正在准备追问或下一题。",
             );
@@ -378,11 +381,37 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
           (result.progress?.substantiveTurns ?? 0) >=
           (result.progress?.targetSubstantiveTurns ?? 6)
         ) {
+          if (result.interview?.status === "FINALIZING") {
+            await updateLifecycle("COMPLETED");
+            if (cancelled) return;
+          }
           setQuestion(null);
           setPhase("COMPLETED");
           voiceExpectedDisconnectRef.current = true;
           await voiceRoomRef.current?.disconnect();
           voiceRoomRef.current = null;
+        }
+        const activeRoom = voiceRoomRef.current;
+        const identity = voiceAgentIdentityRef.current;
+        if (activeRoom && identity && !cancelled) {
+          try {
+            const status = JSON.parse(await activeRoom.localParticipant.performRpc({
+              destinationIdentity: identity, method: "statinterview.status",
+              payload: "{}", responseTimeout: 2_000,
+            }));
+            const stage = parseVoiceProcessing(status, result.nextQuestion?.id ?? null, (result.progress?.completedTurns ?? 0) + 1);
+            if (stage && !cancelled && voiceRoomRef.current === activeRoom) {
+              setVoiceProcessingStage(stage);
+              if (stage === "recovery") {
+                setVoiceMessage("暂未确认保存，转写仍保留。请切换文本核对；无需重新口述。");
+                if (voiceFinishTimerRef.current !== null) window.clearTimeout(voiceFinishTimerRef.current);
+                voiceFinishTimerRef.current = null;
+                setIsFinishingVoice(false);
+              }
+            }
+          } catch {
+            // Status transport is advisory; the persisted checkpoint remains authoritative.
+          }
         }
       } catch {
         // Realtime media can continue through transient polling failures.
@@ -399,7 +428,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       controller.abort();
       if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, [inputChannel, interviewId, recordVoiceEvent, voiceStatus]);
+  }, [inputChannel, interviewId, recordVoiceEvent, voiceStatus, updateLifecycle]);
 
   const elapsedLabel = useMemo(() => {
     const minutes = Math.floor(elapsedSeconds / 60)
@@ -500,6 +529,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   async function startVoiceInterview() {
     if (voiceConnectingRef.current || isSaving || isFinishingVoice) return;
     voiceConnectingRef.current = true;
+    setVoiceProcessingStage("listening");
     const connectionStartedAt = performance.now();
     const clientAttemptId = crypto.randomUUID();
     let requestedVoiceSessionId: string | null = null;
@@ -599,6 +629,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
             const text = await buffer.consume(reader, segmentId, isFinal, (rawTranscript) => {
               setVoiceTranscript(normalizeVoiceTranscriptForDisplay(rawTranscript, questionText));
               setVoiceTranscriptStatus("interim");
+              setVoiceProcessingStage((current) => current === "saved" ? "listening" : current);
               setVoiceMessage("正在识别你的回答；片段更新不代表本题已结束。");
             }, isActive);
             if (!text || !isActive()) return;
@@ -1012,12 +1043,14 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     if (!room || !question || isFinishingVoice || voiceFinishQuestionRef.current || (voiceStatus !== "connected" && voiceStatus !== "muted")) return;
     voiceFinishQuestionRef.current = question.id;
     setIsFinishingVoice(true);
+    setVoiceProcessingStage("transcribing");
     setVoiceMessage("正在提交本题最终转写，等待保存确认…");
     voiceFinishTimerRef.current = window.setTimeout(() => {
       voiceFinishTimerRef.current = null;
       setIsFinishingVoice(false);
-      setVoiceMessage("45 秒内未确认保存。转写仍保留，请切换文本核对并提交，或重新连接语音；不要重复回答已保存的题目。");
-    }, 45_000);
+      setVoiceProcessingStage("recovery");
+      setVoiceMessage("等待保存确认超时。转写仍保留，请切换文本核对并提交，或重新连接语音；不要重复回答已保存的题目。");
+    }, VOICE_SAVE_CONFIRM_TIMEOUT_MS);
     try {
       await sendVoiceControl("finish");
       if (voiceRoomRef.current === room && voiceFinishQuestionRef.current) {
@@ -1083,7 +1116,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
 
   if (isLoading) {
     return (
-      <main className="completion-shell">
+      <main className="practice-ui completion-shell">
         <section className="completion-card" aria-live="polite">
           <p className="eyebrow">正在恢复检查点</p>
           <h1>准备你的下一道题…</h1>
@@ -1096,7 +1129,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   if (phase === "COMPLETED") {
     const isGuidedDemo = interviewMode === "guided_demo";
     return (
-      <main className="completion-shell">
+      <main className="practice-ui completion-shell">
         <section className="completion-card">
           <span className="completion-mark" aria-hidden="true">
             ✓
@@ -1118,7 +1151,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
           )}
           <div className="completion-actions">
             <Link className="primary-button link-button" href={`/report/${interviewId}`}>
-              查看诊断报告 <span>→</span>
+              查看诊断报告
             </Link>
             <Link className="secondary-button" href="/">
               返回首页
@@ -1131,7 +1164,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
 
   if (!question) {
     return (
-      <main className="completion-shell">
+      <main className="practice-ui completion-shell">
         <section className="completion-card">
           <p className="eyebrow">恢复失败</p>
           <h1>暂时没有可用问题。</h1>
@@ -1315,7 +1348,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
             <section className="voice-console" aria-live="polite">
               <div className="voice-copy">
                 <span>语音连接</span>
-                <strong>{voiceStatusHeading(voiceStatus)}</strong>
+                <strong>{voiceProcessingStage !== "listening" && ["connected", "muted"].includes(voiceStatus) ? voiceProcessingLabels[voiceProcessingStage] : voiceStatusHeading(voiceStatus)}</strong>
                 <p>{voiceMessage}</p>
               </div>
               <div className="voice-actions">

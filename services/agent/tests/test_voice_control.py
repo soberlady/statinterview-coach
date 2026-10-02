@@ -78,6 +78,11 @@ def test_worker_waits_for_listener_and_controls_commit_once(monkeypatch):
         await worker.statinterview_session(Context())
         assert events[:3] == ["connect", "listener", "start"]
         control = handlers["statinterview.control"]
+        status = handlers["statinterview.status"]
+        snapshot = json.loads(await status(SimpleNamespace(caller_identity="candidate-test")))
+        assert snapshot == {"sequenceNumber": 2, "questionId": "q2", "stage": "listening"}
+        with pytest.raises(worker.rtc.RpcError):
+            await status(SimpleNamespace(caller_identity="intruder"))
         def request(action="finish", caller="candidate-test", sequence=2, question="q2"):
             return SimpleNamespace(caller_identity=caller, payload=json.dumps({
                 "action": action, "sequenceNumber": sequence, "questionId": question,
@@ -96,5 +101,19 @@ def test_worker_waits_for_listener_and_controls_commit_once(monkeypatch):
         assert submissions == ["这是未经改写的最终原始回答。"]
         assert events[-1] == "下一题"
         assert json.loads(await control(request()))["status"] == "STALE"
+        assert len(submissions) == 1
+        # A timed-out answer becomes durable later: status checks recover it,
+        # without posting again or reading a stale question.
+        async def late_checkpoint(runtime):
+            return {"progress": {"completedTurns": 3}, "nextQuestion": {"id": "q4", "text": "恢复后的问题"}}
+        monkeypatch.setattr(worker, "_load_authoritative_for_turn", late_checkpoint)
+        sessions[0].runtime.submission_pending = True
+        sessions[0].runtime.processing_stage = "recovery"
+        await status(SimpleNamespace(caller_identity="candidate-test"))
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+        assert sessions[0].runtime.submission_pending is False
+        assert sessions[0].runtime.sequence_number == 4
+        assert events[-1] == "恢复后的问题"
         assert len(submissions) == 1
     asyncio.run(run())

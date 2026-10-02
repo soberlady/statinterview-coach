@@ -1,4 +1,9 @@
 /* Scoped private practice theme; public showcase and experiments retain their styles. */
+.practice-ui.completion-shell { background: #f6f7f9; }
+.practice-ui .completion-card { width: min(100%, 620px); padding: clamp(24px, 5vw, 44px); border-radius: 10px; box-shadow: none; }
+.practice-ui .completion-card h1 { font-size: clamp(24px, 4vw, 32px); letter-spacing: -.02em; line-height: 1.5; }
+.practice-ui .completion-actions { flex-wrap: wrap; }
+.practice-ui .setup-help { color: var(--muted); font-size: 14px; line-height: 1.8; margin: 0; font-weight: 400; }
 .practice-ui.room-shell, .practice-ui.report-shell { max-width: 1200px; margin: auto; padding: 0 32px 48px; background: var(--paper); }
 .practice-ui .room-header, .practice-ui .report-header { min-height: 88px; padding: 20px 0; gap: 16px; flex-wrap: wrap; border-bottom: 1px solid var(--line); }
 .practice-ui .room-layout { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 32px; padding-top: 32px; align-items: start; min-height: auto; }

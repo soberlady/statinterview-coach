@@ -347,7 +347,7 @@ export function ReportView({ interviewId }: { interviewId: string }) {
 
   if (!report || !view) {
     return (
-      <main className="completion-shell">
+      <main className="practice-ui completion-shell">
         <section className="completion-card">
           <p className="eyebrow">{error ? "报告不可用" : "正在生成报告"}</p>
           <h1>{error ? "暂时无法读取诊断结果。" : "正在整理回答证据…"}</h1>

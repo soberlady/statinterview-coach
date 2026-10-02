@@ -6,6 +6,7 @@
     "node": ">=22.13.0"
   },
   "scripts": {
+    "test:voice-processing": "tsx --test tests/voice-processing.test.ts",
     "dev": "node scripts/run-vinext.mjs dev",
     "build": "node scripts/run-vinext.mjs build",
     "start": "node scripts/run-vinext.mjs start",

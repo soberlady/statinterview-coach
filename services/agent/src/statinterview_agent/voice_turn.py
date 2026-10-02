@@ -66,7 +66,10 @@ async def wait_for_transcript_stability(
     poll_seconds = max(0.01, min(poll_seconds, max(quiet_seconds, 0.01)))
     loop = asyncio.get_running_loop()
     started_at = loop.time()
-    stable_since = started_at
+    # The model may already have spent several seconds deciding to submit.
+    # Count that existing quiet period instead of starting another full wait.
+    last_transcript_at = getattr(runtime, "last_transcript_at", None)
+    stable_since = min(started_at, last_transcript_at) if isinstance(last_transcript_at, (int, float)) else started_at
     revision = runtime.transcript_buffer.revision
 
     while True:
@@ -153,23 +156,13 @@ async def process_voice_answer(
     try:
         response = await post_turn(payload)
     except VoiceTurnTransportError:
-        runtime.transcript_buffer.clear()
-        return _repeat_result("TURN_TRANSPORT_FAILED")
+        return await recover_pending_answer(runtime, load_authoritative_state, "TURN_TRANSPORT_FAILED")
 
     if response.status_code == 409:
-        try:
-            authoritative = await load_authoritative_state()
-            _apply_authoritative_state(runtime, authoritative)
-        except (VoiceTurnTransportError, ValueError):
-            runtime.transcript_buffer.clear()
-            return _repeat_result("RESYNC_FAILED")
-
-        runtime.transcript_buffer.clear()
-        return _resynced_result(runtime.current_question)
+        return await recover_pending_answer(runtime, load_authoritative_state, "RESYNC_FAILED")
 
     if response.status_code >= 400:
-        runtime.transcript_buffer.clear()
-        return _repeat_result("TURN_REJECTED")
+        return _pending_result("TURN_REJECTED")
 
     result = response.body
     try:
@@ -178,14 +171,7 @@ async def process_voice_answer(
         # A 2xx response with a malformed body is ambiguous: the turn may be
         # durable. Reload the checkpoint instead of blindly submitting the
         # same evidence again or falsely declaring completion.
-        try:
-            authoritative = await load_authoritative_state()
-            _apply_authoritative_state(runtime, authoritative)
-        except (VoiceTurnTransportError, ValueError):
-            runtime.transcript_buffer.clear()
-            return _repeat_result("RESPONSE_RESYNC_FAILED")
-        runtime.transcript_buffer.clear()
-        return _resynced_result(runtime.current_question)
+        return await recover_pending_answer(runtime, load_authoritative_state, "RESPONSE_RESYNC_FAILED")
 
     runtime.transcript_buffer.clear()
     setattr(runtime, "low_confidence_retries", 0)
@@ -223,6 +209,28 @@ async def process_voice_answer(
         "next_question_id": runtime.current_question["id"],
         "spoken_question": _spoken_question(runtime.current_question),
         "instruction": "简短承接后，原样朗读 spoken_question。",
+    }
+
+
+async def recover_pending_answer(runtime, load_authoritative_state, reason):
+    """An HTTP timeout is not proof of failure. Never clear or blindly repost."""
+    try:
+        authoritative = await load_authoritative_state()
+        completed = (authoritative.get("progress") or {}).get("completedTurns")
+        if type(completed) is not int or completed < runtime.sequence_number:
+            return _pending_result(reason)
+        _apply_authoritative_state(runtime, authoritative)
+    except (VoiceTurnTransportError, ValueError, TypeError, AttributeError):
+        return _pending_result(reason)
+    runtime.transcript_buffer.clear()
+    return _resynced_result(runtime.current_question)
+
+
+def _pending_result(reason):
+    return {
+        "status": "SAVE_PENDING",
+        "reason": reason,
+        "instruction": "暂时未确认保存，回答已保留。请在网页核对保存状态，必要时切换文本提交；无需重新口述，不要再次自动提交。",
     }
 
 
@@ -285,6 +293,8 @@ def _repeat_result(reason: str) -> dict[str, Any]:
 def _resynced_result(
     question: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
+    if question is None:
+        return {"status": "COMPLETE", "instruction": "回答已保存，请回到网页查看报告。"}
     return {
         "status": "RESYNCED",
         "next_question_id": question.get("id") if question else None,

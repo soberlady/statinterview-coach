@@ -236,23 +236,28 @@ def test_terminal_checkpoint_does_not_request_a_nonexistent_answer() -> None:
     assert "再完整说一遍" not in result["instruction"]
 
 
-def test_transport_failure_repeats_without_advancing_checkpoint() -> None:
+def test_transport_failure_preserves_answer_without_advancing_checkpoint() -> None:
     runtime = Runtime()
     runtime.transcript_buffer.add("item-1", "这是一段长度足够但提交失败的回答内容。")
 
     async def failed_post(_payload: dict[str, Any]) -> VoiceApiResponse:
         raise VoiceTurnTransportError("timeout")
 
+    async def unchanged() -> dict[str, Any]:
+        return {"progress": {"completedTurns": 1}, "nextQuestion": runtime.current_question}
+
     result = asyncio.run(
         process_voice_answer(
             runtime,
             post_turn=failed_post,
-            load_authoritative_state=unexpected_load,
+            load_authoritative_state=unchanged,
             complete_interview=unexpected_complete,
         )
     )
 
     assert result["reason"] == "TURN_TRANSPORT_FAILED"
+    assert result["status"] == "SAVE_PENDING"
+    assert runtime.transcript_buffer.text == "这是一段长度足够但提交失败的回答内容。"
     assert runtime.sequence_number == 2
     assert runtime.current_question and runtime.current_question["id"] == "q_2"
 
@@ -446,6 +451,44 @@ def test_malformed_checkpoint_cannot_partially_advance_runtime() -> None:
 
 async def unexpected_post(_payload: dict[str, Any]) -> VoiceApiResponse:
     raise AssertionError("post_turn should not be called")
+
+
+def test_timeout_after_commit_recovers_without_reposting():
+    runtime = Runtime()
+    runtime.transcript_buffer.add("item", "这是已经保存但响应在途中丢失的完整回答。")
+    calls = []
+    async def post(payload):
+        calls.append(payload)
+        raise VoiceTurnTransportError("timeout")
+    async def load():
+        return {"progress": {"completedTurns": 2}, "nextQuestion": {"id": "q3", "text": "下一题"}}
+    result = asyncio.run(process_voice_answer(runtime, post_turn=post, load_authoritative_state=load, complete_interview=unexpected_complete))
+    assert len(calls) == 1
+    assert result["status"] == "RESYNCED"
+    assert runtime.sequence_number == 3
+    assert runtime.transcript_buffer.text == ""
+
+
+def test_busy_conflict_keeps_the_unsaved_transcript():
+    runtime = Runtime()
+    runtime.transcript_buffer.add("item", "这是仍然正在评分而尚未保存的完整回答。")
+    async def post(payload):
+        return VoiceApiResponse(409, {})
+    async def load():
+        return {"progress": {"completedTurns": 1}, "nextQuestion": runtime.current_question}
+    result = asyncio.run(process_voice_answer(runtime, post_turn=post, load_authoritative_state=load, complete_interview=unexpected_complete))
+    assert result["status"] == "SAVE_PENDING"
+    assert runtime.sequence_number == 2
+    assert runtime.transcript_buffer.text
+
+
+def test_existing_quiet_time_is_not_waited_twice():
+    runtime = Runtime()
+    async def run():
+        loop = asyncio.get_running_loop()
+        runtime.last_transcript_at = loop.time() - 10
+        return await wait_for_transcript_stability(runtime, quiet_seconds=4, max_wait_seconds=0)
+    assert asyncio.run(run()) is True
 
 
 async def unexpected_load() -> dict[str, Any]:

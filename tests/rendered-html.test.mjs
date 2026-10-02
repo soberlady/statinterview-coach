@@ -66,6 +66,18 @@ test("ships dynamic Open Graph metadata and its image asset", async () => {
   await access(new URL("public/og.png", projectRoot));
 });
 
+test("practice transitions and setup explain the actual product behavior", async () => {
+  for (const path of ["app/loading.tsx", "app/components/InterviewRoom.tsx", "app/components/ReportView.tsx"]) {
+    const source = await readFile(new URL(path, projectRoot), "utf8");
+    assert.doesNotMatch(source, /className="completion-shell"/);
+    assert.match(source, /practice-ui completion-shell/);
+  }
+  const setup = await readFile(new URL("app/components/InterviewSetupForm.tsx", projectRoot), "utf8");
+  assert.match(setup, /不是倒计时/);
+  assert.match(setup, /前 2 道是固定公共题/);
+  assert.match(setup, /不会针对具体项目自由生成问题/);
+});
+
 test("ships a read-only synthetic portfolio demo", async () => {
   const [showcase, guard, worker] = await Promise.all([
     readFile(
