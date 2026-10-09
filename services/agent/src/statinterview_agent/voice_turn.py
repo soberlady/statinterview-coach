@@ -69,17 +69,27 @@ async def wait_for_transcript_stability(
     # The model may already have spent several seconds deciding to submit.
     # Count that existing quiet period instead of starting another full wait.
     last_transcript_at = getattr(runtime, "last_transcript_at", None)
-    stable_since = min(started_at, last_transcript_at) if isinstance(last_transcript_at, (int, float)) else started_at
+    last_speech_at = getattr(runtime, "last_speech_at", None)
+    observed_times = [value for value in (last_transcript_at, last_speech_at) if isinstance(value, (int, float))]
+    stable_since = min(started_at, max(observed_times)) if observed_times else started_at
     revision = runtime.transcript_buffer.revision
 
     while True:
         now = loop.time()
-        if now - stable_since >= quiet_seconds:
+        # A final transcript can lag behind speech or remain unchanged during
+        # a thinking pause. Never treat a quiet transcript as a silent speaker.
+        speaking = getattr(runtime, "user_speaking", False)
+        speech_at = getattr(runtime, "last_speech_at", None)
+        if speaking:
+            stable_since = now
+        elif isinstance(speech_at, (int, float)):
+            stable_since = max(stable_since, min(now, speech_at))
+        if not speaking and now - stable_since >= quiet_seconds:
             return True
         if now - started_at >= max_wait_seconds:
             return False
         await asyncio.sleep(
-            min(poll_seconds, quiet_seconds - (now - stable_since))
+            max(0.001, min(poll_seconds, max_wait_seconds - (now - started_at)))
         )
         current_revision = runtime.transcript_buffer.revision
         if current_revision != revision:

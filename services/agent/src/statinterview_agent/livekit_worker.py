@@ -24,6 +24,7 @@ from livekit.agents import (
     AgentSession,
     ChatMessage,
     ConversationItemAddedEvent,
+    UserStateChangedEvent,
     JobContext,
     RunContext,
     cli,
@@ -62,6 +63,8 @@ class VoiceRuntime:
     transcript_stability_seconds: float = 4.0
     low_confidence_retries: int = 0
     last_transcript_at: float | None = None
+    user_speaking: bool = False
+    last_speech_at: float | None = None
     processing_stage: str = "listening"
     submission_pending: bool = False
     last_recovery_check: float = 0.0
@@ -247,6 +250,11 @@ async def statinterview_session(ctx: JobContext) -> None:
         },
     )
 
+    @session.on("user_state_changed")
+    def capture_user_speech_state(event: UserStateChangedEvent) -> None:
+        runtime.user_speaking = event.new_state == "speaking"
+        runtime.last_speech_at = asyncio.get_running_loop().time()
+
     @session.on("conversation_item_added")
     def capture_committed_user_turn(
         event: ConversationItemAddedEvent,
@@ -270,6 +278,12 @@ async def statinterview_session(ctx: JobContext) -> None:
     # the opening question into an empty room.
     await ctx.connect()
     candidate = await ctx.wait_for_participant()
+    # Pre-dispatch can wait while the browser or an older room commits a turn.
+    # Reload immediately before starting speech, rather than reading the
+    # checkpoint captured when the job was first created.
+    initial = await _load_next_question(api_base_url, interview_id)
+    runtime.sequence_number = int((initial.get("progress") or {}).get("completedTurns", 0)) + 1
+    runtime.current_question = initial.get("nextQuestion")
 
     control_tasks: set[asyncio.Task[Any]] = set()
 

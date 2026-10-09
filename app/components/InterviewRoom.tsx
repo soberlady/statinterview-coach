@@ -309,6 +309,9 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     };
   }, []);
 
+  const preserveVoiceDraftEvent = useEffectEvent(() => {
+    preserveVoiceDraft();
+  });
   useEffect(() => {
     if (inputChannel !== "voice" || voiceStatus === "idle") return;
     let cancelled = false;
@@ -411,6 +414,18 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
               payload: "{}", responseTimeout: 2_000,
             }));
             const stage = parseVoiceProcessing(status, result.nextQuestion?.id ?? null, (result.progress?.completedTurns ?? 0) + 1);
+            if (!stage && !cancelled && voiceRoomRef.current === activeRoom) {
+              voiceExpectedDisconnectRef.current = true;
+              voiceRoomRef.current = null;
+              voiceAgentReadyRef.current = false;
+              preserveVoiceDraftEvent();
+              remoteAudioRef.current?.querySelectorAll("audio").forEach((element) => element.pause());
+              setVoiceStatus("error");
+              setInputChannel("text");
+              setVoiceMessage("语音面试官与页面题目尚未同步，已停止语音并保留未提交转写。请以页面题目为准，核对文本后继续。");
+              await activeRoom.disconnect();
+              return;
+            }
             if (stage && !cancelled && voiceRoomRef.current === activeRoom) {
               setVoiceProcessingStage(stage);
               if (stage === "recovery") {
@@ -705,8 +720,29 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       };
 
       room.on(RoomEvent.TrackSubscribed, (track, _publication, participant) => {
+        void (async () => {
         if (voiceRoomRef.current !== room) return;
         if (track.kind !== Track.Kind.Audio) return;
+        try {
+          const checkpointResponse = await fetch(`/api/interviews/${interviewId}/next-question`, { cache: "no-store", signal: AbortSignal.timeout(10_000) });
+          const checkpoint = (await checkpointResponse.json()) as NextQuestionResponse;
+          if (!checkpointResponse.ok || !checkpoint.nextQuestion || !checkpoint.progress) throw new Error("checkpoint unavailable");
+          const status = JSON.parse(await room.localParticipant.performRpc({
+            destinationIdentity: participant.identity, method: "statinterview.status",
+            payload: "{}", responseTimeout: 5_000,
+          }));
+          if (!parseVoiceProcessing(status, checkpoint.nextQuestion.id, checkpoint.progress.completedTurns + 1)) throw new Error("question mismatch");
+          if (voiceRoomRef.current !== room) return;
+          setQuestion(checkpoint.nextQuestion);
+          setProgress(checkpoint.progress);
+          voiceCompletedTurnsRef.current = checkpoint.progress.completedTurns;
+          voiceQuestionIdRef.current = checkpoint.nextQuestion.id;
+          voiceQuestionTextRef.current = checkpoint.nextQuestion.text;
+          await room.localParticipant.setMicrophoneEnabled(true);
+        } catch {
+          fallBackToText("voice.agent_disconnected", "暂时无法确认语音面试官与当前题目一致，已切回文本。请以页面题目为准；语音 Agent 可能需要更新或重新同步。");
+          return;
+        }
         const element = track.attach();
         element.dataset.livekitRemoteAudio = "true";
         remoteAudioRef.current?.appendChild(element);
@@ -749,6 +785,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         setVoiceMessage(
           "面试官已连接。如未听到题目，请点击重新读题。回答结束后停顿，或手动结束本题。",
         );
+        })().catch(() => fallBackToText("voice.agent_disconnected", "语音同步未完成，已切回文本。请核对页面题目后继续。"));
       });
       room.on(
         RoomEvent.TrackUnsubscribed,
@@ -869,7 +906,6 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       roomConnectedAt = performance.now();
       await Promise.all([
         room.startAudio(),
-        room.localParticipant.setMicrophoneEnabled(true),
       ]);
       const connectedAt = performance.now();
       voiceSessionStartedAtRef.current = connectedAt;
@@ -881,7 +917,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
           voiceSessionId: credentials.voiceSessionId,
           roomName: credentials.roomName,
           completedTurnsAtConnect: progress.completedTurns,
-          measurement: "token-request-to-microphone-published",
+          measurement: "token-request-to-room-connected",
           tokenRequestMs: Math.max(
             0,
             Math.round(tokenResult.completedAt - connectionStartedAt),

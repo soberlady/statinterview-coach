@@ -51,6 +51,40 @@ def test_transcript_stability_resets_when_a_late_fragment_arrives() -> None:
     )
 
 
+def test_active_speech_prevents_submission_when_final_transcript_is_unchanged() -> None:
+    runtime = Runtime()
+    runtime.transcript_buffer.add("item-1", "已经转写出来的前半段回答")
+    runtime.user_speaking = True
+    stable = asyncio.run(wait_for_transcript_stability(
+        runtime, quiet_seconds=0.01, max_wait_seconds=0.03, poll_seconds=0.01,
+    ))
+    assert stable is False
+    assert runtime.transcript_buffer.text == "已经转写出来的前半段回答"
+
+
+def test_speech_end_restarts_quiet_period_even_without_a_new_final_fragment() -> None:
+    runtime = Runtime()
+    runtime.transcript_buffer.add("item-1", "回答的前半段")
+    runtime.user_speaking = True
+
+    async def scenario() -> tuple[bool, float]:
+        loop = asyncio.get_running_loop()
+        started = loop.time()
+        pending = asyncio.create_task(wait_for_transcript_stability(
+            runtime, quiet_seconds=0.04, max_wait_seconds=0.2, poll_seconds=0.01,
+        ))
+        await asyncio.sleep(0.03)
+        runtime.user_speaking = False
+        runtime.last_speech_at = loop.time()
+        return await pending, loop.time() - started
+
+    stable, elapsed = asyncio.run(scenario())
+    assert stable is True
+    # Windows event-loop timers have coarse resolution; this still excludes
+    # submission immediately when speech ends around 0.03 seconds.
+    assert elapsed >= 0.06
+
+
 def test_transcript_stability_times_out_without_clearing_answer() -> None:
     runtime = Runtime()
     runtime.transcript_buffer.add("item-1", "这是一段仍在继续的回答")
