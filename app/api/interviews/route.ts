@@ -1,6 +1,9 @@
 import { and, desc, eq } from "drizzle-orm";
 import { getDb } from "@/db";
-import { interviews, skillStates } from "@/db/schema";
+import { interviews, interviewTurns, skillStates } from "@/db/schema";
+import { inferJobWeights } from "@/app/lib/agent-policy";
+import { COACHING_POLICY_VERSION, createTrainingPlan, readPolicyConfig, interviewQuestionBankVersion, type ExperienceBand, type PolicyConfig } from "@/app/lib/practice-plan";
+import { CURRENT_QUESTION_BANK_VERSION, type QuestionBankVersion } from "@/app/lib/question-bank";
 import {
   errorResponse,
   jsonResponse,
@@ -70,6 +73,28 @@ export async function POST(request: Request) {
       recordingEnabled:
         payload.recordingEnabled ?? payload.saveRecording ?? false,
     };
+    const sourceInterviewId = optionalString(payload, "sourceInterviewId", { max: 128 });
+    let source: typeof interviews.$inferSelect | undefined;
+    let trainingPlan: PolicyConfig["trainingPlan"];
+    let questionBankVersion: QuestionBankVersion = CURRENT_QUESTION_BANK_VERSION;
+    if (sourceInterviewId) {
+      const db = getDb();
+      [source] = await db.select().from(interviews).where(eq(interviews.id, sourceInterviewId)).limit(1);
+      if (!source || !["COMPLETED", "FINALIZING", "PAUSED"].includes(source.status) || source.mode === "guided_demo") {
+        throw validationError("sourceInterviewId", "请先完成或暂停一次真实练习，再创建专项训练。");
+      }
+      const [turns, states] = await Promise.all([
+        db.select().from(interviewTurns).where(eq(interviewTurns.interviewId, source.id)).orderBy(interviewTurns.sequenceNumber),
+        db.select().from(skillStates).where(eq(skillStates.interviewId, source.id)),
+      ]);
+      const sourceConfig = readPolicyConfig(source.policyConfig);
+      if (sourceConfig) questionBankVersion = interviewQuestionBankVersion(source);
+      trainingPlan = createTrainingPlan({ sourceInterviewId: source.id, turns, states, questionBankVersion,
+        jobWeights: inferJobWeights(source.jobDescription), previousPlan: readPolicyConfig(source.policyConfig)?.trainingPlan }) ?? undefined;
+      if (!trainingPlan) throw validationError("sourceInterviewId", "当前证据或未见场景题不足以安排三题专项训练，请先完成一次新的诊断。");
+      Object.assign(normalizedPayload, { jobTitle: source.jobTitle, jobDescription: source.jobDescription,
+        candidateBackground: source.candidateBackground, durationMinutes: 10, mode: "training" });
+    }
 
     const jobTitle = requiredString(normalizedPayload, "jobTitle", {
       max: 120,
@@ -101,6 +126,14 @@ export async function POST(request: Request) {
         "must be diagnostic, training or guided_demo",
       );
     }
+    if (mode === "training" && !trainingPlan) throw validationError("sourceInterviewId", "专项训练必须从已有练习报告创建。");
+    const experienceBand = optionalString(payload, "experienceBand", { max: 20 });
+    if (experienceBand && !["beginner", "intermediate", "advanced"].includes(experienceBand)) {
+      throw validationError("experienceBand", "请选择入门、有项目经验或有工作经验。");
+    }
+    const policyConfig: PolicyConfig = { version: COACHING_POLICY_VERSION, questionBankVersion,
+      ...(experienceBand ? { experienceBand: experienceBand as ExperienceBand } : {}),
+      ...(trainingPlan ? { trainingPlan } : {}) };
 
     const id = `int_${crypto.randomUUID()}`;
     const now = new Date().toISOString();
@@ -117,6 +150,7 @@ export async function POST(request: Request) {
           cameraEnabled,
           recordingEnabled,
           mode,
+          policyConfig: JSON.stringify(policyConfig),
           createdAt: now,
           updatedAt: now,
         })

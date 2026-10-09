@@ -73,7 +73,13 @@ test("practice transitions and setup explain the actual product behavior", async
     assert.match(source, /practice-ui completion-shell/);
   }
   const setup = await readFile(new URL("app/components/InterviewSetupForm.tsx", projectRoot), "utf8");
-  assert.match(setup, /不是倒计时/);
+  assert.doesNotMatch(setup, /<select[^>]*name="durationMinutes"/);
+  assert.match(setup, /durationMinutes: 20/);
+  assert.match(setup, /7 道主问题/);
+  assert.match(setup, /最多 2 次追问/);
+  assert.match(setup, /可随时暂停/);
+  const page = await readFile(new URL("app/page.tsx", projectRoot), "utf8");
+  assert.doesNotMatch(page + setup, /15\s*\/\s*20|选题时间预算/);
   assert.match(setup, /前 2 道是固定公共题/);
   assert.match(setup, /不会针对具体项目自由生成问题/);
 });

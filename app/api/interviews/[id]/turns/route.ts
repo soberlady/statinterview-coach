@@ -8,7 +8,6 @@ import {
 } from "@/db/schema";
 import {
   selectNextQuestion,
-  TARGET_SUBSTANTIVE_TURNS,
   updateAbility,
 } from "@/app/lib/agent-policy";
 import {
@@ -24,6 +23,7 @@ import {
   getInterviewQuestion,
   toPublicQuestion,
 } from "@/app/lib/question-bank";
+import { publicTrainingContext, targetQuestionCount, interviewQuestionBankVersion } from "@/app/lib/practice-plan";
 import {
   ApiError,
   errorResponse,
@@ -63,13 +63,6 @@ export async function POST(request: Request, context: RouteContext) {
     }
 
     const questionId = requiredString(payload, "questionId", { max: 128 });
-    const question = getInterviewQuestion(questionId);
-    if (!question) {
-      throw validationError(
-        "questionId",
-        "must reference an approved question-bank item",
-      );
-    }
     const answerText = requiredString(payload, "answerText", {
       max: 20_000,
     });
@@ -126,17 +119,6 @@ export async function POST(request: Request, context: RouteContext) {
         "Interview was not found.",
       );
     }
-    if (
-      !isTurnAcceptingState(interview.status) ||
-      !isTurnAcceptingState(interview.currentStage)
-    ) {
-      throw new ApiError(
-        409,
-        "INTERVIEW_NOT_ACTIVE",
-        `Turns cannot be added to an interview in ${interview.status} state.`,
-      );
-    }
-
     const [duplicate] = await db
       .select()
       .from(interviewTurns)
@@ -150,12 +132,14 @@ export async function POST(request: Request, context: RouteContext) {
 
     if (duplicate) {
       if (
-        duplicate.questionId === question.id &&
+        duplicate.questionId === questionId &&
         duplicate.answerText === answerText.trim()
       ) {
-        const selection = await loadSelection(db, interview);
+        const selection = await loadSelection(db, interview, duplicate.skill);
+        const savedTurn = serializeTurn(duplicate);
         return jsonResponse({
-          turn: serializeTurn(duplicate),
+          turn: savedTurn,
+          evaluation: savedTurn.evaluation,
           interview: serializeInterview(interview),
           ...selection,
           idempotentReplay: true,
@@ -167,6 +151,23 @@ export async function POST(request: Request, context: RouteContext) {
         "This sequence number is already used by another turn.",
         { sequenceNumber },
       );
+    }
+
+    // Replaying an already committed answer is read-only, including after
+    // finalization or pause. State guards still apply to every new write.
+    if (
+      !isTurnAcceptingState(interview.status) ||
+      !isTurnAcceptingState(interview.currentStage)
+    ) {
+      throw new ApiError(
+        409,
+        "INTERVIEW_NOT_ACTIVE",
+        `Turns cannot be added to an interview in ${interview.status} state.`,
+      );
+    }
+    const question = getInterviewQuestion(questionId, interviewQuestionBankVersion(interview));
+    if (!question) {
+      throw validationError("questionId", "must reference an approved question-bank item");
     }
 
     const [existingTurns, existingStates] = await Promise.all([
@@ -578,6 +579,7 @@ export async function POST(request: Request, context: RouteContext) {
         evaluation,
         skillState: serializeSkillState(updatedSkillState),
         interview: serializeInterview(updatedInterview),
+        training: publicTrainingContext(updatedInterview, allTurns, decision.nextQuestion?.id),
         nextQuestion: decision.nextQuestion
           ? toPublicQuestion(decision.nextQuestion)
           : null,
@@ -600,7 +602,7 @@ export async function POST(request: Request, context: RouteContext) {
                 ).length,
               })
             : null,
-        progress: buildProgress(allTurns, decision.nextQuestion !== null),
+        progress: buildProgress(allTurns, decision.nextQuestion !== null, updatedInterview),
       },
       201,
     );
@@ -612,6 +614,7 @@ export async function POST(request: Request, context: RouteContext) {
 async function loadSelection(
   db: ReturnType<typeof getDb>,
   interview: typeof interviews.$inferSelect,
+  replayedSkill: string,
 ) {
   const [turns, states] = await Promise.all([
     db
@@ -637,7 +640,10 @@ async function loadSelection(
     (turn) =>
       turn.status === "completed" && turn.questionType !== "verification",
   ).length;
+  const replayedState = states.find((state) => state.skill === replayedSkill);
   return {
+    skillState: replayedState ? serializeSkillState(replayedState) : null,
+    training: publicTrainingContext(interview, turns, decision.nextQuestion?.id),
     nextQuestion: decision.nextQuestion
       ? toPublicQuestion(decision.nextQuestion)
       : null,
@@ -654,7 +660,7 @@ async function loadSelection(
             substantiveTurns,
           })
         : null,
-    progress: buildProgress(turns, decision.nextQuestion !== null),
+    progress: buildProgress(turns, decision.nextQuestion !== null, interview),
   };
 }
 
@@ -671,7 +677,7 @@ function scorerTranscriptConfidenceThreshold(): number {
   return Number.isFinite(parsed) ? Math.min(1, Math.max(0, parsed)) : 0.72;
 }
 
-function buildProgress(turns: typeof interviewTurns.$inferSelect[], hasNext: boolean) {
+function buildProgress(turns: typeof interviewTurns.$inferSelect[], hasNext: boolean, interview: { policyConfig?: string }) {
   const completed = turns.filter((turn) => turn.status === "completed").length;
   const substantive = turns.filter(
     (turn) =>
@@ -680,7 +686,7 @@ function buildProgress(turns: typeof interviewTurns.$inferSelect[], hasNext: boo
   return {
     completedTurns: completed,
     substantiveTurns: substantive,
-    targetSubstantiveTurns: TARGET_SUBSTANTIVE_TURNS,
+    targetSubstantiveTurns: targetQuestionCount(interview),
     hasNext,
   };
 }

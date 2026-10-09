@@ -97,7 +97,7 @@ def _stable_uniform(*parts: object) -> float:
 
 def _load_questions() -> tuple[Question, ...]:
     bank = json.loads(
-        (ROOT / "content" / "question-bank.json").read_text(encoding="utf-8")
+        (ROOT / "content" / "legacy" / "question-bank.v1.json").read_text(encoding="utf-8")
     )
     questions: list[Question] = []
     for raw in bank["questions"]:

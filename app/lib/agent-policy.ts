@@ -3,6 +3,9 @@ import type {
   InterviewTurn,
   SkillState,
 } from "@/db/schema";
+import { selectNextQuestion as selectLegacyQuestion } from "./agent-policy-v2";
+import { inferExperienceBand } from "./candidate-routing";
+import { COACHING_POLICY_VERSION, readPolicyConfig, interviewQuestionBankVersion } from "./practice-plan";
 import {
   getInterviewQuestion,
   listQuestions,
@@ -11,6 +14,7 @@ import {
   type BankQuestion,
   type InterviewQuestion,
   type SkillKey,
+  type QuestionBankVersion,
 } from "./question-bank";
 import {
   normalizeDifficulty,
@@ -124,7 +128,7 @@ export type SelectionCandidate = {
 };
 
 export type SelectionContext = {
-  policyVersion: typeof SELECTION_POLICY_VERSION;
+  policyVersion: typeof SELECTION_POLICY_VERSION | "three-stage-v2";
   selectionPhase: SelectionPhase;
   remainingSeconds: number;
   jobWeights: Record<SkillKey, number>;
@@ -134,7 +138,9 @@ export type SelectionContext = {
 export type SelectionPhase =
   | "public_anchor"
   | "jd_directed_baseline"
-  | "posterior_adaptive";
+  | "posterior_adaptive"
+  | "targeted_practice"
+  | "transfer_check";
 
 export type CandidateRouting = {
   experienceBand: "beginner" | "intermediate" | "advanced";
@@ -142,7 +148,7 @@ export type CandidateRouting = {
   scenarioTags: string[];
 };
 
-export const SELECTION_POLICY_VERSION = "three-stage-v2";
+export const SELECTION_POLICY_VERSION = COACHING_POLICY_VERSION;
 export const TARGET_SUBSTANTIVE_TURNS = 7;
 const PUBLIC_ANCHOR_IDS = [
   "statistics_ml_002",
@@ -399,11 +405,16 @@ export function selectNextQuestion(input: {
     | "candidateBackground"
     | "durationMinutes"
     | "verificationCount"
-  >;
+  > & Partial<Pick<Interview, "policyConfig" | "mode">>;
   turns: InterviewTurn[];
   skillStates: SkillState[];
 }): SelectionResult {
   const { interview, turns, skillStates } = input;
+  const config = readPolicyConfig(interview.policyConfig);
+  if (!config) return selectLegacyQuestion(input);
+  const bankVersion = interviewQuestionBankVersion(interview);
+  const getQuestion = (id: string) => getInterviewQuestion(id, bankVersion);
+  if (interview.mode === "training" && !config.trainingPlan) throw new Error("Training requires a persisted practice plan");
   const completedTurns = turns.filter(
     (turn) => turn.status === "completed" && turn.answerText.trim().length > 0,
   );
@@ -420,11 +431,20 @@ export function selectNextQuestion(input: {
     interview.verificationCount < MAX_VERIFICATIONS
   ) {
     const source = lastTurn.questionId
-      ? getInterviewQuestion(lastTurn.questionId)
+      ? getQuestion(lastTurn.questionId)
       : undefined;
-    if (source?.verificationQuestions[0]) {
-      const verification = getInterviewQuestion(
-        `${source.sourceQuestionId}__verify_0`,
+    if (source?.verificationQuestions.length) {
+      const criteria = (lastEvaluation?.semantic as AnswerEvaluation["semantic"])?.criteria ?? [];
+      const specifications = source.verificationRubrics ?? [];
+      const chosen = specifications.map((specification, index) => ({
+        index,
+        priority: specification.criterionIndexes.reduce((sum, criterionIndex) => {
+          const criterion = criteria[criterionIndex];
+          return sum + (criterion ? (criterion.evidence.length ? Math.max(0, 4 - criterion.score) : 5) : 0);
+        }, 0),
+      })).sort((a, b) => b.priority - a.priority || a.index - b.index)[0];
+      const verification = getQuestion(
+        chosen ? `${source.sourceQuestionId}__verify_v3_${chosen.index}` : `${source.sourceQuestionId}__verify_0`,
       );
       if (verification) {
         return {
@@ -453,7 +473,7 @@ export function selectNextQuestion(input: {
     completedTurns
       .map((turn) => turn.questionId)
       .filter((id): id is string => Boolean(id))
-      .map((id) => getInterviewQuestion(id)?.sourceQuestionId ?? id),
+      .map((id) => getQuestion(id)?.sourceQuestionId ?? id),
   );
   const substantiveTurns = completedTurns.filter(
     (turn) => turn.questionType !== "verification",
@@ -461,14 +481,35 @@ export function selectNextQuestion(input: {
   const candidateRouting = inferCandidateRouting(
     interview.candidateBackground,
   );
+  if (config.experienceBand) {
+    candidateRouting.experienceBand = config.experienceBand;
+    candidateRouting.preferredDifficulty = config.experienceBand === "beginner" ? 2 : config.experienceBand === "advanced" ? 4 : 3;
+  }
   const jobWeights = inferJobWeights(interview.jobDescription);
   const remainingSeconds = calculateRemainingSeconds(
     interview.durationMinutes,
     completedTurns,
+    bankVersion,
   );
 
+  if (config.trainingPlan) {
+    const plan = config.trainingPlan;
+    const index = substantiveTurns.length;
+    const source = index < 3 ? getQuestion(plan.questionIds[index]) : undefined;
+    if (index < 3 && !source) throw new Error("Persisted practice question is unavailable");
+    return {
+      nextQuestion: source ? { ...source, questionType: "adaptive" } : null,
+      action: !source ? "COMPLETE" : shouldAbstainFromLastQuestion ? "ABSTAIN" : "ACCEPT",
+      reason: !source ? "已完成两道专项练习与一道未见场景复测。"
+        : index === 2 ? "复测使用未见过的题目家族，隐藏提示，独立观察迁移表现。"
+          : `围绕“${plan.topic}”完成第 ${index + 1} 道专项练习；题目来自已保存的训练计划。`,
+      utility: null, ranking: [],
+      context: selectionContext(index < 2 ? "targeted_practice" : "transfer_check", remainingSeconds, jobWeights, candidateRouting),
+    };
+  }
+
   if (substantiveTurns.length < PUBLIC_ANCHOR_COUNT) {
-    const nextAnchor = getInterviewQuestion(
+    const nextAnchor = getQuestion(
       PUBLIC_ANCHOR_IDS[substantiveTurns.length],
     );
     if (!nextAnchor) {
@@ -499,7 +540,7 @@ export function selectNextQuestion(input: {
       interview.durationMinutes * 60 -
         PUBLIC_ANCHOR_IDS.reduce(
           (total, id) =>
-            total + (getInterviewQuestion(id)?.expectedSeconds ?? 120),
+            total + (getQuestion(id)?.expectedSeconds ?? 120),
           0,
         ),
       1,
@@ -508,7 +549,7 @@ export function selectNextQuestion(input: {
       substantiveTurns.length - PUBLIC_ANCHOR_COUNT;
     const targetSkill = rankedJobSkills(jobWeights)[baselineIndex];
     const maxJobWeight = Math.max(...Object.values(jobWeights), 1e-9);
-    const scored = listQuestions()
+    const scored = listQuestions(bankVersion)
       .filter(
         (question) =>
           question.skill === targetSkill &&
@@ -595,18 +636,12 @@ export function selectNextQuestion(input: {
     skillStates.map((state) => [state.skill, state]),
   );
   const maxJobWeight = Math.max(...Object.values(jobWeights), 1e-9);
-  const answeredBySkill = new Map<SkillKey, number>();
-  for (const turn of substantiveTurns) {
-    if (!(turn.skill in jobWeights)) continue;
-    const skill = turn.skill as SkillKey;
-    answeredBySkill.set(skill, (answeredBySkill.get(skill) ?? 0) + 1);
-  }
   const lastTwoSkills = substantiveTurns.slice(-2).map((turn) => turn.skill);
   const blockedSkill =
     lastTwoSkills.length === 2 && lastTwoSkills[0] === lastTwoSkills[1]
       ? lastTwoSkills[0]
       : null;
-  const candidates = listQuestions().filter(
+  const candidates = listQuestions(bankVersion).filter(
     (question) =>
       !question.isAnchor &&
       !askedSourceIds.has(question.id) &&
@@ -621,7 +656,7 @@ export function selectNextQuestion(input: {
         interview.jobDescription,
         jobWeights,
         maxJobWeight,
-        answeredBySkill.get(question.skill) ?? 0,
+        stateBySkill.get(question.skill)?.sourceTurnCount ?? 0,
         remainingSeconds,
         candidateRouting,
       ),
@@ -646,7 +681,7 @@ export function selectNextQuestion(input: {
       selectionCandidate(
         question,
         signals,
-        candidateRouting.preferredDifficulty,
+        posteriorTargetDifficulty(stateBySkill.get(question.skill), candidateRouting.preferredDifficulty),
         0,
       ),
     );
@@ -702,9 +737,16 @@ function selectionSignals(
     remainingSeconds,
     difficultyMatch: difficultyMatch(
       question.difficulty,
-      candidateRouting.preferredDifficulty,
+      posteriorTargetDifficulty(state, candidateRouting.preferredDifficulty),
     ),
   });
+}
+
+export function posteriorTargetDifficulty(state: SkillState | undefined, initialDifficulty: number): number {
+  if (!state || state.sourceTurnCount === 0) return initialDifficulty;
+  const weight = state.sourceTurnCount / (state.sourceTurnCount + 1);
+  const observedDifficulty = Math.max(1, Math.min(5, 3 + state.posteriorMean / 0.75));
+  return (1 - weight) * initialDifficulty + weight * observedDifficulty;
 }
 
 function baselineSignals(
@@ -807,6 +849,7 @@ function noEligibleQuestion(
 function calculateRemainingSeconds(
   durationMinutes: number,
   completedTurns: InterviewTurn[],
+  bankVersion: QuestionBankVersion,
 ): number {
   return Math.max(
     durationMinutes * 60 -
@@ -814,7 +857,7 @@ function calculateRemainingSeconds(
         (total, turn) =>
           total +
           (turn.questionId
-            ? (getInterviewQuestion(turn.questionId)?.expectedSeconds ?? 120)
+            ? (getInterviewQuestion(turn.questionId, bankVersion)?.expectedSeconds ?? 120)
             : 120),
         0,
       ),
@@ -871,30 +914,7 @@ function inferCandidateRouting(
   candidateBackground: string,
 ): CandidateRouting {
   const normalized = candidateBackground.toLowerCase();
-  const beginnerTerms = [
-    "零基础",
-    "初学",
-    "入门",
-    "转行",
-    "尚未",
-    "没有项目",
-  ];
-  const advancedTerms = [
-    "博士",
-    "高级",
-    "资深",
-    "精通",
-    "三年",
-    "四年",
-    "五年",
-  ];
-  const experienceBand = advancedTerms.some((term) =>
-    normalized.includes(term),
-  )
-    ? "advanced"
-    : beginnerTerms.some((term) => normalized.includes(term))
-      ? "beginner"
-      : "intermediate";
+  const experienceBand = inferExperienceBand(candidateBackground);
   const preferredDifficulty =
     experienceBand === "advanced"
       ? 4
@@ -965,7 +985,7 @@ const JOB_SKILL_TERMS: Record<SkillKey, string[]> = {
   ],
 };
 
-function inferJobWeights(jobDescription: string): Record<SkillKey, number> {
+export function inferJobWeights(jobDescription: string): Record<SkillKey, number> {
   const normalized = jobDescription.toLowerCase();
   const raw = Object.fromEntries(
     Object.entries(JOB_SKILL_TERMS).map(([skill, terms]) => [

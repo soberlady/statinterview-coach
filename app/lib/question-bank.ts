@@ -1,4 +1,10 @@
-import rawQuestionBank from "@/content/question-bank.json";
+import legacyQuestionBank from "@/content/legacy/question-bank.v1.json";
+import coachingQuestionBank from "@/content/legacy/question-bank.coaching-v1.json";
+
+export const LEGACY_QUESTION_BANK_VERSION = "question-bank-v1";
+export const COACHING_QUESTION_BANK_VERSION = "coaching-bank-v1";
+export const CURRENT_QUESTION_BANK_VERSION = COACHING_QUESTION_BANK_VERSION;
+export type QuestionBankVersion = typeof LEGACY_QUESTION_BANK_VERSION | typeof COACHING_QUESTION_BANK_VERSION;
 
 export const SKILL_LABELS = {
   statistics_ml: "统计与机器学习",
@@ -25,6 +31,14 @@ export type BankQuestion = {
   isAnchor: boolean;
   rubric: RubricCriterion[];
   verificationQuestions: string[];
+  topic?: string;
+  family?: string;
+  learningPoints?: string[];
+  verificationRubrics?: Array<{
+    criterionIndexes: number[];
+    difficulty: number;
+    rubric: RubricCriterion[];
+  }>;
 };
 
 export type InterviewQuestion = BankQuestion & {
@@ -32,21 +46,50 @@ export type InterviewQuestion = BankQuestion & {
   sourceQuestionId: string;
 };
 
-const questions = rawQuestionBank.questions as BankQuestion[];
+const banks: Record<QuestionBankVersion, BankQuestion[]> = {
+  [LEGACY_QUESTION_BANK_VERSION]: legacyQuestionBank.questions as BankQuestion[],
+  [COACHING_QUESTION_BANK_VERSION]: coachingQuestionBank.questions as BankQuestion[],
+};
 
-export function listQuestions(): readonly BankQuestion[] {
+export function listQuestions(version: QuestionBankVersion = CURRENT_QUESTION_BANK_VERSION): readonly BankQuestion[] {
+  const questions = banks[version];
+  if (!questions) throw new Error("Unsupported question bank version");
   return questions;
 }
 
-export function listAnchorQuestions(): InterviewQuestion[] {
-  return questions
+export function listLegacyQuestions(): readonly BankQuestion[] {
+  return listQuestions(LEGACY_QUESTION_BANK_VERSION);
+}
+
+export function getLegacyInterviewQuestion(questionId: string) {
+  return getInterviewQuestion(questionId, LEGACY_QUESTION_BANK_VERSION);
+}
+
+export function listAnchorQuestions(version: QuestionBankVersion = CURRENT_QUESTION_BANK_VERSION): InterviewQuestion[] {
+  return listQuestions(version)
     .filter((question) => question.isAnchor)
     .map((question) => toInterviewQuestion(question, "anchor"));
 }
 
 export function getInterviewQuestion(
   questionId: string,
+  version: QuestionBankVersion = CURRENT_QUESTION_BANK_VERSION,
 ): InterviewQuestion | undefined {
+  const questions = listQuestions(version);
+  const targetedVerification = questionId.match(/^(.+)__verify_v3_(\d+)$/);
+  if (targetedVerification) {
+    const source = questions.find((question) => question.id === targetedVerification[1]);
+    const index = Number(targetedVerification[2]);
+    const specification = source?.verificationRubrics?.[index];
+    const question = source?.verificationQuestions[index];
+    if (!source || !specification || !question) return undefined;
+    return {
+      ...source, id: questionId, question, difficulty: specification.difficulty,
+      expectedSeconds: Math.min(source.expectedSeconds, 90), isAnchor: false,
+      questionType: "verification", sourceQuestionId: source.id,
+      rubric: specification.rubric,
+    };
+  }
   const roleAnchorMatch = questionId.match(/^(.+)__role_anchor$/);
   if (roleAnchorMatch) {
     const source = questions.find(

@@ -2,6 +2,13 @@
 
 Updated: 2026-08-30
 
+Historical scope: this report describes the frozen v2 policy and the original
+24-question bank (`content/legacy/question-bank.v1.json`). The current
+coaching-v3 policy uses 48 questions and a different difficulty/coverage rule;
+the 3.83% MAE result must not be attributed to that release. Its separate
+behavioral checks are recorded in `content/coaching-benchmark.json` and
+`docs/COACHING_UPGRADE_ZH.md`.
+
 ## Question
 
 With the same seven-question budget, can the Agent estimate abilities that matter

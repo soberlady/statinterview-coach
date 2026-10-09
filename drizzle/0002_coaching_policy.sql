@@ -1,0 +1,1 @@
+ALTER TABLE `interviews` ADD `policy_config` text DEFAULT '{}' NOT NULL;

@@ -12,6 +12,8 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import type { GuidedDemoPayload } from "@/app/lib/guided-demo";
+import type { publicTrainingContext } from "@/app/lib/practice-plan";
+import { browserDraftStorage, clearAnswerDraft, loadAnswerDraft, saveAnswerDraft } from "@/app/lib/answer-draft";
 import {
   transitionVoiceStatus,
   VOICE_AGENT_COLD_START_NOTICE_MS,
@@ -72,6 +74,7 @@ type SavedVoiceAnswer = {
 };
 
 type NextQuestionResponse = ApiErrorBody & {
+  training?: ReturnType<typeof publicTrainingContext>;
   interview?: {
     status: string;
     currentStage: string;
@@ -107,18 +110,18 @@ type VoiceEventInput = {
 };
 
 const flowLabels = [
-  "统计与机器学习",
-  "实验与因果",
-  "SQL 与 Python",
-  "业务分析",
-  "自适应诊断",
-  "自适应复核",
+  "公共统计基线", "公共业务基线", "岗位基线一", "岗位基线二",
+  "自适应诊断一", "自适应诊断二", "自适应诊断三",
 ];
 
 export function InterviewRoom({ interviewId }: { interviewId: string }) {
+  const [training, setTraining] = useState<ReturnType<typeof publicTrainingContext>>(null);
+  const [transferStarted, setTransferStarted] = useState(false);
   const router = useRouter();
   const [question, setQuestion] = useState<PublicQuestion | null>(null);
   const [answer, setAnswer] = useState("");
+  const [draftStatus, setDraftStatus] = useState("");
+  const [isCompleting, setIsCompleting] = useState(false);
   const [phase, setPhase] = useState("PREPARING");
   const [progress, setProgress] = useState<Progress>({
     completedTurns: 0,
@@ -222,6 +225,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         const restoredStatus = result.interview?.status;
         setInterviewMode(result.interview?.mode ?? "diagnostic");
         setDemoGuide(result.demo ?? null);
+        setTraining(result.training ?? null);
         if (restoredStatus === "CANCELLED") {
           throw new Error("本次诊断已经取消，请返回首页重新创建。");
         }
@@ -237,6 +241,9 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
               "选题策略没有返回下一题，但当前诊断尚未完成，请刷新后重试。",
             );
           }
+          setQuestion(null);
+          setPhase("FINALIZING");
+          clearAnswerDraft(browserDraftStorage(), interviewId);
           if (
             restoredStatus === "FINALIZING" ||
             restoredStatus === "PAUSED" ||
@@ -253,6 +260,9 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         }
         if (cancelled) return;
         setQuestion(result.nextQuestion);
+        const draft = loadAnswerDraft(browserDraftStorage(), interviewId, result.nextQuestion.id);
+        setAnswer(draft ?? "");
+        setDraftStatus(draft ? "已恢复本机草稿，请核对后提交。" : "");
         if (result.progress) setProgress(result.progress);
         setDecision(result.decision ?? null);
         setPhase(
@@ -313,6 +323,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         );
         const result = (await response.json()) as NextQuestionResponse;
         if (!response.ok || cancelled) return;
+        setTraining(result.training ?? null);
         if (result.lastCompletedAnswer) setSavedVoiceAnswer(result.lastCompletedAnswer);
         if (result.progress) {
           setProgress(result.progress);
@@ -466,32 +477,20 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       }
 
       if (result.evaluation) setLastEvaluation(result.evaluation);
+      setTraining(result.training ?? null);
       if (result.progress) setProgress(result.progress);
       if (result.interview?.mode) setInterviewMode(result.interview.mode);
       setDemoGuide(result.demo ?? null);
       setDecision(result.decision ?? null);
+      clearAnswerDraft(browserDraftStorage(), interviewId);
+      setDraftStatus("");
       setAnswer("");
       setStartedAt(new Date().toISOString());
 
       if (!result.nextQuestion) {
-        setPhase("FINALIZING");
-        const completionResponse = await fetch(`/api/interviews/${interviewId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            status: "COMPLETED",
-            currentStage: "COMPLETED",
-          }),
-        });
-        if (!completionResponse.ok) {
-          const completionResult =
-            (await completionResponse.json()) as ApiErrorBody;
-          throw new Error(
-            completionResult.error?.message ?? "报告生成前的状态保存失败。",
-          );
-        }
         setQuestion(null);
-        setPhase("COMPLETED");
+        setPhase("FINALIZING");
+        await finishInterview();
         return;
       }
 
@@ -568,6 +567,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         return;
       }
       setQuestion(checkpoint.nextQuestion);
+      setTraining(checkpoint.training ?? null);
       voiceQuestionTextRef.current = checkpoint.nextQuestion.text;
       voiceQuestionIdRef.current = checkpoint.nextQuestion.id;
       if (checkpoint.progress) {
@@ -977,11 +977,32 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     }
   }
 
+  async function finishInterview() {
+    setError("");
+    setIsCompleting(true);
+    try {
+      await updateLifecycle("COMPLETED");
+      setPhase("COMPLETED");
+    } catch {
+      setError("回答已保存，结束确认暂未完成。请重试确认，或先查看已保存的报告。");
+    } finally {
+      setIsCompleting(false);
+    }
+  }
+
+  function updateTextAnswer(text: string) {
+    setAnswer(text);
+    if (!question) return;
+    const saved = saveAnswerDraft(browserDraftStorage(), interviewId, question.id, text);
+    setDraftStatus(!saved ? "本机草稿保存不可用，请在离开前提交或复制回答。"
+      : text.trim() ? "草稿已保存在本机，24 小时内可恢复。" : "本机草稿已清除。");
+  }
+
   function preserveVoiceDraft() {
     const text = voiceTranscriptBufferRef.current.text;
     if (text.trim() && voiceQuestionIdRef.current) {
       setVoiceDraft({ questionId: voiceQuestionIdRef.current, text });
-      setAnswer((current) => current.trim() ? current : text);
+      if (!answer.trim()) updateTextAnswer(text);
     }
     if (voiceFinishTimerRef.current !== null) window.clearTimeout(voiceFinishTimerRef.current);
     voiceFinishTimerRef.current = null;
@@ -1084,6 +1105,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       const response = await fetch(`/api/interviews/${interviewId}/next-question`, { cache: "no-store", signal: AbortSignal.timeout(10_000) });
       const state = (await response.json()) as NextQuestionResponse;
       if (!response.ok) return;
+      setTraining(state.training ?? null);
       if (state.progress) setProgress(state.progress);
       if (state.nextQuestion) {
         if (state.nextQuestion.id !== question?.id) setAnswer("");
@@ -1116,7 +1138,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
 
   if (isLoading) {
     return (
-      <main className="practice-ui completion-shell">
+      <main id="main-content" tabIndex={-1} className="practice-ui completion-shell">
         <section className="completion-card" aria-live="polite">
           <p className="eyebrow">正在恢复检查点</p>
           <h1>准备你的下一道题…</h1>
@@ -1126,16 +1148,35 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     );
   }
 
+  if (phase === "FINALIZING") {
+    return (
+      <main id="main-content" tabIndex={-1} className="practice-ui completion-shell">
+        <section className="completion-card" aria-busy={isCompleting}>
+          <p className="eyebrow">回答已保存</p>
+          <h1>正在确认本次练习结束。</h1>
+          <p>所有已提交回答都已保存，无需重新作答。</p>
+          {error ? <p role="alert">{error}</p> : <p role="status">正在保存结束状态…</p>}
+          <div className="completion-actions">
+            <button className="primary-button" type="button" disabled={isCompleting || isSaving} onClick={finishInterview}>
+              {isCompleting ? "正在确认…" : "重试结束确认"}
+            </button>
+            <Link className="secondary-button" href={`/report/${interviewId}`}>查看已保存的报告</Link>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
   if (phase === "COMPLETED") {
     const isGuidedDemo = interviewMode === "guided_demo";
     return (
-      <main className="practice-ui completion-shell">
+      <main id="main-content" tabIndex={-1} className="practice-ui completion-shell">
         <section className="completion-card">
           <span className="completion-mark" aria-hidden="true">
             ✓
           </span>
           <p className="eyebrow">
-            {isGuidedDemo ? "引导演示已完成" : "自适应诊断已完成"}
+            {isGuidedDemo ? "引导演示已完成" : training ? "专项训练已完成" : "自适应诊断已完成"}
           </p>
           <h1>回答、决策与能力状态都已保存。</h1>
           {isGuidedDemo ? (
@@ -1164,7 +1205,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
 
   if (!question) {
     return (
-      <main className="practice-ui completion-shell">
+      <main id="main-content" tabIndex={-1} className="practice-ui completion-shell">
         <section className="completion-card">
           <p className="eyebrow">恢复失败</p>
           <h1>暂时没有可用问题。</h1>
@@ -1178,9 +1219,29 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   }
 
   const isGuidedDemo = interviewMode === "guided_demo";
+  // Verification belongs to the main answer just saved, not the next step.
+  const displayedStep = question.questionType === "verification"
+    ? Math.max(0, progress.substantiveTurns - 1)
+    : progress.substantiveTurns;
+
+  if (training?.stage === "transfer" && !transferStarted) {
+    return (
+      <main id="main-content" tabIndex={-1} className="practice-ui completion-shell">
+        <section className="completion-card">
+          <p className="eyebrow">专项练习完成 · {training.topic}</p>
+          <h1>复盘后，用新场景再试一次。</h1>
+          <p>下面是上一道练习的反馈。开始复测后将隐藏提示，新题的独立回答会单独记录。</p>
+          <ul>{[...(training.feedback?.gaps ?? []), ...(training.feedback?.learningPoints ?? [])].slice(0, 6)
+            .map((point, index) => <li key={index}>{point}</li>)}</ul>
+          <button className="primary-button" type="button" onClick={() => setTransferStarted(true)}>开始无提示复测</button>
+          <button className="quiet-button" type="button" onClick={exitAndPause} disabled={isExiting}>暂停并查看阶段报告</button>
+        </section>
+      </main>
+    );
+  }
 
   return (
-    <main className="practice-ui room-shell">
+    <main id="main-content" tabIndex={-1} className="practice-ui room-shell">
       <div className="remote-audio" ref={remoteAudioRef} />
       <header className="room-header">
         <Link className="brand compact" href="/">
@@ -1210,28 +1271,31 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         <aside className="room-progress">
           <p className="card-index">本次练习</p>
           <h2>回答进度</h2>
-          <p>7 道主问题，按需追问。每轮回答后保存进度。</p>
+          <p className="room-progress-count" role="status">已完成 <strong>{progress.substantiveTurns}</strong> / {progress.targetSubstantiveTurns} 道主问题</p>
+          <p>{progress.targetSubstantiveTurns} 道主问题，按需追问。每轮回答后保存进度。</p>
           <ol>
-            {flowLabels.map((label, index) => (
+            {(training ? ["专项练习一", "专项练习二", "新场景独立复测"] : flowLabels).map((label, index) => (
               <li
                 className={
-                  index === progress.substantiveTurns
+                  index === displayedStep
                     ? "active"
-                    : index < progress.substantiveTurns
+                    : index < displayedStep
                       ? "complete"
                       : ""
                 }
                 key={label}
+                aria-current={index === displayedStep ? "step" : undefined}
+                aria-label={`${label}，${index < displayedStep ? "已保存" : index === displayedStep ? "当前步骤" : "等待中"}`}
               >
-                <span>{index < progress.substantiveTurns ? "✓" : index + 1}</span>
+                <span>{index < displayedStep ? "✓" : index + 1}</span>
                 <div>
                   <strong>{label}</strong>
                   <small>
-                    {index === progress.substantiveTurns
+                    {index === displayedStep
                       ? question.questionType === "verification"
                         ? "追问验证中"
-                        : "正在评估"
-                      : index < progress.substantiveTurns
+                        : isSaving ? "正在评估" : "正在作答"
+                      : index < displayedStep
                         ? "已保存"
                         : "等待中"}
                   </small>
@@ -1246,6 +1310,21 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         </aside>
 
         <section className="question-stage">
+          {training ? (
+            <section className="guided-demo-panel" aria-label="专项训练说明">
+              <div>
+                <strong>{training.stage === "transfer" ? "新场景独立复测 · 不提供提示" : `专项练习 · ${training.topic}`}</strong>
+                <p>{training.reason}</p>
+                {training.stage === "practice" ? (
+                  <details open>
+                    <summary>先看方法与上题反馈</summary>
+                    <ul>{[...(training.feedback?.gaps ?? []), ...(training.feedback?.learningPoints ?? training.learningPoints)].slice(0, 6)
+                      .map((point, index) => <li key={index}>{point}</li>)}</ul>
+                  </details>
+                ) : null}
+              </div>
+            </section>
+          ) : null}
           {isGuidedDemo && demoGuide ? (
             <section className="guided-demo-panel" aria-label="引导演示步骤">
               <div>
@@ -1260,13 +1339,13 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
           <div className="agent-presence">
             <div>
               <strong>AI 面试官</strong>
-              <small>{questionTypeLabel(question.questionType)}</small>
+              <small>{training && question.questionType !== "verification" ? "专项训练" : questionTypeLabel(question.questionType)}</small>
             </div>
           </div>
 
-          <div className="question-card">
+          <div className="question-card" aria-live="polite" aria-atomic="true">
             <div className="question-meta">
-              <span>{questionTypeLabel(question.questionType)}</span>
+              <span>{training && question.questionType !== "verification" ? (training.stage === "transfer" ? "独立复测" : "有提示练习") : questionTypeLabel(question.questionType)}</span>
               <span>{question.skillLabel}</span>
               <span>难度 {question.difficulty} / 5</span>
             </div>
@@ -1277,11 +1356,13 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
           </div>
 
           {inputChannel === "text" ? (
-            <form className="answer-composer" onSubmit={submitAnswer}>
+            <form className="answer-composer" onSubmit={submitAnswer} aria-busy={isSaving}>
               <div className="composer-heading">
                 <label htmlFor="answer">你的回答</label>
                 {isGuidedDemo ? (
                   <span className="demo-channel-label">固定演示评分通道</span>
+                ) : training ? (
+                  <span className="demo-channel-label">专项训练使用文本作答，便于逐题复盘</span>
                 ) : (
                   <button
                     className="channel-switch"
@@ -1304,7 +1385,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
                       type="button"
                       key={option.id}
                       className={option.recommended ? "recommended" : ""}
-                      onClick={() => setAnswer(option.answer)}
+                      onClick={() => updateTextAnswer(option.answer)}
                       disabled={isSaving}
                     >
                       <span>
@@ -1318,8 +1399,10 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
               ) : null}
               <textarea
                 id="answer"
+                aria-describedby={error ? "answer-help answer-draft-status answer-error" : "answer-help answer-draft-status"}
                 value={answer}
-                onChange={(event) => setAnswer(event.target.value)}
+                onChange={(event) => updateTextAnswer(event.target.value)}
+                maxLength={20_000}
                 placeholder={
                   isGuidedDemo
                     ? "请从上方载入推荐演示回答；你也可以修改，但修改后只运行结构化降级反馈。"
@@ -1329,9 +1412,13 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
                 disabled={isSaving}
               />
               {voiceDraft ? <details><summary>查看切换前保留的语音转写</summary><p>{voiceDraft.text}</p><small>请确认对应题目后使用，不会自动提交。</small></details> : null}
+              <div className="answer-draft-status">
+                <small id="answer-draft-status" role="status">{draftStatus || "未提交的草稿仅保存在本机。"}</small>
+                {answer ? <button className="quiet-button" type="button" disabled={isSaving} onClick={() => updateTextAnswer("")}>清除草稿</button> : null}
+              </div>
               <div className="composer-footer">
-                <span>{answer.trim().length} 字</span>
-                {error ? <p role="alert">{error}</p> : null}
+                <span id="answer-help">{answer.trim().length} 字 · 按你的思路作答</span>
+                {error ? <p id="answer-error" role="alert">{error}</p> : null}
                 {voiceStatus === "unavailable" ||
                 voiceStatus === "error" ? (
                   <p role="status">{voiceMessage}</p>

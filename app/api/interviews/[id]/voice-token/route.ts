@@ -17,7 +17,7 @@ export async function POST(_request: Request, context: RouteContext) {
   try {
     const { id: interviewId } = await context.params;
     const [interview] = await getDb()
-      .select({ id: interviews.id, status: interviews.status })
+      .select({ id: interviews.id, status: interviews.status, mode: interviews.mode })
       .from(interviews)
       .where(eq(interviews.id, interviewId))
       .limit(1);
@@ -34,6 +34,11 @@ export async function POST(_request: Request, context: RouteContext) {
         "INTERVIEW_NOT_ACTIVE",
         "This interview can no longer join a voice room.",
       );
+    }
+    // The voice worker advances automatically and cannot yet present the
+    // practice feedback / hide-hints boundary required by a training plan.
+    if (interview.mode === "training") {
+      throw new ApiError(409, "TRAINING_TEXT_ONLY", "专项训练使用文本作答，以保留逐题反馈和无提示复测。");
     }
 
     const serverUrl = process.env.LIVEKIT_URL?.trim();

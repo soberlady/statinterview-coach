@@ -1,8 +1,8 @@
 {
   "version": "agent-demo-v1",
   "synthetic": true,
-  "scenarioVersion": "sql-analyst-three-stage-v2",
-  "policyVersion": "three-stage-v2",
+  "scenarioVersion": "sql-analyst-coaching-v3",
+  "policyVersion": "coaching-v3",
   "boundary": "Synthetic fixture scores; production TypeScript policy executed in memory. No model calls, database, audio or human-validity measurement. Fingerprint covers the policy trace, not a cryptographic signature of raw evidence.",
   "interview": {
     "id": "synthetic-agent-demo",
@@ -44,7 +44,7 @@
     },
     {
       "sequenceNumber": 2,
-      "questionId": "statistics_ml_002__verify_0",
+      "questionId": "statistics_ml_002__verify_v3_0",
       "questionText": "如果样本量翻四倍，标准误大约如何变化？",
       "questionType": "verification",
       "phase": null,
@@ -101,21 +101,20 @@
     },
     {
       "sequenceNumber": 4,
-      "questionId": "business_analytics_004__role_anchor",
-      "questionText": "短视频团队计划优化人均观看时长。请设计一套指标体系，避免团队只追求时长而损害长期体验。",
+      "questionId": "business_analytics_009__role_anchor",
+      "questionText": "某活动带来很多新用户，但投放成本也大幅上升。你会用哪些指标判断增长是否值得持续？",
       "questionType": "anchor",
       "phase": "jd_directed_baseline",
       "skill": "business_analytics",
       "skillLabel": "业务分析",
-      "answer": "这是引导演示中的合成完整回答，我会按判断、条件和验证动作展开。\n第一，定义核心结果指标并明确活跃用户、观看行为、时间窗口及异常播放口径。\n第二，将观看时长拆为活跃人数、观看频次、单次时长或内容消费漏斗等驱动指标。\n第三，设置次日或长期留存、负反馈、退出率、投诉或健康使用等护栏指标。\n第四，加入内容供给、多样性、创作者生态或商业化等平衡指标。\n第五，说明短期指标提升需通过长期分群或实验观察验证，不直接等同于用户价值提升。\n最后，我会保留原始口径、查询或实验记录，让上述判断可以被另一位分析师复核。",
+      "answer": "这是引导演示中的合成完整回答，我会按判断、条件和验证动作展开。\n第一，同时评估增量获客、获客成本和用户质量，不只看注册数。\n第二，按队列观察留存、贡献毛利、回本周期及估计不确定性。\n第三，区分自然增长与活动增量，通过合适对照验证并考虑容量和长期风险。\n最后，我会保留原始口径、查询或实验记录，让上述判断可以被另一位分析师复核。",
       "evaluator": "DEMO_FIXTURE",
       "action": "ACCEPT",
       "reliability": "HIGH",
       "evidence": [
-        "第一，定义核心结果指标并明确活跃用户、观看行为、时间窗口及异常播放口径。",
-        "第二，将观看时长拆为活跃人数、观看频次、单次时长或内容消费漏斗等驱动指标。",
-        "第三，设置次日或长期留存、负反馈、退出率、投诉或健康使用等护栏指标。",
-        "第四，加入内容供给、多样性、创作者生态或商业化等平衡指标。"
+        "第一，同时评估增量获客、获客成本和用户质量，不只看注册数。",
+        "第二，按队列观察留存、贡献毛利、回本周期及估计不确定性。",
+        "第三，区分自然增长与活动增量，通过合适对照验证并考虑容量和长期风险。"
       ],
       "reason": "这是合成演示证据，不能作为真实候选人能力结论。",
       "selectionReason": "面试开始时已将“业务分析”冻结为第 1 个 JD 定向基线维度；背景路由仅用于选择难度档位和场景，不参与评分。",
@@ -131,21 +130,20 @@
     },
     {
       "sequenceNumber": 5,
-      "questionId": "experiment_causal_004__role_anchor",
-      "questionText": "一次实验同时观察20个指标，其中只有一个指标p值小于0.05。你会如何解释并控制误判风险？",
+      "questionId": "experiment_causal_008__role_anchor",
+      "questionText": "团队每天查看实验p值，看到小于0.05立即停止并上线。你会解释哪些风险，并给出可执行方案？",
       "questionType": "anchor",
       "phase": "jd_directed_baseline",
       "skill": "experiment_causal",
       "skillLabel": "实验与因果",
-      "answer": "这是引导演示中的合成完整回答，我会按判断、条件和验证动作展开。\n第一，指出同时检验多个指标会提高至少出现一个假阳性的概率。\n第二，区分实验前定义的主指标、护栏指标和探索性指标。\n第三，提出Bonferroni、Holm或FDR等校正方法，并能说明其控制目标。\n第四，结合效应大小、置信区间、机制合理性和复现实验判断该显著结果。\n第五，指出不能在看到数据后只挑显著指标包装成预设结论。\n最后，我会保留原始口径、查询或实验记录，让上述判断可以被另一位分析师复核。",
+      "answer": "这是引导演示中的合成完整回答，我会按判断、条件和验证动作展开。\n第一，反复查看并按显著性停止会改变常规固定样本检验的误判率。\n第二，预先确定样本量和周期，或采用事先设计的序贯检验与停止规则。\n第三，持续监测故障和安全护栏，但区分运行监控与效果显著性决策。\n最后，我会保留原始口径、查询或实验记录，让上述判断可以被另一位分析师复核。",
       "evaluator": "DEMO_FIXTURE",
       "action": "ACCEPT",
       "reliability": "HIGH",
       "evidence": [
-        "第一，指出同时检验多个指标会提高至少出现一个假阳性的概率。",
-        "第二，区分实验前定义的主指标、护栏指标和探索性指标。",
-        "第三，提出Bonferroni、Holm或FDR等校正方法，并能说明其控制目标。",
-        "第四，结合效应大小、置信区间、机制合理性和复现实验判断该显著结果。"
+        "第一，反复查看并按显著性停止会改变常规固定样本检验的误判率。",
+        "第二，预先确定样本量和周期，或采用事先设计的序贯检验与停止规则。",
+        "第三，持续监测故障和安全护栏，但区分运行监控与效果显著性决策。"
       ],
       "reason": "这是合成演示证据，不能作为真实候选人能力结论。",
       "selectionReason": "面试开始时已将“实验与因果”冻结为第 2 个 JD 定向基线维度；背景路由仅用于选择难度档位和场景，不参与评分。",
@@ -161,21 +159,20 @@
     },
     {
       "sequenceNumber": 6,
-      "questionId": "sql_python_004",
-      "questionText": "事件表events(user_id, event_name, event_time)记录浏览、加购、支付。你会如何计算24小时内按顺序完成这三步的用户漏斗？",
+      "questionId": "sql_python_008",
+      "questionText": "团队按注册周比较7日留存，本周新注册用户尚未满7天。请设计统计口径和SQL处理方式。",
       "questionType": "adaptive",
       "phase": "posterior_adaptive",
       "skill": "sql_python",
       "skillLabel": "SQL 与 Python",
-      "answer": "这是引导演示中的合成完整回答，我会按判断、条件和验证动作展开。\n第一，明确漏斗起点、分析单位、观察窗口以及同一用户多次行为的归属规则。\n第二，为每个用户或会话确定首次有效浏览时间，并只寻找其后的加购与支付。\n第三，保证browse_time小于add_time小于pay_time且pay_time不晚于起点24小时。\n第四，使用条件聚合、自连接或窗口函数实现各阶段去重人数统计。\n第五，识别跨设备身份、重复事件、退款或迟到日志等数据问题。\n最后，我会保留原始口径、查询或实验记录，让上述判断可以被另一位分析师复核。",
+      "answer": "这是引导演示中的合成完整回答，我会按判断、条件和验证动作展开。\n第一，明确注册队列、自然日或滚动窗口及第7日回访定义。\n第二，只纳入已拥有完整观察窗口的队列，未成熟队列标记待观察而不是零留存。\n第三，按用户去重后计算分子分母，并检查时区、迟到日志及测试账户。\n最后，我会保留原始口径、查询或实验记录，让上述判断可以被另一位分析师复核。",
       "evaluator": "DEMO_FIXTURE",
       "action": "ACCEPT",
       "reliability": "HIGH",
       "evidence": [
-        "第一，明确漏斗起点、分析单位、观察窗口以及同一用户多次行为的归属规则。",
-        "第二，为每个用户或会话确定首次有效浏览时间，并只寻找其后的加购与支付。",
-        "第三，保证browse_time小于add_time小于pay_time且pay_time不晚于起点24小时。",
-        "第四，使用条件聚合、自连接或窗口函数实现各阶段去重人数统计。"
+        "第一，明确注册队列、自然日或滚动窗口及第7日回访定义。",
+        "第二，只纳入已拥有完整观察窗口的队列，未成熟队列标记待观察而不是零留存。",
+        "第三，按用户去重后计算分子分母，并检查时区、迟到日志及测试账户。"
       ],
       "reason": "这是合成演示证据，不能作为真实候选人能力结论。",
       "selectionReason": "综合能力后验不确定性、JD 相关度、覆盖需求、难度匹配和剩余时长后，该题效用最高。",
@@ -191,51 +188,20 @@
     },
     {
       "sequenceNumber": 7,
-      "questionId": "sql_python_003",
-      "questionText": "给定登录表login_log(user_id, login_date)，你会如何计算每天新增用户的次日留存率？请说明口径和SQL思路。",
-      "questionType": "adaptive",
-      "phase": "posterior_adaptive",
-      "skill": "sql_python",
-      "skillLabel": "SQL 与 Python",
-      "answer": "这是引导演示中的合成完整回答，我会按判断、条件和验证动作展开。\n第一，用每个用户最早登录日期定义新增日期，并处理同日重复登录。\n第二，将新增用户与其新增日期后一天的登录记录匹配。\n第三，以次日登录的去重新增用户数除以当日新增用户数。\n第四，明确自然日、时区、测试账号及数据未完结日期等口径问题。\n最后，我会保留原始口径、查询或实验记录，让上述判断可以被另一位分析师复核。",
-      "evaluator": "DEMO_FIXTURE",
-      "action": "ACCEPT",
-      "reliability": "HIGH",
-      "evidence": [
-        "第一，用每个用户最早登录日期定义新增日期，并处理同日重复登录。",
-        "第二，将新增用户与其新增日期后一天的登录记录匹配。",
-        "第三，以次日登录的去重新增用户数除以当日新增用户数。",
-        "第四，明确自然日、时区、测试账号及数据未完结日期等口径问题。"
-      ],
-      "reason": "这是合成演示证据，不能作为真实候选人能力结论。",
-      "selectionReason": "综合能力后验不确定性、JD 相关度、覆盖需求、难度匹配和剩余时长后，该题效用最高。",
-      "stateUpdated": true,
-      "before": {
-        "mean": 0.2588,
-        "uncertainty": 0.9022
-      },
-      "after": {
-        "mean": 0.3525,
-        "uncertainty": 0.844
-      }
-    },
-    {
-      "sequenceNumber": 8,
-      "questionId": "experiment_causal_005",
-      "questionText": "运营发现领取优惠券的用户复购率更高，想据此证明优惠券有效。为什么这个结论可能有偏？如果不能随机实验，你会怎样分析？",
+      "questionId": "experiment_causal_010",
+      "questionText": "一个城市上线补贴后订单增长20%，同期相似城市增长8%。你会怎样评估补贴效果，哪些条件需要验证？",
       "questionType": "adaptive",
       "phase": "posterior_adaptive",
       "skill": "experiment_causal",
       "skillLabel": "实验与因果",
-      "answer": "这是引导演示中的合成完整回答，我会按判断、条件和验证动作展开。\n第一，指出领取行为不是随机的，高意愿或高活跃用户更可能领取并复购，存在选择偏差或混杂。\n第二，明确因果问题的处理、结果、目标人群和时间顺序。\n第三，提出基于可观测混杂的回归调整、倾向得分匹配或加权等可执行方案。\n第四，说明需要检查组间重叠、协变量平衡以及模型设定。\n第五，承认未观测混杂仍可能存在，并提出敏感性分析或寻找准实验设计。\n最后，我会保留原始口径、查询或实验记录，让上述判断可以被另一位分析师复核。",
+      "answer": "这是引导演示中的合成完整回答，我会按判断、条件和验证动作展开。\n第一，可构造差分中的差分比较前后变化，区分绝对量与比例尺度。\n第二，检查平行趋势合理性、其他同期政策和对照城市是否受影响。\n第三，考虑城市级相关、样本时间跨度和异质性，不将12个百分点机械当成已识别因果效应。\n最后，我会保留原始口径、查询或实验记录，让上述判断可以被另一位分析师复核。",
       "evaluator": "DEMO_FIXTURE",
       "action": "ACCEPT",
       "reliability": "HIGH",
       "evidence": [
-        "第一，指出领取行为不是随机的，高意愿或高活跃用户更可能领取并复购，存在选择偏差或混杂。",
-        "第二，明确因果问题的处理、结果、目标人群和时间顺序。",
-        "第三，提出基于可观测混杂的回归调整、倾向得分匹配或加权等可执行方案。",
-        "第四，说明需要检查组间重叠、协变量平衡以及模型设定。"
+        "第一，可构造差分中的差分比较前后变化，区分绝对量与比例尺度。",
+        "第二，检查平行趋势合理性、其他同期政策和对照城市是否受影响。",
+        "第三，考虑城市级相关、样本时间跨度和异质性，不将12个百分点机械当成已识别因果效应。"
       ],
       "reason": "这是合成演示证据，不能作为真实候选人能力结论。",
       "selectionReason": "综合能力后验不确定性、JD 相关度、覆盖需求、难度匹配和剩余时长后，该题效用最高。",
@@ -245,8 +211,38 @@
         "uncertainty": 0.9022
       },
       "after": {
-        "mean": 0.5391,
-        "uncertainty": 0.8318
+        "mean": 0.4411,
+        "uncertainty": 0.8338
+      }
+    },
+    {
+      "sequenceNumber": 8,
+      "questionId": "statistics_ml_004",
+      "questionText": "欺诈识别中正样本只占0.5%，一个模型准确率达到99.5%。你如何判断这个模型是否有用，并选择评价指标？",
+      "questionType": "adaptive",
+      "phase": "posterior_adaptive",
+      "skill": "statistics_ml",
+      "skillLabel": "统计与机器学习",
+      "answer": "这是引导演示中的合成完整回答，我会按判断、条件和验证动作展开。\n第一，指出全部预测为非欺诈即可得到99.5%准确率，因此准确率在该不平衡场景具有误导性。\n第二，结合漏判和误判解释召回率、精确率及混淆矩阵。\n第三，提出PR-AUC、F1或不同阈值下的精确率召回率作为更合适的比较依据。\n第四，把阈值选择与人工审核容量、欺诈损失或误伤成本联系起来。\n第五，说明评估集需保持真实分布并避免训练测试泄漏。\n最后，我会保留原始口径、查询或实验记录，让上述判断可以被另一位分析师复核。",
+      "evaluator": "DEMO_FIXTURE",
+      "action": "ACCEPT",
+      "reliability": "HIGH",
+      "evidence": [
+        "第一，指出全部预测为非欺诈即可得到99.5%准确率，因此准确率在该不平衡场景具有误导性。",
+        "第二，结合漏判和误判解释召回率、精确率及混淆矩阵。",
+        "第三，提出PR-AUC、F1或不同阈值下的精确率召回率作为更合适的比较依据。",
+        "第四，把阈值选择与人工审核容量、欺诈损失或误伤成本联系起来。"
+      ],
+      "reason": "这是合成演示证据，不能作为真实候选人能力结论。",
+      "selectionReason": "综合能力后验不确定性、JD 相关度、覆盖需求、难度匹配和剩余时长后，该题效用最高。",
+      "stateUpdated": true,
+      "before": {
+        "mean": 0,
+        "uncertainty": 1
+      },
+      "after": {
+        "mean": 0.2588,
+        "uncertainty": 0.9022
       }
     }
   ],
@@ -275,7 +271,7 @@
         },
         "ranking": [],
         "context": {
-          "policyVersion": "three-stage-v2",
+          "policyVersion": "coaching-v3",
           "selectionPhase": "public_anchor",
           "remainingSeconds": 1200,
           "jobWeights": {
@@ -295,9 +291,9 @@
       },
       {
         "sequenceNumber": 2,
-        "actualQuestionId": "statistics_ml_002__verify_0",
+        "actualQuestionId": "statistics_ml_002__verify_v3_0",
         "actualQuestionText": "如果样本量翻四倍，标准误大约如何变化？",
-        "expectedQuestionId": "statistics_ml_002__verify_0",
+        "expectedQuestionId": "statistics_ml_002__verify_v3_0",
         "expectedQuestionText": "如果样本量翻四倍，标准误大约如何变化？",
         "questionType": "verification",
         "skill": "statistics_ml",
@@ -336,7 +332,7 @@
         },
         "ranking": [],
         "context": {
-          "policyVersion": "three-stage-v2",
+          "policyVersion": "coaching-v3",
           "selectionPhase": "public_anchor",
           "remainingSeconds": 990,
           "jobWeights": {
@@ -356,16 +352,16 @@
       },
       {
         "sequenceNumber": 4,
-        "actualQuestionId": "business_analytics_004__role_anchor",
-        "actualQuestionText": "短视频团队计划优化人均观看时长。请设计一套指标体系，避免团队只追求时长而损害长期体验。",
-        "expectedQuestionId": "business_analytics_004__role_anchor",
-        "expectedQuestionText": "短视频团队计划优化人均观看时长。请设计一套指标体系，避免团队只追求时长而损害长期体验。",
+        "actualQuestionId": "business_analytics_009__role_anchor",
+        "actualQuestionText": "某活动带来很多新用户，但投放成本也大幅上升。你会用哪些指标判断增长是否值得持续？",
+        "expectedQuestionId": "business_analytics_009__role_anchor",
+        "expectedQuestionText": "某活动带来很多新用户，但投放成本也大幅上升。你会用哪些指标判断增长是否值得持续？",
         "questionType": "anchor",
         "skill": "business_analytics",
         "reliability": "HIGH",
         "action": "ACCEPT",
         "reason": "面试开始时已将“业务分析”冻结为第 1 个 JD 定向基线维度；背景路由仅用于选择难度档位和场景，不参与评分。",
-        "utility": 0.4454,
+        "utility": 0.4521,
         "matchesPolicy": true,
         "evaluationReplayable": true,
         "stateUpdated": true,
@@ -374,6 +370,48 @@
           "uncertainty": 0.844
         },
         "ranking": [
+          {
+            "questionId": "business_analytics_009__role_anchor",
+            "questionText": "某活动带来很多新用户，但投放成本也大幅上升。你会用哪些指标判断增长是否值得持续？",
+            "skill": "business_analytics",
+            "difficulty": 3,
+            "expectedSeconds": 150,
+            "utility": 0.4521,
+            "signals": {
+              "utility": 0.4521,
+              "informationGain": 0,
+              "normalizedInformationGain": 0,
+              "jdRelevance": 0.675,
+              "difficultyMatch": 1,
+              "coverageNeed": 1,
+              "timeCost": 0.166667
+            },
+            "routing": {
+              "targetDifficulty": 3,
+              "scenarioMatch": 0
+            }
+          },
+          {
+            "questionId": "business_analytics_011__role_anchor",
+            "questionText": "三个地区订单分别下降50%、10%、5%。领导希望先处理下降50%的地区，你会如何确定排查优先级？",
+            "skill": "business_analytics",
+            "difficulty": 3,
+            "expectedSeconds": 150,
+            "utility": 0.4521,
+            "signals": {
+              "utility": 0.4521,
+              "informationGain": 0,
+              "normalizedInformationGain": 0,
+              "jdRelevance": 0.675,
+              "difficultyMatch": 1,
+              "coverageNeed": 1,
+              "timeCost": 0.166667
+            },
+            "routing": {
+              "targetDifficulty": 3,
+              "scenarioMatch": 0
+            }
+          },
           {
             "questionId": "business_analytics_004__role_anchor",
             "questionText": "短视频团队计划优化人均观看时长。请设计一套指标体系，避免团队只追求时长而损害长期体验。",
@@ -394,52 +432,10 @@
               "targetDifficulty": 3,
               "scenarioMatch": 0
             }
-          },
-          {
-            "questionId": "business_analytics_003__role_anchor",
-            "questionText": "电商支付转化率突然下降，但订单量基本不变。你会如何解释这个看似矛盾的现象并继续分析？",
-            "skill": "business_analytics",
-            "difficulty": 2,
-            "expectedSeconds": 180,
-            "utility": 0.4112,
-            "signals": {
-              "utility": 0.4112,
-              "informationGain": 0,
-              "normalizedInformationGain": 0,
-              "jdRelevance": 0.675,
-              "difficultyMatch": 0.75,
-              "coverageNeed": 1,
-              "timeCost": 0.2
-            },
-            "routing": {
-              "targetDifficulty": 3,
-              "scenarioMatch": 0
-            }
-          },
-          {
-            "questionId": "business_analytics_005__role_anchor",
-            "questionText": "实验显示新推荐策略点击率提升5%，但购买转化率下降2%，收入无显著变化。你会如何向产品经理给出上线建议？",
-            "skill": "business_analytics",
-            "difficulty": 4,
-            "expectedSeconds": 210,
-            "utility": 0.4079,
-            "signals": {
-              "utility": 0.4079,
-              "informationGain": 0,
-              "normalizedInformationGain": 0,
-              "jdRelevance": 0.675,
-              "difficultyMatch": 0.75,
-              "coverageNeed": 1,
-              "timeCost": 0.233333
-            },
-            "routing": {
-              "targetDifficulty": 3,
-              "scenarioMatch": 1
-            }
           }
         ],
         "context": {
-          "policyVersion": "three-stage-v2",
+          "policyVersion": "coaching-v3",
           "selectionPhase": "jd_directed_baseline",
           "remainingSeconds": 900,
           "jobWeights": {
@@ -459,16 +455,16 @@
       },
       {
         "sequenceNumber": 5,
-        "actualQuestionId": "experiment_causal_004__role_anchor",
-        "actualQuestionText": "一次实验同时观察20个指标，其中只有一个指标p值小于0.05。你会如何解释并控制误判风险？",
-        "expectedQuestionId": "experiment_causal_004__role_anchor",
-        "expectedQuestionText": "一次实验同时观察20个指标，其中只有一个指标p值小于0.05。你会如何解释并控制误判风险？",
+        "actualQuestionId": "experiment_causal_008__role_anchor",
+        "actualQuestionText": "团队每天查看实验p值，看到小于0.05立即停止并上线。你会解释哪些风险，并给出可执行方案？",
+        "expectedQuestionId": "experiment_causal_008__role_anchor",
+        "expectedQuestionText": "团队每天查看实验p值，看到小于0.05立即停止并上线。你会解释哪些风险，并给出可执行方案？",
         "questionType": "anchor",
         "skill": "experiment_causal",
         "reliability": "HIGH",
         "action": "ACCEPT",
         "reason": "面试开始时已将“实验与因果”冻结为第 2 个 JD 定向基线维度；背景路由仅用于选择难度档位和场景，不参与评分。",
-        "utility": 0.4488,
+        "utility": 0.4521,
         "matchesPolicy": true,
         "evaluationReplayable": true,
         "stateUpdated": true,
@@ -478,39 +474,18 @@
         },
         "ranking": [
           {
-            "questionId": "experiment_causal_004__role_anchor",
-            "questionText": "一次实验同时观察20个指标，其中只有一个指标p值小于0.05。你会如何解释并控制误判风险？",
+            "questionId": "experiment_causal_008__role_anchor",
+            "questionText": "团队每天查看实验p值，看到小于0.05立即停止并上线。你会解释哪些风险，并给出可执行方案？",
             "skill": "experiment_causal",
             "difficulty": 3,
-            "expectedSeconds": 180,
-            "utility": 0.4488,
+            "expectedSeconds": 150,
+            "utility": 0.4521,
             "signals": {
-              "utility": 0.4488,
+              "utility": 0.4521,
               "informationGain": 0,
               "normalizedInformationGain": 0,
               "jdRelevance": 0.675,
               "difficultyMatch": 1,
-              "coverageNeed": 1,
-              "timeCost": 0.2
-            },
-            "routing": {
-              "targetDifficulty": 3,
-              "scenarioMatch": 1
-            }
-          },
-          {
-            "questionId": "experiment_causal_002__role_anchor",
-            "questionText": "你要检验推荐页改版能否提升点击率。实验前需要哪些信息来估算样本量？样本量不足会带来什么后果？",
-            "skill": "experiment_causal",
-            "difficulty": 2,
-            "expectedSeconds": 150,
-            "utility": 0.4146,
-            "signals": {
-              "utility": 0.4146,
-              "informationGain": 0,
-              "normalizedInformationGain": 0,
-              "jdRelevance": 0.675,
-              "difficultyMatch": 0.75,
               "coverageNeed": 1,
               "timeCost": 0.166667
             },
@@ -520,18 +495,39 @@
             }
           },
           {
-            "questionId": "experiment_causal_003__role_anchor",
-            "questionText": "一个计划50:50分流的实验最终两组人数为45:55。你会如何排查，实验结果还能直接使用吗？",
+            "questionId": "experiment_causal_010__role_anchor",
+            "questionText": "一个城市上线补贴后订单增长20%，同期相似城市增长8%。你会怎样评估补贴效果，哪些条件需要验证？",
             "skill": "experiment_causal",
-            "difficulty": 2,
+            "difficulty": 3,
             "expectedSeconds": 150,
-            "utility": 0.4146,
+            "utility": 0.4521,
             "signals": {
-              "utility": 0.4146,
+              "utility": 0.4521,
               "informationGain": 0,
               "normalizedInformationGain": 0,
               "jdRelevance": 0.675,
-              "difficultyMatch": 0.75,
+              "difficultyMatch": 1,
+              "coverageNeed": 1,
+              "timeCost": 0.166667
+            },
+            "routing": {
+              "targetDifficulty": 3,
+              "scenarioMatch": 1
+            }
+          },
+          {
+            "questionId": "experiment_causal_011__role_anchor",
+            "questionText": "评估课程推荐对购买的影响时，有人建议控制“是否点击推荐卡片”。你认为合适吗？",
+            "skill": "experiment_causal",
+            "difficulty": 3,
+            "expectedSeconds": 150,
+            "utility": 0.4521,
+            "signals": {
+              "utility": 0.4521,
+              "informationGain": 0,
+              "normalizedInformationGain": 0,
+              "jdRelevance": 0.675,
+              "difficultyMatch": 1,
               "coverageNeed": 1,
               "timeCost": 0.166667
             },
@@ -542,7 +538,7 @@
           }
         ],
         "context": {
-          "policyVersion": "three-stage-v2",
+          "policyVersion": "coaching-v3",
           "selectionPhase": "jd_directed_baseline",
           "remainingSeconds": 900,
           "jobWeights": {
@@ -562,16 +558,16 @@
       },
       {
         "sequenceNumber": 6,
-        "actualQuestionId": "sql_python_004",
-        "actualQuestionText": "事件表events(user_id, event_name, event_time)记录浏览、加购、支付。你会如何计算24小时内按顺序完成这三步的用户漏斗？",
-        "expectedQuestionId": "sql_python_004",
-        "expectedQuestionText": "事件表events(user_id, event_name, event_time)记录浏览、加购、支付。你会如何计算24小时内按顺序完成这三步的用户漏斗？",
+        "actualQuestionId": "sql_python_008",
+        "actualQuestionText": "团队按注册周比较7日留存，本周新注册用户尚未满7天。请设计统计口径和SQL处理方式。",
+        "expectedQuestionId": "sql_python_008",
+        "expectedQuestionText": "团队按注册周比较7日留存，本周新注册用户尚未满7天。请设计统计口径和SQL处理方式。",
         "questionType": "adaptive",
         "skill": "sql_python",
         "reliability": "HIGH",
         "action": "ACCEPT",
         "reason": "综合能力后验不确定性、JD 相关度、覆盖需求、难度匹配和剩余时长后，该题效用最高。",
-        "utility": 0.4727,
+        "utility": 0.4933,
         "matchesPolicy": true,
         "evaluationReplayable": true,
         "stateUpdated": true,
@@ -581,20 +577,20 @@
         },
         "ranking": [
           {
-            "questionId": "sql_python_004",
-            "questionText": "事件表events(user_id, event_name, event_time)记录浏览、加购、支付。你会如何计算24小时内按顺序完成这三步的用户漏斗？",
+            "questionId": "sql_python_008",
+            "questionText": "团队按注册周比较7日留存，本周新注册用户尚未满7天。请设计统计口径和SQL处理方式。",
             "skill": "sql_python",
             "difficulty": 3,
-            "expectedSeconds": 210,
-            "utility": 0.4727,
+            "expectedSeconds": 150,
+            "utility": 0.4933,
             "signals": {
-              "utility": 0.4727,
+              "utility": 0.4933,
               "informationGain": 0.092688,
               "normalizedInformationGain": 0.13372,
               "jdRelevance": 0.65,
               "difficultyMatch": 1,
               "coverageNeed": 1,
-              "timeCost": 0.5
+              "timeCost": 0.294118
             },
             "routing": {
               "targetDifficulty": 3,
@@ -602,41 +598,41 @@
             }
           },
           {
-            "questionId": "sql_python_003",
-            "questionText": "给定登录表login_log(user_id, login_date)，你会如何计算每天新增用户的次日留存率？请说明口径和SQL思路。",
+            "questionId": "sql_python_011",
+            "questionText": "跨国业务把UTC时间戳转成当地日期后，日订单数与旧报表对不上。你会怎样定位并统一口径？",
             "skill": "sql_python",
-            "difficulty": 2,
-            "expectedSeconds": 180,
-            "utility": 0.4627,
+            "difficulty": 3,
+            "expectedSeconds": 150,
+            "utility": 0.4933,
             "signals": {
-              "utility": 0.4627,
-              "informationGain": 0.085501,
-              "normalizedInformationGain": 0.123352,
-              "jdRelevance": 0.75,
-              "difficultyMatch": 0.75,
-              "coverageNeed": 1,
-              "timeCost": 0.428571
-            },
-            "routing": {
-              "targetDifficulty": 3,
-              "scenarioMatch": 0
-            }
-          },
-          {
-            "questionId": "sql_python_005",
-            "questionText": "一个20GB CSV无法直接装入本机内存，但你需要按用户聚合交易金额并输出Top 1000用户。你会如何用Python完成？",
-            "skill": "sql_python",
-            "difficulty": 4,
-            "expectedSeconds": 180,
-            "utility": 0.4377,
-            "signals": {
-              "utility": 0.4377,
-              "informationGain": 0.085501,
-              "normalizedInformationGain": 0.123352,
+              "utility": 0.4933,
+              "informationGain": 0.092688,
+              "normalizedInformationGain": 0.13372,
               "jdRelevance": 0.65,
-              "difficultyMatch": 0.75,
+              "difficultyMatch": 1,
               "coverageNeed": 1,
-              "timeCost": 0.428571
+              "timeCost": 0.294118
+            },
+            "routing": {
+              "targetDifficulty": 3,
+              "scenarioMatch": 0
+            }
+          },
+          {
+            "questionId": "sql_python_004",
+            "questionText": "事件表events(user_id, event_name, event_time)记录浏览、加购、支付。你会如何计算24小时内按顺序完成这三步的用户漏斗？",
+            "skill": "sql_python",
+            "difficulty": 3,
+            "expectedSeconds": 210,
+            "utility": 0.4815,
+            "signals": {
+              "utility": 0.4815,
+              "informationGain": 0.092688,
+              "normalizedInformationGain": 0.13372,
+              "jdRelevance": 0.65,
+              "difficultyMatch": 1,
+              "coverageNeed": 1,
+              "timeCost": 0.411765
             },
             "routing": {
               "targetDifficulty": 3,
@@ -645,9 +641,9 @@
           }
         ],
         "context": {
-          "policyVersion": "three-stage-v2",
+          "policyVersion": "coaching-v3",
           "selectionPhase": "posterior_adaptive",
-          "remainingSeconds": 420,
+          "remainingSeconds": 510,
           "jobWeights": {
             "statistics_ml": 0.083333,
             "experiment_causal": 0.333333,
@@ -665,81 +661,81 @@
       },
       {
         "sequenceNumber": 7,
-        "actualQuestionId": "sql_python_003",
-        "actualQuestionText": "给定登录表login_log(user_id, login_date)，你会如何计算每天新增用户的次日留存率？请说明口径和SQL思路。",
-        "expectedQuestionId": "sql_python_003",
-        "expectedQuestionText": "给定登录表login_log(user_id, login_date)，你会如何计算每天新增用户的次日留存率？请说明口径和SQL思路。",
+        "actualQuestionId": "experiment_causal_010",
+        "actualQuestionText": "一个城市上线补贴后订单增长20%，同期相似城市增长8%。你会怎样评估补贴效果，哪些条件需要验证？",
+        "expectedQuestionId": "experiment_causal_010",
+        "expectedQuestionText": "一个城市上线补贴后订单增长20%，同期相似城市增长8%。你会怎样评估补贴效果，哪些条件需要验证？",
         "questionType": "adaptive",
-        "skill": "sql_python",
+        "skill": "experiment_causal",
         "reliability": "HIGH",
         "action": "ACCEPT",
         "reason": "综合能力后验不确定性、JD 相关度、覆盖需求、难度匹配和剩余时长后，该题效用最高。",
-        "utility": 0.3338,
+        "utility": 0.397,
         "matchesPolicy": true,
         "evaluationReplayable": true,
         "stateUpdated": true,
         "posteriorAfter": {
-          "mean": 0.3525,
-          "uncertainty": 0.844
+          "mean": 0.4411,
+          "uncertainty": 0.8338
         },
         "ranking": [
           {
-            "questionId": "sql_python_003",
-            "questionText": "给定登录表login_log(user_id, login_date)，你会如何计算每天新增用户的次日留存率？请说明口径和SQL思路。",
-            "skill": "sql_python",
-            "difficulty": 2,
-            "expectedSeconds": 180,
-            "utility": 0.3338,
-            "signals": {
-              "utility": 0.3338,
-              "informationGain": 0.068528,
-              "normalizedInformationGain": 0.098865,
-              "jdRelevance": 0.75,
-              "difficultyMatch": 0.75,
-              "coverageNeed": 0.5,
-              "timeCost": 0.857143
-            },
-            "routing": {
-              "targetDifficulty": 3,
-              "scenarioMatch": 0
-            }
-          },
-          {
-            "questionId": "experiment_causal_003",
-            "questionText": "一个计划50:50分流的实验最终两组人数为45:55。你会如何排查，实验结果还能直接使用吗？",
+            "questionId": "experiment_causal_010",
+            "questionText": "一个城市上线补贴后订单增长20%，同期相似城市增长8%。你会怎样评估补贴效果，哪些条件需要验证？",
             "skill": "experiment_causal",
-            "difficulty": 2,
+            "difficulty": 3,
             "expectedSeconds": 150,
-            "utility": 0.3293,
+            "utility": 0.397,
             "signals": {
-              "utility": 0.3293,
-              "informationGain": 0.068528,
-              "normalizedInformationGain": 0.098865,
+              "utility": 0.397,
+              "informationGain": 0.079108,
+              "normalizedInformationGain": 0.114129,
               "jdRelevance": 0.675,
-              "difficultyMatch": 0.75,
+              "difficultyMatch": 0.956867,
               "coverageNeed": 0.5,
-              "timeCost": 0.714286
+              "timeCost": 0.416667
             },
             "routing": {
-              "targetDifficulty": 3,
+              "targetDifficulty": 3.1725333333333334,
               "scenarioMatch": 0
             }
           },
           {
-            "questionId": "sql_python_005",
-            "questionText": "一个20GB CSV无法直接装入本机内存，但你需要按用户聚合交易金额并输出Top 1000用户。你会如何用Python完成？",
-            "skill": "sql_python",
-            "difficulty": 4,
-            "expectedSeconds": 180,
-            "utility": 0.3143,
+            "questionId": "experiment_causal_011",
+            "questionText": "评估课程推荐对购买的影响时，有人建议控制“是否点击推荐卡片”。你认为合适吗？",
+            "skill": "experiment_causal",
+            "difficulty": 3,
+            "expectedSeconds": 150,
+            "utility": 0.397,
             "signals": {
-              "utility": 0.3143,
-              "informationGain": 0.076999,
-              "normalizedInformationGain": 0.111086,
-              "jdRelevance": 0.65,
-              "difficultyMatch": 0.75,
+              "utility": 0.397,
+              "informationGain": 0.079108,
+              "normalizedInformationGain": 0.114129,
+              "jdRelevance": 0.675,
+              "difficultyMatch": 0.956867,
               "coverageNeed": 0.5,
-              "timeCost": 0.857143
+              "timeCost": 0.416667
+            },
+            "routing": {
+              "targetDifficulty": 3.1725333333333334,
+              "scenarioMatch": 0
+            }
+          },
+          {
+            "questionId": "statistics_ml_004",
+            "questionText": "欺诈识别中正样本只占0.5%，一个模型准确率达到99.5%。你如何判断这个模型是否有用，并选择评价指标？",
+            "skill": "statistics_ml",
+            "difficulty": 3,
+            "expectedSeconds": 150,
+            "utility": 0.3935,
+            "signals": {
+              "utility": 0.3935,
+              "informationGain": 0.092688,
+              "normalizedInformationGain": 0.13372,
+              "jdRelevance": 0.3,
+              "difficultyMatch": 1,
+              "coverageNeed": 1,
+              "timeCost": 0.416667
             },
             "routing": {
               "targetDifficulty": 3,
@@ -748,9 +744,9 @@
           }
         ],
         "context": {
-          "policyVersion": "three-stage-v2",
+          "policyVersion": "coaching-v3",
           "selectionPhase": "posterior_adaptive",
-          "remainingSeconds": 210,
+          "remainingSeconds": 360,
           "jobWeights": {
             "statistics_ml": 0.083333,
             "experiment_causal": 0.333333,
@@ -768,60 +764,39 @@
       },
       {
         "sequenceNumber": 8,
-        "actualQuestionId": "experiment_causal_005",
-        "actualQuestionText": "运营发现领取优惠券的用户复购率更高，想据此证明优惠券有效。为什么这个结论可能有偏？如果不能随机实验，你会怎样分析？",
-        "expectedQuestionId": "experiment_causal_005",
-        "expectedQuestionText": "运营发现领取优惠券的用户复购率更高，想据此证明优惠券有效。为什么这个结论可能有偏？如果不能随机实验，你会怎样分析？",
+        "actualQuestionId": "statistics_ml_004",
+        "actualQuestionText": "欺诈识别中正样本只占0.5%，一个模型准确率达到99.5%。你如何判断这个模型是否有用，并选择评价指标？",
+        "expectedQuestionId": "statistics_ml_004",
+        "expectedQuestionText": "欺诈识别中正样本只占0.5%，一个模型准确率达到99.5%。你如何判断这个模型是否有用，并选择评价指标？",
         "questionType": "adaptive",
-        "skill": "experiment_causal",
+        "skill": "statistics_ml",
         "reliability": "HIGH",
         "action": "ACCEPT",
         "reason": "综合能力后验不确定性、JD 相关度、覆盖需求、难度匹配和剩余时长后，该题效用最高。",
-        "utility": 0.3062,
+        "utility": 0.3637,
         "matchesPolicy": true,
         "evaluationReplayable": true,
         "stateUpdated": true,
         "posteriorAfter": {
-          "mean": 0.5391,
-          "uncertainty": 0.8318
+          "mean": 0.2588,
+          "uncertainty": 0.9022
         },
         "ranking": [
           {
-            "questionId": "experiment_causal_005",
-            "questionText": "运营发现领取优惠券的用户复购率更高，想据此证明优惠券有效。为什么这个结论可能有偏？如果不能随机实验，你会怎样分析？",
-            "skill": "experiment_causal",
-            "difficulty": 4,
-            "expectedSeconds": 210,
-            "utility": 0.3062,
-            "signals": {
-              "utility": 0.3062,
-              "informationGain": 0.076999,
-              "normalizedInformationGain": 0.111086,
-              "jdRelevance": 0.675,
-              "difficultyMatch": 0.75,
-              "coverageNeed": 0.5,
-              "timeCost": 1
-            },
-            "routing": {
-              "targetDifficulty": 3,
-              "scenarioMatch": 0
-            }
-          },
-          {
-            "questionId": "experiment_causal_003",
-            "questionText": "一个计划50:50分流的实验最终两组人数为45:55。你会如何排查，实验结果还能直接使用吗？",
-            "skill": "experiment_causal",
-            "difficulty": 2,
+            "questionId": "statistics_ml_004",
+            "questionText": "欺诈识别中正样本只占0.5%，一个模型准确率达到99.5%。你如何判断这个模型是否有用，并选择评价指标？",
+            "skill": "statistics_ml",
+            "difficulty": 3,
             "expectedSeconds": 150,
-            "utility": 0.3007,
+            "utility": 0.3637,
             "signals": {
-              "utility": 0.3007,
-              "informationGain": 0.068528,
-              "normalizedInformationGain": 0.098865,
-              "jdRelevance": 0.675,
-              "difficultyMatch": 0.75,
-              "coverageNeed": 0.5,
-              "timeCost": 1
+              "utility": 0.3637,
+              "informationGain": 0.092688,
+              "normalizedInformationGain": 0.13372,
+              "jdRelevance": 0.3,
+              "difficultyMatch": 1,
+              "coverageNeed": 1,
+              "timeCost": 0.714286
             },
             "routing": {
               "targetDifficulty": 3,
@@ -829,20 +804,41 @@
             }
           },
           {
-            "questionId": "business_analytics_005",
-            "questionText": "实验显示新推荐策略点击率提升5%，但购买转化率下降2%，收入无显著变化。你会如何向产品经理给出上线建议？",
-            "skill": "business_analytics",
-            "difficulty": 4,
-            "expectedSeconds": 210,
-            "utility": 0.2767,
+            "questionId": "statistics_ml_009",
+            "questionText": "客服只向已解决工单的用户发满意度问卷，得到95%好评。你会如何向负责人解释，并设计更可信的统计方案？",
+            "skill": "statistics_ml",
+            "difficulty": 3,
+            "expectedSeconds": 150,
+            "utility": 0.3637,
             "signals": {
-              "utility": 0.2767,
-              "informationGain": 0.07002,
-              "normalizedInformationGain": 0.101017,
-              "jdRelevance": 0.675,
-              "difficultyMatch": 0.75,
-              "coverageNeed": 0.333333,
-              "timeCost": 1
+              "utility": 0.3637,
+              "informationGain": 0.092688,
+              "normalizedInformationGain": 0.13372,
+              "jdRelevance": 0.3,
+              "difficultyMatch": 1,
+              "coverageNeed": 1,
+              "timeCost": 0.714286
+            },
+            "routing": {
+              "targetDifficulty": 3,
+              "scenarioMatch": 0
+            }
+          },
+          {
+            "questionId": "statistics_ml_011",
+            "questionText": "垃圾邮件模型可以拦截更多垃圾邮件，但也会把正常邮件误拦。你怎样为普通收件箱与高风险企业邮箱分别选择阈值？",
+            "skill": "statistics_ml",
+            "difficulty": 3,
+            "expectedSeconds": 150,
+            "utility": 0.3637,
+            "signals": {
+              "utility": 0.3637,
+              "informationGain": 0.092688,
+              "normalizedInformationGain": 0.13372,
+              "jdRelevance": 0.3,
+              "difficultyMatch": 1,
+              "coverageNeed": 1,
+              "timeCost": 0.714286
             },
             "routing": {
               "targetDifficulty": 3,
@@ -851,9 +847,9 @@
           }
         ],
         "context": {
-          "policyVersion": "three-stage-v2",
+          "policyVersion": "coaching-v3",
           "selectionPhase": "posterior_adaptive",
-          "remainingSeconds": 30,
+          "remainingSeconds": 210,
           "jobWeights": {
             "statistics_ml": 0.083333,
             "experiment_causal": 0.333333,
@@ -890,13 +886,13 @@
       "abstentions": 1
     }
   },
-  "fingerprint": "06fc036747cc809d97c173af8ae5dc7d3f5a4a897d3f84f1dc58233ed7b84bf6",
+  "fingerprint": "9a598239506c67c756bc096898a45008b7b8a7988551f3c8932ca17d7202ccc6",
   "tamperCheck": {
     "detected": true,
     "sequenceNumber": 6,
-    "expectedQuestionId": "sql_python_004",
+    "expectedQuestionId": "sql_python_008",
     "replacementQuestionId": "statistics_ml_001",
     "allQuestionsApproved": true,
-    "fingerprint": "ede7fea1179223866374812fb9db857d29d3da63c906997e2a19bcb6f553c720"
+    "fingerprint": "4d6208c0799cb36c7a41529a7af2fdad932c47df046c9d7fbd7bd36cbf434662"
   }
 }

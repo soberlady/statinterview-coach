@@ -1,3 +1,4 @@
+import { interviewQuestionBankVersion } from "./practice-plan";
 import type {
   Interview,
   InterviewTurn,
@@ -71,7 +72,7 @@ export function replayInterviewPolicy(input: {
     | "jobDescription"
     | "candidateBackground"
     | "durationMinutes"
-  >;
+  > & Partial<Pick<Interview, "policyConfig" | "mode">>;
   turns: InterviewTurn[];
 }): PolicyAudit {
   const completedTurns = [...input.turns]
@@ -94,6 +95,8 @@ export function replayInterviewPolicy(input: {
   for (const turn of completedTurns) {
     const decision = selectNextQuestion({
       interview: {
+        policyConfig: input.interview.policyConfig,
+        mode: input.interview.mode,
         jobDescription: input.interview.jobDescription,
         candidateBackground: input.interview.candidateBackground,
         durationMinutes: input.interview.durationMinutes,
@@ -104,7 +107,7 @@ export function replayInterviewPolicy(input: {
     });
     const expectedQuestion = decision.nextQuestion;
     const actualQuestion = turn.questionId
-      ? getInterviewQuestion(turn.questionId)
+      ? getInterviewQuestion(turn.questionId, interviewQuestionBankVersion(input.interview))
       : undefined;
     const evaluation = parseEvaluation(turn.evaluation);
     const actualState = actualQuestion
@@ -181,6 +184,8 @@ export function replayInterviewPolicy(input: {
 
   const finalDecision = selectNextQuestion({
     interview: {
+      policyConfig: input.interview.policyConfig,
+      mode: input.interview.mode,
       jobDescription: input.interview.jobDescription,
       candidateBackground: input.interview.candidateBackground,
       durationMinutes: input.interview.durationMinutes,
@@ -217,7 +222,7 @@ export function replayInterviewPolicy(input: {
       replayedTurns: steps.length,
       matchingSelections,
       adaptiveDecisions: steps.filter(
-        (step) => step.questionType === "adaptive",
+        (step) => step.context?.selectionPhase === "posterior_adaptive",
       ).length,
       verificationDecisions: steps.filter(
         (step) => step.action === "VERIFY",

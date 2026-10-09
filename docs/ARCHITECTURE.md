@@ -1,5 +1,15 @@
 # Architecture
 
+## Coaching v3
+
+New interviews persist `policy_config` with an explicit policy version and optional experience band. Existing rows default to `{}` and use the frozen `agent-policy-v2.ts` selector over the original 24 IDs, preserving old replay behavior. New verification IDs resolve independent follow-up rubrics; legacy IDs retain their original semantics.
+
+The seven-question diagnosis retains two public anchors and two frozen JD baselines. Its remaining three decisions use reliable evidence coverage and a posterior-dependent difficulty target. Clear, quoted incorrect answers are reliable low scores; missing evidence and correctness are separate signals.
+
+A report can create a server-generated, persisted plan with two guided text exercises and one unseen-family transfer question. The plan stores its source, exclusions, topic and learning points. The client cannot choose plan IDs. Practice hints and previous-answer feedback are hidden when the user enters the transfer stage. Voice is disabled for training until its automatic progression can preserve this boundary. Reports interpret the transfer result separately from practice; the training posterior is not a pre/post learning-effect estimate.
+
+Historical v2 simulation artifacts use `content/legacy/question-bank.v1.json`. Current v3 synthetic routing regression is `content/coaching-benchmark.json`; these are distinct evidence sources.
+
 ## System boundary
 
 The browser and LiveKit worker are transports. They are not allowed to choose a

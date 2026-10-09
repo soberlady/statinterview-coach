@@ -3,13 +3,13 @@ import { getDb } from "@/db";
 import { interviews, interviewTurns, skillStates } from "@/db/schema";
 import {
   selectNextQuestion,
-  TARGET_SUBSTANTIVE_TURNS,
 } from "@/app/lib/agent-policy";
 import {
   buildGuidedDemoPayload,
   GUIDED_DEMO_MODE,
 } from "@/app/lib/guided-demo";
 import { toPublicQuestion } from "@/app/lib/question-bank";
+import { publicTrainingContext, targetQuestionCount } from "@/app/lib/practice-plan";
 import {
   ApiError,
   errorResponse,
@@ -70,6 +70,7 @@ export async function GET(_request: Request, context: RouteContext) {
         answerText: lastCompletedTurn.answerText,
       } : null,
       interview: serializeInterview(interview),
+      training: publicTrainingContext(interview, turns, decision.nextQuestion?.id),
       nextQuestion: decision.nextQuestion
         ? toPublicQuestion(decision.nextQuestion)
         : null,
@@ -89,7 +90,7 @@ export async function GET(_request: Request, context: RouteContext) {
       progress: {
         completedTurns,
         substantiveTurns,
-        targetSubstantiveTurns: TARGET_SUBSTANTIVE_TURNS,
+        targetSubstantiveTurns: targetQuestionCount(interview),
       },
     });
   } catch (error) {

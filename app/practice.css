@@ -36,6 +36,18 @@
 .practice-ui .report-status { gap: 8px; flex-wrap: wrap; }
 .practice-ui .report-status span { background: #edf2f7; border-radius: 4px; font-size: 13px; color: var(--ink); }
 .practice-ui .report-grid { gap: 20px; }
+.practice-ui .report-training-outcome { grid-column: 1 / -1; grid-row: auto; }
+.practice-ui .report-training-outcome h2 { margin-top: 0; }
+.practice-ui .report-training-outcome p { margin: 8px 0; }
+.practice-ui .skill-score span { display: block; white-space: nowrap; }
+.practice-ui .evidence-quotes { grid-template-columns: minmax(0, 1fr); }
+.practice-ui .evidence-quotes blockquote { min-width: 0; overflow-wrap: anywhere; }
+.practice-ui .feedback-card { color: var(--ink); }
+.practice-ui .feedback-card > div:first-child > p:last-child,
+.practice-ui .rating-row > span { color: var(--muted); }
+.practice-ui .rating-row button { color: var(--ink); border-color: var(--line); background: var(--paper); }
+.practice-ui .rating-row button:hover,
+.practice-ui .rating-row button.selected { color: white; border-color: var(--teal); background: var(--teal); }
 .practice-ui .evaluation-notice { background: #f0f3f6; border: 1px solid var(--line); border-radius: 6px; font-size: 14px; }
 .practice-ui .policy-audit-card { margin-top: 24px; padding: 24px; }
 .practice-ui .skill-report-row p, .practice-ui .evidence-list, .practice-ui .report-caption { font-size: 14px; line-height: 1.8; }

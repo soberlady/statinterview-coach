@@ -5,7 +5,7 @@ import {
 import type { InterviewQuestion } from "./question-bank";
 
 export const GUIDED_DEMO_MODE = "guided_demo";
-export const GUIDED_DEMO_VERSION = "sql-analyst-three-stage-v2";
+export const GUIDED_DEMO_VERSION = "sql-analyst-coaching-v3";
 
 export const GUIDED_DEMO_REQUEST = {
   jobTitle: "增长数据分析实习生（引导演示）",

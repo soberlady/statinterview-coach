@@ -1,2 +1,6 @@
 # Keep generated demo evidence byte-identical on Windows and Linux.
 /content/agent-demo.json text eol=lf
+/content/coaching-benchmark.json text eol=lf
+# Legacy scoring fixtures fingerprint the exact frozen question-bank bytes.
+/content/legacy/question-bank.v1.json text eol=lf
+/content/legacy/question-bank.coaching-v1.json text eol=lf

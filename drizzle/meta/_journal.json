@@ -15,6 +15,13 @@
       "when": 1788424923580,
       "tag": "0001_greedy_mimic",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1790959632387,
+      "tag": "0002_coaching_policy",
+      "breakpoints": true
     }
   ]
 }

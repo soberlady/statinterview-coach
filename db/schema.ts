@@ -28,6 +28,7 @@ export const interviews = sqliteTable(
       .notNull()
       .default(false),
     mode: text("mode").notNull().default("diagnostic"),
+    policyConfig: text("policy_config").notNull().default("{}"),
     status: text("status").notNull().default("CREATED"),
     currentStage: text("current_stage").notNull().default("CREATED"),
     currentQuestionId: text("current_question_id"),

@@ -1,0 +1,21 @@
+[
+  {
+    "package": "braces",
+    "version": "3.0.3",
+    "advisory": "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm",
+    "severity": "high",
+    "range": "<=3.0.3",
+    "reviewBy": "2026-11-04",
+    "affectedPackages": [
+      "braces",
+      "micromatch",
+      "fast-glob",
+      "@next/eslint-plugin-next",
+      "eslint-config-next",
+      "vite-plugin-dynamic-import",
+      "vite-plugin-commonjs",
+      "vinext"
+    ],
+    "reason": "No patched release as of 2026-10-04. These development dependencies process repository glob patterns during lint/build. Application and Worker code do not import them or pass candidate input to them. This is a temporary reviewed exception, not a vulnerability fix. Recheck upstream and production reachability by the review date; see docs/DEPENDENCY_UPGRADE_ZH.md."
+  }
+]

@@ -13,7 +13,7 @@ type CriterionResult = {
   note: string;
 };
 
-export const RUBRIC_PROMPT_VERSION = "rubric-double-pass-v2";
+export const RUBRIC_PROMPT_VERSION = "rubric-double-pass-v3";
 export const TRANSCRIPT_REPAIR_PROMPT_VERSION = "transcript-repair-v1";
 
 export type AnswerEvaluationOptions = {
@@ -322,7 +322,7 @@ export function combineRubricPasses(input: {
   const evidenceCoverage = combined.reduce(
     (total, criterion) =>
       total +
-      (criterion.score > 0 && criterion.evidence.length > 0
+      (criterion.evidence.length > 0
         ? criterion.weight
         : 0),
     0,
@@ -337,11 +337,11 @@ export function combineRubricPasses(input: {
   const reliability: Reliability =
     evidenceCoverage >= 0.75 &&
     reviewDisagreement <= 0.4 &&
-    answer.trim().length >= 80
+    answer.trim().length > 0
       ? "HIGH"
       : evidenceCoverage >= 0.5 &&
           reviewDisagreement <= 0.8 &&
-          answer.trim().length >= 40
+          answer.trim().length > 0
         ? "MEDIUM"
         : "LOW";
   const strengths = combined
@@ -731,7 +731,9 @@ export function buildRubricMessages(input: {
         "转写理解辅助仅用于理解语音识别中的百分号、中英混合术语和明确近音词；不得把它当作候选人新增的观点。",
         "辅助文本不得用于补全原文中缺失的否定词、因果关系、步骤或结论。",
         "辅助文本与回答原文冲突时，以回答原文为准。",
-        "每条量表给0到4分：0无证据，1很弱，2部分，3基本充分，4充分且准确。",
+        "每条量表给0到4分：0未回答或明确错误，1很弱，2部分，3基本充分，4充分且准确。",
+        "评分与证据可靠性不同：明确错误或明确表示不会也可以有原文证据。对错误论述给0分并引用错误原话，在note说明矛盾；完全未提及才使用空证据。",
+        "按题目要求判断回答是否完整，不按字数给分；简短但准确的限定追问可以得满分。",
         "evidence只能逐字引用回答原文，不能引用转写理解辅助；无证据时必须为空数组。",
         "只输出JSON对象，格式为 {\"criteria\":[{\"criterionIndex\":0,\"score\":0,\"evidence\":[],\"note\":\"\"}]}。",
       ].join("\n"),

@@ -202,6 +202,7 @@ function buildCompleteSession(): {
     cameraEnabled: false,
     recordingEnabled: false,
     mode: "diagnostic",
+    policyConfig: '{"version":"coaching-v3"}',
     status: "CREATED",
     currentStage: "CREATED",
     currentQuestionId: null,

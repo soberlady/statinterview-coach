@@ -6,6 +6,10 @@
 
 **面向中文数据分析岗位的、不确定性感知的自适应面试训练 Agent。**
 
+产品服务于个人面试前的诊断、练习和复测；作为个人作品，它展示的是
+Agent 的状态管理、受约束决策、可靠性控制与可重放执行，不用于企业筛选候选人。
+当前版本与真人验收步骤见 [本次训练闭环升级](docs/COACHING_UPGRADE_ZH.md)。
+
 StatInterview Coach does more than generate questions and a final score. It
 maintains an explicit ability state, chooses the next approved question under
 a fixed interview budget, verifies weak evidence, and preserves a replayable
@@ -55,10 +59,11 @@ For a Chinese walkthrough and source-reading map, start with
 | Auditable execution | Every answer, state transition, ranking and checkpoint is persisted. Reports replay the complete path, verify five invariants and fingerprint the policy trace with SHA-256. |
 | Realtime voice | LiveKit browser audio and a Python Agents worker preserve final raw transcripts, wait for transcript stability, recover checkpoints and fall back safely to text. |
 | Evidence-bound scoring | A bounded ASR repair pass precedes two role-separated rubric scoring passes, while quoted evidence must remain a verbatim substring of the original answer. |
+| Practice loop | A report creates two guided text exercises and one unseen transfer question, with persisted plans, feedback and a separately interpreted transfer result. |
 
 ## Measured result
 
-In a deterministic paired simulation of **4,000 candidates** under the same
+For the **frozen v2 policy and original 24-question bank**, a deterministic paired simulation of **4,000 candidates** under the same
 seven-question budget, the three-stage adaptive policy reduced job-weighted
 MAE by **3.83%** versus a fixed sequence. The paired absolute-difference 95%
 interval was `[-0.0312, -0.0223]`, and the 90% posterior interval covered
@@ -69,6 +74,12 @@ hiring validity or real-user learning impact. The effect varies by job profile,
 and the formal human-data scorer gate remains `NOT_READY`. See the
 [experiment report](docs/EXPERIMENT_RESULTS.md) and
 [release checklist](docs/RELEASE_CHECKLIST.md).
+
+The current **coaching-v3 / 48-question** release has a separate
+[12-scenario sensitivity regression](content/coaching-benchmark.json): all four
+role profiles select different routes for injected low and high scores, with
+7/7 matching replay decisions per scenario. This is a behavioral regression,
+not a new MAE result or evidence of real-user learning gains.
 
 ## System flow
 
@@ -97,8 +108,11 @@ claim full session-policy equivalence across both implementations.
 ## What works now
 
 - end-to-end Chinese text and LiveKit voice interview flows with text fallback;
-- 24 approved data-analysis questions with weighted rubrics;
+- 48 curated data-analysis questions and 97 follow-ups with independent weighted rubrics, topic/family metadata and learning points; newly authored content awaits human review;
+- report-driven text training: two guided exercises and one unseen transfer question, with exclusions carried through the training chain;
 - refresh-safe D1 checkpoints, pause/resume recovery and atomic turn writes;
+- question-scoped local drafts with 24-hour validity, replay-safe answer retries and recoverable completion confirmation;
+- immutable, session-pinned question-bank snapshots for scoring and historical replay;
 - deterministic adaptive selection, bounded verification and explicit
   `ABSTAIN`;
 - evidence-linked reports with uncertainty, top-three counterfactual rankings,
@@ -106,7 +120,7 @@ claim full session-policy equivalence across both implementations.
 - auditable ASR repair that preserves raw transcripts and protects numeric,
   percentage, negation and causal evidence;
 - model, latency and marginal-cost telemetry for voice and semantic scoring;
-- 99 Python Agent tests plus TypeScript parity, rendered-output, fault-injection
+- Python Agent tests plus TypeScript parity, rendered-output, fault-injection
   and local D1 end-to-end coverage;
 - a one-click synthetic guided path and an isolated read-only public showcase;
 - a clean-checkout GitHub Actions gate that rebuilds all frozen evidence.
@@ -136,6 +150,12 @@ npm run dev
 ```
 
 Open `http://localhost:3000`.
+
+On Windows, double-click `Start-Local-Preview.cmd` to prepare the local database
+and start the preview at `http://localhost:4175/`. Keep its terminal window open
+while practicing; closing it stops the local service. The launcher reuses an
+already running healthy preview. After restarting the computer, start it again
+before submitting the setup form.
 
 For a repeatable interview demo, choose **进入引导演示** on the landing page
 and use the answer option marked **推荐步骤**. The first weak answer triggers a
@@ -173,6 +193,8 @@ automatically falls back to the labeled structure heuristic.
 
 ```powershell
 npm run doctor
+npm run audit:dependencies
+npx playwright install chromium
 npm run verify
 ```
 
@@ -180,7 +202,7 @@ npm run verify
 secret values. `verify` is the clean-checkout gate used by GitHub Actions: it
 validates content, checks all TypeScript types, builds the app, runs
 Python/TypeScript/rendered-output tests,
-exercises the local D1 API end to end and regenerates all frozen synthetic
+exercises the local D1 API and browser recovery paths end to end and regenerates all frozen synthetic
 evidence. `/api/health` provides a non-secret database/question-bank/policy
 readiness check for a running deployment.
 
@@ -190,6 +212,21 @@ configuration preflight; deployment readiness still requires `doctor`.
 `verify:code` does not isolate the process from local environment files.
 Install the Python test dependencies first:
 `python -m pip install -e "./services/agent[dev]"`.
+
+Browser regressions use Playwright with synthetic demo answers and the local
+mock scorer. On Windows, Chrome at its standard installation path can be used
+without downloading Chromium; `STATINTERVIEW_BROWSER_EXECUTABLE` overrides the
+executable. CI installs Chromium automatically. Tests cover draft restore,
+response loss, terminal-state retries, completion failures, narrow screens and
+the unhinted transfer boundary. Voice processing tests are included in the main
+TypeScript test entry point.
+
+CI also audits the complete npm dependency tree, including build tools. A
+time-limited, narrowly scoped exception remains for one unfixed upstream
+`braces` advisory; it is printed explicitly and expires on 2026-11-04. New
+advisories and unavailable audit reports fail the gate. This is not a zero-
+vulnerability result. See [dependency upgrade and remaining risk](docs/DEPENDENCY_UPGRADE_ZH.md)
+for versions, compatibility checks and the exception boundary.
 
 See [architecture](docs/ARCHITECTURE.md),
 [evaluation plan](docs/EVALUATION.md),

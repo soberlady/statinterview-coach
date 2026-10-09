@@ -27,17 +27,26 @@ function check(condition, message) {
   }
 }
 
-check(bank?.schemaVersion === "1.0.0", "schemaVersion 必须为 1.0.0");
+check(bank?.schemaVersion === "1.1.0", "schemaVersion 必须为 1.1.0");
 check(bank?.locale === "zh-CN", "locale 必须为 zh-CN");
 check(Array.isArray(questions), "questions 必须是数组");
 
 if (Array.isArray(questions)) {
-  check(questions.length === 24, `题目总数应为 24，实际为 ${questions.length}`);
+  check(questions.length >= 48, `题目总数至少为 48，实际为 ${questions.length}`);
 
   const ids = new Set();
 
   for (const [index, question] of questions.entries()) {
     const label = question?.id ?? `questions[${index}]`;
+    check(typeof question.topic === "string" && question.topic.length > 0, `${label}: 缺少知识主题`);
+    check(typeof question.family === "string" && question.family.length > 0, `${label}: 缺少题目家族`);
+    check(Array.isArray(question.learningPoints) && question.learningPoints.length >= 3, `${label}: 至少需要三条学习要点`);
+    check(Array.isArray(question.verificationRubrics) && question.verificationRubrics.length === question.verificationQuestions.length, `${label}: 每条追问必须有独立量表`);
+    for (const spec of question.verificationRubrics ?? []) {
+      check(Number.isInteger(spec.difficulty) && spec.difficulty >= 1 && spec.difficulty <= 5, `${label}: 追问难度无效`);
+      check(Array.isArray(spec.criterionIndexes) && spec.criterionIndexes.length > 0 && spec.criterionIndexes.every((index) => Number.isInteger(index) && index >= 0 && index < question.rubric.length), `${label}: 追问对应量表索引无效`);
+      check(Array.isArray(spec.rubric) && spec.rubric.every((item) => typeof item.criterion === "string" && item.criterion.length >= 10 && item.weight > 0) && Math.abs(spec.rubric.reduce((sum, item) => sum + item.weight, 0) - 1) < 1e-9, `${label}: 追问评分要点或权重无效`);
+    }
 
     check(
       typeof question?.id === "string" &&
@@ -118,8 +127,8 @@ if (Array.isArray(questions)) {
     const difficulties = new Set(skillQuestions.map((question) => question.difficulty));
 
     check(
-      skillQuestions.length === 6,
-      `${skill}: 应有 6 题，实际为 ${skillQuestions.length}`,
+      skillQuestions.length >= 12,
+      `${skill}: 至少有 12 题，实际为 ${skillQuestions.length}`,
     );
     check(
       anchors.length === 1,
@@ -139,5 +148,5 @@ if (errors.length > 0) {
   }
   process.exitCode = 1;
 } else {
-  console.log("题库校验通过：24 道题、4 个能力维度、每类 6 题且恰好 1 道锚点题。");
+  console.log(`题库校验通过：${questions.length} 道主问题、${questions.reduce((sum, question) => sum + question.verificationQuestions.length, 0)} 条带独立量表的追问、4 个能力维度。`);
 }

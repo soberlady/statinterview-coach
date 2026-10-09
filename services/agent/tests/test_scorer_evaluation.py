@@ -232,7 +232,7 @@ def test_core_agreement_metrics_handle_ties_and_reverse_order() -> None:
 
 
 def load_fixture_inputs() -> dict:
-    bank_path = REPOSITORY_ROOT / "content" / "question-bank.json"
+    bank_path = REPOSITORY_ROOT / "content" / "legacy" / "question-bank.v1.json"
     bank_bytes = bank_path.read_bytes()
     return {
         "question_bank": json.loads(bank_bytes),

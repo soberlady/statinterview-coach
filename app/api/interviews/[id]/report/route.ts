@@ -15,6 +15,9 @@ import { summarizeCostTelemetry } from "@/app/lib/cost-telemetry";
 import { diagnoseVoiceTranscripts } from "@/app/lib/voice-transcript-diagnostics";
 import { summarizeVoiceTelemetry } from "@/app/lib/voice-telemetry";
 import scoringBenchmark from "@/content/scoring-benchmark.json";
+import { inferJobWeights } from "@/app/lib/agent-policy";
+import { createTrainingPlan, readPolicyConfig, interviewQuestionBankVersion } from "@/app/lib/practice-plan";
+import { CURRENT_QUESTION_BANK_VERSION } from "@/app/lib/question-bank";
 import { ApiError, errorResponse, jsonResponse, parseJsonText } from "../../../_lib/http";
 import {
   serializeInterview,
@@ -110,6 +113,15 @@ export async function GET(_request: Request, context: RouteContext) {
     });
     const policyFingerprint =
       await fingerprintPolicyAudit(policyAudit);
+    const trainingPlan = readPolicyConfig(interview.policyConfig)?.trainingPlan;
+    const recommendation = interview.mode === "guided_demo" ? null : createTrainingPlan({
+      sourceInterviewId: id, turns: turnRows, states: stateRows,
+      questionBankVersion: readPolicyConfig(interview.policyConfig) ? interviewQuestionBankVersion(interview) : CURRENT_QUESTION_BANK_VERSION,
+      jobWeights: inferJobWeights(interview.jobDescription), previousPlan: trainingPlan,
+    });
+    const transferTurn = trainingPlan
+      ? completedTurns.find((turn) => turn.questionId === trainingPlan.questionIds[2]) : undefined;
+    const transferEvaluation = transferTurn ? parseJsonText<{ action?: string; totalScore?: number }>(transferTurn.evaluation, {}) : null;
 
     return jsonResponse({
       report: {
@@ -119,6 +131,19 @@ export async function GET(_request: Request, context: RouteContext) {
             ? "INSUFFICIENT_EVIDENCE"
             : "AVAILABLE",
         interview: serializeInterview(interview),
+        trainingRecommendation: recommendation ? {
+          focusSkill: recommendation.focusSkill, topic: recommendation.topic,
+          kind: recommendation.kind, reason: recommendation.reason,
+          learningPoints: recommendation.learningPoints,
+        } : null,
+        trainingOutcome: trainingPlan ? {
+          sourceInterviewId: trainingPlan.sourceInterviewId, focusSkill: trainingPlan.focusSkill,
+          topic: trainingPlan.topic, completed: Boolean(transferTurn),
+          transferScore: transferEvaluation?.action === "ACCEPT" ? transferEvaluation.totalScore ?? null : null,
+          message: !transferTurn ? "尚未完成新场景复测。"
+            : transferEvaluation?.action !== "ACCEPT" ? "复测证据不足，暂不判断是否掌握；练习和追问不能代替独立复测。"
+              : "这是一次未见场景的独立回答结果。本轮能力状态包含有提示练习，仅用于过程反馈；不能与诊断后验直接比较，也不能据此宣称长期学习提升。",
+        } : null,
         skillStates: stateRows.map(serializeSkillState),
         turns: turnRows.map(serializeTurn),
         metrics: {

@@ -1,5 +1,10 @@
 # Interview guide
 
+## Current release boundary
+
+The product is a personal interview-training Agent, demonstrated on Chinese data-analysis interviews. It is a portfolio project for an Agent developer role, not a hiring-screening product.
+The current coaching-v3 release has 48 main questions, 97 follow-ups and a two-practice / one-unseen-transfer loop. All 3.83% MAE references below describe the historical frozen v2 / 24-question simulation. Do not attribute them to v3 or to real learning outcomes. See [the upgrade and acceptance notes](COACHING_UPGRADE_ZH.md).
+
 This document keeps the project explainable by one student. Do not memorize
 marketing language; be able to derive and modify the decisions below.
 

@@ -27,6 +27,9 @@ jobs:
           cache: pip
           cache-dependency-path: services/agent/pyproject.toml
       - run: npm ci
+      - name: Audit dependencies (including build tools)
+        run: npm run audit:dependencies
+      - run: npx playwright install --with-deps chromium
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -e "./services/agent[dev]"
       - run: npm run verify

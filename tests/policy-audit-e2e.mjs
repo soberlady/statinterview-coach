@@ -6,6 +6,7 @@ import { createServer } from "node:http";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { runBrowserRecovery } from "./browser-recovery.mjs";
 
 const projectRoot = fileURLToPath(new URL("../", import.meta.url));
 const execFileAsync = promisify(execFile);
@@ -132,7 +133,7 @@ try {
   const health = await requestJson("/api/health");
   assert.equal(health.status, "ok");
   assert.equal(health.checks.database, "ready");
-  assert.equal(health.checks.questionBank.approvedQuestionCount, 24);
+  assert.equal(health.checks.questionBank.approvedQuestionCount, 48);
   assert.equal(health.checks.policy, "ready");
   const interviewPayload = {
     jobTitle: "数据分析实习生",
@@ -361,6 +362,7 @@ try {
   });
   const interviewId = created.interview?.id;
   assert.equal(typeof interviewId, "string");
+  assert.equal(JSON.parse(created.interview.policyConfig).questionBankVersion, "coaching-bank-v1");
 
   let selection = await requestJson(
     `/api/interviews/${interviewId}/next-question`,
@@ -436,6 +438,15 @@ try {
       answerText: richAnswer,
     });
     assert.equal(checkpoint.progress.completedTurns, sequenceNumber);
+    const beforeReplay = await requestJson(`/api/interviews/${interviewId}`);
+    const callsBeforeReplay = scorerRequestCount;
+    const replay = await requestJson(`/api/interviews/${interviewId}/turns`, { method: "POST",
+      body: JSON.stringify({ sequenceNumber, questionId: selection.turn.questionId, answerText: richAnswer, inputMode: "text" }) });
+    assert.equal(replay.idempotentReplay, true);
+    assert.deepEqual(replay.evaluation, selection.evaluation);
+    assert.deepEqual(replay.skillState, selection.skillState);
+    assert.equal(scorerRequestCount, callsBeforeReplay);
+    assert.deepEqual(await requestJson(`/api/interviews/${interviewId}`), beforeReplay);
     sequenceNumber += 1;
   }
 
@@ -451,6 +462,11 @@ try {
   );
   assert.equal(pausedAfterFinalTurn.interview.status, "PAUSED");
   assert.equal(pausedAfterFinalTurn.nextQuestion, null);
+  const finalSubmission = { sequenceNumber: sequenceNumber - 1, questionId: selection.turn.questionId, answerText: richAnswer };
+  const pausedBeforeReplay = await requestJson(`/api/interviews/${interviewId}`);
+  const pausedReplay = await requestJson(`/api/interviews/${interviewId}/turns`, { method: "POST", body: JSON.stringify(finalSubmission) });
+  assert.equal(pausedReplay.idempotentReplay, true);
+  assert.deepEqual(await requestJson(`/api/interviews/${interviewId}`), pausedBeforeReplay);
   await requestJson(`/api/interviews/${interviewId}`, {
     method: "PATCH",
     body: JSON.stringify({
@@ -458,6 +474,14 @@ try {
       currentStage: "COMPLETED",
     }),
   });
+  const completedBeforeReplay = await requestJson(`/api/interviews/${interviewId}`);
+  const completedReplay = await requestJson(`/api/interviews/${interviewId}/turns`, { method: "POST", body: JSON.stringify(finalSubmission) });
+  assert.equal(completedReplay.idempotentReplay, true);
+  assert.deepEqual(await requestJson(`/api/interviews/${interviewId}`), completedBeforeReplay);
+  const newTerminalWrite = await fetch(`${baseUrl}/api/interviews/${interviewId}/turns`, { method: "POST",
+    headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...finalSubmission, sequenceNumber }) });
+  assert.equal(newTerminalWrite.status, 409);
+  assert.equal((await newTerminalWrite.json()).error.code, "INTERVIEW_NOT_ACTIVE");
   const voiceSessionA = `voice-e2e-a-${crypto.randomUUID()}`;
   const voiceSessionB = `voice-e2e-b-${crypto.randomUUID()}`;
   await requestJson(`/api/interviews/${interviewId}/events`, {
@@ -568,7 +592,7 @@ try {
       (turn) =>
         turn.evaluation.evaluator === "RUBRIC_DOUBLE_PASS" &&
         turn.evaluation.semantic?.promptVersion ===
-          "rubric-double-pass-v2" &&
+          "rubric-double-pass-v3" &&
         /^[a-f0-9]{64}$/.test(
           turn.evaluation.semantic?.questionFingerprint ?? "",
         ) &&
@@ -593,6 +617,48 @@ try {
   );
   assert.equal(adaptiveSteps.length, 3);
   assert.ok(adaptiveSteps.every((step) => step.ranking.length === 3));
+
+  // Real D1-backed training: server-created plan, unseen transfer, restore and replay.
+  assert.ok(report.trainingRecommendation);
+  const trainingCreated = await requestJson("/api/interviews", {
+    method: "POST", body: JSON.stringify({ mode: "training", sourceInterviewId: interviewId,
+      policyConfig: { trainingPlan: { questionIds: ["statistics_ml_001"] } } }),
+  });
+  const trainingId = trainingCreated.interview.id;
+  const trainingVoice = await fetch(`${baseUrl}/api/interviews/${trainingId}/voice-token`, { method: "POST" });
+  assert.equal(trainingVoice.status, 409);
+  assert.equal((await trainingVoice.json()).error.code, "TRAINING_TEXT_ONLY");
+  const savedPlan = JSON.parse(trainingCreated.interview.policyConfig).trainingPlan;
+  assert.equal(savedPlan.sourceInterviewId, interviewId);
+  assert.equal(savedPlan.questionIds.length, 3);
+  assert.ok(savedPlan.questionIds.every(id => !savedPlan.seenQuestionIds.includes(id)));
+  let trainingSelection = await requestJson(`/api/interviews/${trainingId}/next-question`);
+  assert.equal(trainingSelection.progress.targetSubstantiveTurns, 3);
+  for (let index = 0; index < 3; index++) {
+    assert.equal(trainingSelection.nextQuestion.id, savedPlan.questionIds[index]);
+    if (index === 2) {
+      assert.equal(trainingSelection.training.stage, "transfer");
+      assert.deepEqual(trainingSelection.training.learningPoints, []);
+    }
+    trainingSelection = await requestJson(`/api/interviews/${trainingId}/turns`, { method: "POST",
+      body: JSON.stringify({ sequenceNumber: index + 1, questionId: trainingSelection.nextQuestion.id,
+        answerText: richAnswer, inputMode: "text" }) });
+    if (index === 0) {
+      await requestJson(`/api/interviews/${trainingId}`, { method: "PATCH", body: JSON.stringify({ status: "PAUSED", currentStage: "PAUSED" }) });
+      const restored = await requestJson(`/api/interviews/${trainingId}/next-question`);
+      assert.equal(restored.nextQuestion.id, savedPlan.questionIds[1]);
+      assert.ok(restored.training.feedback.learningPoints.length > 0);
+      await requestJson(`/api/interviews/${trainingId}`, { method: "PATCH", body: JSON.stringify({ status: "RECOVERING", currentStage: "RECOVERING" }) });
+      trainingSelection = restored;
+    }
+  }
+  assert.equal(trainingSelection.nextQuestion, null);
+  await requestJson(`/api/interviews/${trainingId}`, { method: "PATCH", body: JSON.stringify({ status: "COMPLETED", currentStage: "COMPLETED" }) });
+  const trainingReport = (await requestJson(`/api/interviews/${trainingId}/report`)).report;
+  assert.equal(trainingReport.policyAudit.summary.matchingSelections, 3);
+  assert.ok(Object.values(trainingReport.policyAudit.invariants).every(Boolean));
+  assert.equal(trainingReport.trainingOutcome.transferScore, 0.875);
+  assert.equal(trainingReport.trainingOutcome.sourceInterviewId, interviewId);
 
   // Independent voice fixture: diagnostic metadata must never affect ability state.
   const voiceFixture = await requestJson("/api/interviews", {
@@ -752,6 +818,8 @@ try {
     "DEMO_FEEDBACK_NOT_COLLECTED",
   );
   assert.equal(scorerRequestCount, scorerRequestsBeforeDemo);
+  const demoScorerCalls = scorerRequestCount - scorerRequestsBeforeDemo;
+  const browserChecks = await runBrowserRecovery({ baseUrl, trainingSourceId: interviewId, answerText: richAnswer });
 
   console.log(
     JSON.stringify(
@@ -764,10 +832,11 @@ try {
         adaptiveDecisions:
           report.policyAudit.summary.adaptiveDecisions,
         fingerprint: report.policyAudit.fingerprint.slice(0, 16),
+        browserChecks,
         guidedDemo: {
           completedTurns: demoReport.metrics.completedTurns,
           acceptedTurns: demoReport.metrics.acceptedTurns,
-          scorerCalls: scorerRequestCount - scorerRequestsBeforeDemo,
+          scorerCalls: demoScorerCalls,
         },
       },
       null,

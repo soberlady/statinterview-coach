@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { VoiceTranscriptDiagnostics } from "./VoiceTranscriptDiagnostics";
 import type { VoiceTranscriptDiagnostics as TranscriptDiagnostics } from "@/app/lib/voice-transcript-diagnostics";
 import { useEffect, useMemo, useState } from "react";
@@ -94,7 +95,7 @@ type PolicyAuditStep = {
     selectionPhase:
       | "public_anchor"
       | "jd_directed_baseline"
-      | "posterior_adaptive";
+      | "posterior_adaptive" | "targeted_practice" | "transfer_check";
     candidateRouting: {
       experienceBand: "beginner" | "intermediate" | "advanced";
       preferredDifficulty: 2 | 3 | 4;
@@ -133,6 +134,15 @@ type Report = {
   generatedAt: string;
   assessmentStatus: "INSUFFICIENT_EVIDENCE" | "AVAILABLE";
   interview: Interview;
+  trainingRecommendation?: {
+    focusSkill: string; topic: string;
+    kind: "gap" | "insufficient_evidence" | "reinforcement";
+    reason: string; learningPoints: string[];
+  } | null;
+  trainingOutcome?: {
+    sourceInterviewId: string; focusSkill: string; topic: string;
+    completed: boolean; transferScore: number | null; message: string;
+  } | null;
   skillStates: SkillState[];
   turns: Turn[];
   metrics: {
@@ -215,6 +225,9 @@ const questionTypeLabels: Record<string, string> = {
 };
 
 export function ReportView({ interviewId }: { interviewId: string }) {
+  const router = useRouter();
+  const [startingTraining, setStartingTraining] = useState(false);
+  const [trainingError, setTrainingError] = useState("");
   const [report, setReport] = useState<Report | null>(null);
   const [error, setError] = useState("");
   const [feedbackRating, setFeedbackRating] = useState<number | null>(null);
@@ -347,7 +360,7 @@ export function ReportView({ interviewId }: { interviewId: string }) {
 
   if (!report || !view) {
     return (
-      <main className="practice-ui completion-shell">
+      <main id="main-content" tabIndex={-1} className="practice-ui completion-shell">
         <section className="completion-card">
           <p className="eyebrow">{error ? "报告不可用" : "正在生成报告"}</p>
           <h1>{error ? "暂时无法读取诊断结果。" : "正在整理回答证据…"}</h1>
@@ -362,11 +375,22 @@ export function ReportView({ interviewId }: { interviewId: string }) {
     );
   }
 
-  const nextSkill = view.weakest?.label ?? "回答结构";
-  const nextSkillKey = view.weakest?.key;
-  const nextSkillGaps = report.turns
-    .filter((turn) => turn.skill === nextSkillKey)
-    .flatMap((turn) => turn.evaluation.gaps ?? []);
+  const nextSkill = report.trainingRecommendation
+    ? labels[report.trainingRecommendation.focusSkill] : view.weakest?.label ?? "回答结构";
+  async function startTraining() {
+    setStartingTraining(true);
+    setTrainingError("");
+    try {
+      const response = await fetch("/api/interviews", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "training", sourceInterviewId: interviewId }) });
+      const result = await response.json() as { interview?: { id: string }; error?: { message: string } };
+      if (!response.ok || !result.interview?.id) throw new Error(result.error?.message ?? "暂时无法开始专项训练。");
+      router.push(`/interview/${result.interview.id}`);
+    } catch (failure) {
+      setTrainingError(failure instanceof Error ? failure.message : "暂时无法开始专项训练。");
+      setStartingTraining(false);
+    }
+  }
   const auditChecks = [
     {
       label: "题号连续",
@@ -391,7 +415,7 @@ export function ReportView({ interviewId }: { interviewId: string }) {
   ];
 
   return (
-    <main className="practice-ui report-shell">
+    <main id="main-content" tabIndex={-1} className="practice-ui report-shell">
       <header className="report-header">
         <Link className="brand compact" href="/">
           <span className="brand-mark">S</span>
@@ -408,7 +432,7 @@ export function ReportView({ interviewId }: { interviewId: string }) {
           <p className="eyebrow">
             {report.interview.status === "PAUSED"
               ? "暂停检查点 · 阶段性证据"
-              : "证据型能力诊断"}
+              : report.trainingOutcome ? "专项训练与新场景复测" : "证据型能力诊断"}
           </p>
           <h1>{report.interview.status === "PAUSED" ? "阶段性练习报告" : "本次练习报告"}</h1>
           <p>
@@ -433,11 +457,18 @@ export function ReportView({ interviewId }: { interviewId: string }) {
         </div>
         <div className="report-summary">
           <span>建议下一步</span>
-          <strong>专项训练：{nextSkill}</strong>
+          <strong>{report.trainingRecommendation ? `专项训练：${nextSkill}` : "复盘本次回答"}</strong>
           <p>
-            {nextSkillGaps[0] ??
-              "用不同场景回测当前判断，继续降低能力估计的不确定性。"}
+            {report.trainingRecommendation?.reason ?? (view.usesDemoFixture
+              ? "演示结束后，可以从首页开始一次自己的诊断。"
+              : "当前证据或未见场景题不足以安排三题专项训练。可先复盘回答，再开始新诊断；新诊断可能重复题目。")}
           </p>
+          {report.trainingRecommendation ? (
+            <button className="primary-button" type="button" disabled={startingTraining} onClick={startTraining}>
+              {startingTraining ? "正在准备专项训练…" : "开始两题练习与新题复测"}
+            </button>
+          ) : null}
+          {trainingError ? <p className="form-error" role="alert">{trainingError}</p> : null}
           <Link
             className="primary-button"
             href={
@@ -472,6 +503,15 @@ export function ReportView({ interviewId }: { interviewId: string }) {
       ) : null}
 
       <section className="report-grid">
+        {report.trainingOutcome ? (
+          <article className="report-card report-training-outcome">
+            <h2>专项训练与独立复测</h2>
+            <p>{report.trainingOutcome.topic} · {report.trainingOutcome.transferScore === null
+              ? "尚无可靠复测分数" : `新场景复测 ${(report.trainingOutcome.transferScore * 4).toFixed(1)} / 4`}</p>
+            <p>{report.trainingOutcome.message}</p>
+            <Link href={`/report/${report.trainingOutcome.sourceInterviewId}`}>查看训练前的诊断证据</Link>
+          </article>
+        ) : null}
         <details className="report-technical report-card-wide">
           <summary>查看语音质量与连接记录</summary>
         {report.metrics.voiceTranscriptDiagnostics && (
@@ -545,7 +585,7 @@ export function ReportView({ interviewId }: { interviewId: string }) {
           <div className="section-heading">
             <div>
               <p className="card-index">能力概览</p>
-              <h2>能力状态与证据可靠性</h2>
+              <h2>{report.trainingOutcome ? "本轮练习状态与证据可靠性" : "能力状态与证据可靠性"}</h2>
             </div>
             <span className="legend">分数仅作训练参考</span>
           </div>
@@ -742,7 +782,11 @@ export function ReportView({ interviewId }: { interviewId: string }) {
                         : step.context.selectionPhase ===
                             "jd_directed_baseline"
                           ? "JD 定向基线"
-                          : "后验自适应"}
+                          : step.context.selectionPhase === "targeted_practice"
+                            ? "专项练习"
+                            : step.context.selectionPhase === "transfer_check"
+                              ? "新场景复测"
+                              : "后验自适应"}
                       {" · 难度路由 " +
                         step.context.candidateRouting
                           .preferredDifficulty}
@@ -867,18 +911,20 @@ export function ReportView({ interviewId }: { interviewId: string }) {
             <h2>这份报告对你有帮助吗？</h2>
             <p>反馈会作为离线评测数据保存，不会反向修改本次分数。</p>
           </div>
-          <div className="rating-row" aria-label="报告评分">
+          <div className="rating-row" role="group" aria-label="报告评分">
             {[1, 2, 3, 4, 5].map((rating) => (
               <button
                 className={feedbackRating === rating ? "selected" : ""}
                 key={rating}
                 type="button"
+                aria-label={`报告帮助程度 ${rating} 分，满分 5 分`}
+                aria-pressed={feedbackRating === rating}
                 onClick={() => void submitFeedback(rating)}
               >
                 {rating}
               </button>
             ))}
-            <span>{feedbackStatus}</span>
+            <span role="status">{feedbackStatus}</span>
           </div>
         </section>
       )}

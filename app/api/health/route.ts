@@ -3,7 +3,7 @@ import { interviews } from "@/db/schema";
 import { listQuestions } from "@/app/lib/question-bank";
 import { ApiError, errorResponse, jsonResponse } from "../_lib/http";
 
-const EXPECTED_QUESTION_COUNT = 24;
+const EXPECTED_QUESTION_COUNT = 48;
 
 export async function GET() {
   try {

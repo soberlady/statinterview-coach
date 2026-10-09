@@ -1,0 +1,362 @@
+{
+  "version": "coaching-sensitivity-v1",
+  "policyVersion": "coaching-v3",
+  "synthetic": true,
+  "boundary": "12 deterministic injected-score scenarios validate sensitivity, budgets and replay only. They do not estimate model accuracy, calibrated ability or learning improvement. The older 3.83% result belongs to the frozen v2 simulation.",
+  "cases": [
+    {
+      "profile": "balanced",
+      "injectedScore": 0,
+      "questionIds": [
+        "statistics_ml_002",
+        "business_analytics_002",
+        "business_analytics_009__role_anchor",
+        "experiment_causal_008__role_anchor",
+        "sql_python_008",
+        "sql_python_011",
+        "experiment_causal_010"
+      ],
+      "phases": [
+        "public_anchor",
+        "public_anchor",
+        "jd_directed_baseline",
+        "jd_directed_baseline",
+        "posterior_adaptive",
+        "posterior_adaptive",
+        "posterior_adaptive"
+      ],
+      "adaptiveDifficulties": [
+        3,
+        3,
+        3
+      ],
+      "acceptedEvidence": 7,
+      "replayMatches": 7
+    },
+    {
+      "profile": "balanced",
+      "injectedScore": 0.5,
+      "questionIds": [
+        "statistics_ml_002",
+        "business_analytics_002",
+        "business_analytics_009__role_anchor",
+        "experiment_causal_008__role_anchor",
+        "sql_python_008",
+        "sql_python_011",
+        "experiment_causal_010"
+      ],
+      "phases": [
+        "public_anchor",
+        "public_anchor",
+        "jd_directed_baseline",
+        "jd_directed_baseline",
+        "posterior_adaptive",
+        "posterior_adaptive",
+        "posterior_adaptive"
+      ],
+      "adaptiveDifficulties": [
+        3,
+        3,
+        3
+      ],
+      "acceptedEvidence": 7,
+      "replayMatches": 7
+    },
+    {
+      "profile": "balanced",
+      "injectedScore": 1,
+      "questionIds": [
+        "statistics_ml_002",
+        "business_analytics_002",
+        "business_analytics_009__role_anchor",
+        "experiment_causal_008__role_anchor",
+        "sql_python_008",
+        "sql_python_011",
+        "statistics_ml_004"
+      ],
+      "phases": [
+        "public_anchor",
+        "public_anchor",
+        "jd_directed_baseline",
+        "jd_directed_baseline",
+        "posterior_adaptive",
+        "posterior_adaptive",
+        "posterior_adaptive"
+      ],
+      "adaptiveDifficulties": [
+        3,
+        3,
+        3
+      ],
+      "acceptedEvidence": 7,
+      "replayMatches": 7
+    },
+    {
+      "profile": "sql",
+      "injectedScore": 0,
+      "questionIds": [
+        "statistics_ml_002",
+        "business_analytics_002",
+        "sql_python_008__role_anchor",
+        "business_analytics_009__role_anchor",
+        "sql_python_011",
+        "sql_python_007",
+        "experiment_causal_008"
+      ],
+      "phases": [
+        "public_anchor",
+        "public_anchor",
+        "jd_directed_baseline",
+        "jd_directed_baseline",
+        "posterior_adaptive",
+        "posterior_adaptive",
+        "posterior_adaptive"
+      ],
+      "adaptiveDifficulties": [
+        3,
+        2,
+        3
+      ],
+      "acceptedEvidence": 7,
+      "replayMatches": 7
+    },
+    {
+      "profile": "sql",
+      "injectedScore": 0.5,
+      "questionIds": [
+        "statistics_ml_002",
+        "business_analytics_002",
+        "sql_python_008__role_anchor",
+        "business_analytics_009__role_anchor",
+        "sql_python_011",
+        "sql_python_004",
+        "experiment_causal_008"
+      ],
+      "phases": [
+        "public_anchor",
+        "public_anchor",
+        "jd_directed_baseline",
+        "jd_directed_baseline",
+        "posterior_adaptive",
+        "posterior_adaptive",
+        "posterior_adaptive"
+      ],
+      "adaptiveDifficulties": [
+        3,
+        3,
+        3
+      ],
+      "acceptedEvidence": 7,
+      "replayMatches": 7
+    },
+    {
+      "profile": "sql",
+      "injectedScore": 1,
+      "questionIds": [
+        "statistics_ml_002",
+        "business_analytics_002",
+        "sql_python_008__role_anchor",
+        "business_analytics_009__role_anchor",
+        "sql_python_011",
+        "experiment_causal_008",
+        "sql_python_005"
+      ],
+      "phases": [
+        "public_anchor",
+        "public_anchor",
+        "jd_directed_baseline",
+        "jd_directed_baseline",
+        "posterior_adaptive",
+        "posterior_adaptive",
+        "posterior_adaptive"
+      ],
+      "adaptiveDifficulties": [
+        3,
+        3,
+        4
+      ],
+      "acceptedEvidence": 7,
+      "replayMatches": 7
+    },
+    {
+      "profile": "experiment",
+      "injectedScore": 0,
+      "questionIds": [
+        "statistics_ml_002",
+        "business_analytics_002",
+        "experiment_causal_008__role_anchor",
+        "business_analytics_009__role_anchor",
+        "experiment_causal_010",
+        "sql_python_008",
+        "experiment_causal_007"
+      ],
+      "phases": [
+        "public_anchor",
+        "public_anchor",
+        "jd_directed_baseline",
+        "jd_directed_baseline",
+        "posterior_adaptive",
+        "posterior_adaptive",
+        "posterior_adaptive"
+      ],
+      "adaptiveDifficulties": [
+        3,
+        3,
+        2
+      ],
+      "acceptedEvidence": 7,
+      "replayMatches": 7
+    },
+    {
+      "profile": "experiment",
+      "injectedScore": 0.5,
+      "questionIds": [
+        "statistics_ml_002",
+        "business_analytics_002",
+        "experiment_causal_008__role_anchor",
+        "business_analytics_009__role_anchor",
+        "experiment_causal_010",
+        "sql_python_008",
+        "experiment_causal_011"
+      ],
+      "phases": [
+        "public_anchor",
+        "public_anchor",
+        "jd_directed_baseline",
+        "jd_directed_baseline",
+        "posterior_adaptive",
+        "posterior_adaptive",
+        "posterior_adaptive"
+      ],
+      "adaptiveDifficulties": [
+        3,
+        3,
+        3
+      ],
+      "acceptedEvidence": 7,
+      "replayMatches": 7
+    },
+    {
+      "profile": "experiment",
+      "injectedScore": 1,
+      "questionIds": [
+        "statistics_ml_002",
+        "business_analytics_002",
+        "experiment_causal_008__role_anchor",
+        "business_analytics_009__role_anchor",
+        "experiment_causal_010",
+        "sql_python_008",
+        "experiment_causal_012"
+      ],
+      "phases": [
+        "public_anchor",
+        "public_anchor",
+        "jd_directed_baseline",
+        "jd_directed_baseline",
+        "posterior_adaptive",
+        "posterior_adaptive",
+        "posterior_adaptive"
+      ],
+      "adaptiveDifficulties": [
+        3,
+        3,
+        4
+      ],
+      "acceptedEvidence": 7,
+      "replayMatches": 7
+    },
+    {
+      "profile": "business",
+      "injectedScore": 0,
+      "questionIds": [
+        "statistics_ml_002",
+        "business_analytics_002",
+        "business_analytics_009__role_anchor",
+        "experiment_causal_008__role_anchor",
+        "sql_python_008",
+        "business_analytics_007",
+        "business_analytics_008"
+      ],
+      "phases": [
+        "public_anchor",
+        "public_anchor",
+        "jd_directed_baseline",
+        "jd_directed_baseline",
+        "posterior_adaptive",
+        "posterior_adaptive",
+        "posterior_adaptive"
+      ],
+      "adaptiveDifficulties": [
+        3,
+        2,
+        2
+      ],
+      "acceptedEvidence": 7,
+      "replayMatches": 7
+    },
+    {
+      "profile": "business",
+      "injectedScore": 0.5,
+      "questionIds": [
+        "statistics_ml_002",
+        "business_analytics_002",
+        "business_analytics_009__role_anchor",
+        "experiment_causal_008__role_anchor",
+        "sql_python_008",
+        "business_analytics_011",
+        "business_analytics_004"
+      ],
+      "phases": [
+        "public_anchor",
+        "public_anchor",
+        "jd_directed_baseline",
+        "jd_directed_baseline",
+        "posterior_adaptive",
+        "posterior_adaptive",
+        "posterior_adaptive"
+      ],
+      "adaptiveDifficulties": [
+        3,
+        3,
+        3
+      ],
+      "acceptedEvidence": 7,
+      "replayMatches": 7
+    },
+    {
+      "profile": "business",
+      "injectedScore": 1,
+      "questionIds": [
+        "statistics_ml_002",
+        "business_analytics_002",
+        "business_analytics_009__role_anchor",
+        "experiment_causal_008__role_anchor",
+        "sql_python_008",
+        "business_analytics_011",
+        "business_analytics_012"
+      ],
+      "phases": [
+        "public_anchor",
+        "public_anchor",
+        "jd_directed_baseline",
+        "jd_directed_baseline",
+        "posterior_adaptive",
+        "posterior_adaptive",
+        "posterior_adaptive"
+      ],
+      "adaptiveDifficulties": [
+        3,
+        3,
+        4
+      ],
+      "acceptedEvidence": 7,
+      "replayMatches": 7
+    }
+  ],
+  "profilesWithDifferentLowHighRoutes": [
+    "balanced",
+    "sql",
+    "experiment",
+    "business"
+  ]
+}

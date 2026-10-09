@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import benchmark from "@/content/policy-benchmark.json";
 import { PublicShowcase } from "../components/PublicShowcase";
 
 export const metadata: Metadata = {
@@ -9,15 +8,5 @@ export const metadata: Metadata = {
 };
 
 export default function ShowcasePage() {
-  return (
-    <PublicShowcase
-      relativeMaeReduction={Math.abs(
-        benchmark.adaptiveSelection.comparisons.adaptive_vs_fixed
-          .relative_mae_change_pct,
-      )}
-      simulatedCandidates={
-        benchmark.adaptiveSelection.design.total_simulated_candidates
-      }
-    />
-  );
+  return <PublicShowcase />;
 }
