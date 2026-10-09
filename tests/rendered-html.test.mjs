@@ -39,7 +39,8 @@ test("keeps the production product copy and safety boundary", async () => {
   assert.match(report, /低可靠性回答不会直接改变能力状态/);
   assert.match(report, /每一次选题都可以确定性重放/);
   assert.match(report, /当时的前三名候选题/);
-  assert.match(report, /当前使用实验性语义量表评分/);
+  assert.match(report, /结果用于帮助你复盘/);
+  assert.match(report, /不是你的练习结果/);
   assert.match(report, /暂停检查点 · 阶段性证据/);
   assert.match(report, /继续面试/);
   assert.match(lab, /离线合成实验，不是招聘效度证明/);

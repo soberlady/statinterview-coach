@@ -1349,6 +1349,12 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
               <span>{question.skillLabel}</span>
               <span>难度 {question.difficulty} / 5</span>
             </div>
+            {question.questionType === "verification" ? (
+              <div className="follow-up-notice">
+                <strong>这是基于上一题的追问</strong>
+                <p>请继续围绕上一题的场景，补充下面这一点。无需重答整题；本次追问不计入 {progress.targetSubstantiveTurns} 道主问题。</p>
+              </div>
+            ) : null}
             <h1>{question.text}</h1>
             <p>
               不需要追求标准答案。请说明判断过程、需要的数据、判断标准以及如何验证结论。

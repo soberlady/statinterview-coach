@@ -36,7 +36,7 @@ from .api_auth import api_request_headers as _api_request_headers
 from .voice_cost import estimate_livekit_inference_cost
 from .voice_control import matches_question, question_snapshot
 from .voice_room import resolve_interview_id, resolve_voice_session_id
-from .voice_speech import build_opening_prompt, prepare_question_for_speech
+from .voice_speech import build_opening_prompt, prepare_interview_question_for_speech
 from .voice_terms import build_question_keyterms
 from .voice_transcript import CommittedTranscriptBuffer
 from .voice_turn import (
@@ -76,7 +76,7 @@ class StatInterviewVoiceAgent(Agent):
 
     def __init__(self, first_question: dict[str, Any] | None) -> None:
         question_text = (
-            prepare_question_for_speech(first_question["text"])
+            prepare_interview_question_for_speech(first_question["text"], first_question.get("questionType"))
             if first_question
             else "本次诊断已经完成，请提醒候选人查看报告。"
         )
@@ -311,7 +311,7 @@ async def statinterview_session(ctx: JobContext) -> None:
                         session.say("这段回答尚未保存，请在网页核对转写后继续回答，或切换文字提交。")
                 else:
                     session.interrupt()
-                    session.say(prepare_question_for_speech(runtime.current_question["text"]))
+                    session.say(prepare_interview_question_for_speech(runtime.current_question["text"], runtime.current_question.get("questionType")))
         except Exception:
             runtime.processing_stage = "recovery"
             # Never log answer content or credentials on the control path.
@@ -392,6 +392,7 @@ async def statinterview_session(ctx: JobContext) -> None:
             build_opening_prompt(
                 runtime.sequence_number,
                 str(runtime.current_question["text"]),
+                runtime.current_question.get("questionType"),
             ),
         )
     else:

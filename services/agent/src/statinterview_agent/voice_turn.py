@@ -6,7 +6,7 @@ import asyncio
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Mapping, Protocol
 
-from .voice_speech import prepare_question_for_speech
+from .voice_speech import prepare_interview_question_for_speech
 from .voice_terms import answer_contains_english_fragment, extract_question_keyterms
 from .voice_transcript import prepare_transcript_for_scoring
 
@@ -276,7 +276,9 @@ def _question_or_none(value: Any) -> dict[str, Any] | None:
 def _spoken_question(question: Mapping[str, Any] | None) -> str | None:
     if question is None:
         return None
-    return prepare_question_for_speech(str(question.get("text", "")))
+    return prepare_interview_question_for_speech(
+        str(question.get("text", "")), question.get("questionType")
+    )
 
 
 def _repeat_result(reason: str) -> dict[str, Any]:

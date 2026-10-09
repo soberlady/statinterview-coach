@@ -8,6 +8,12 @@ import { useEffect, useMemo, useState } from "react";
 
 type Reliability = "HIGH" | "MEDIUM" | "LOW";
 
+const reliabilityLabels: Record<Reliability, string> = {
+  HIGH: "证据可靠性：高",
+  MEDIUM: "证据可靠性：中",
+  LOW: "证据可靠性：低",
+};
+
 type Interview = {
   id: string;
   jobTitle: string;
@@ -444,6 +450,7 @@ export function ReportView({ interviewId }: { interviewId: string }) {
             这不是录用预测。每项结论都来自已保存的回答证据；
             低可靠性回答不会直接改变能力状态。
           </p>
+          <p>先看“本轮待补证据”，找到需要补充的知识与判断步骤，再按“建议下一步”练习。能力概览用于观察本轮表现，不必只盯着分数。</p>
           <div className="report-status">
             <span>
               {view.usesDemoFixture
@@ -496,9 +503,12 @@ export function ReportView({ interviewId }: { interviewId: string }) {
         </aside>
       ) : view.usesSemanticScorer ? (
         <aside className="evaluation-notice">
-          当前使用实验性语义量表评分，正式门禁状态为{" "}
-          {report.scorerReleaseGate.status}。结果仅用于训练反馈；评分一致性门禁通过前，
-          不会把它宣称为已验证评分器或招聘效度证据。
+          <p>本次由 AI 按题目量表给出反馈，结果用于帮助你复盘。评分仍可能有偏差，请结合原回答和待补证据理解，不作为招聘判断依据。</p>
+          <details>
+            <summary>评分方法与验证进展</summary>
+            <p>每个评分点经过初评和复核，并核对原回答中的引用证据。证据可靠性反映两次评分的一致程度和证据覆盖，不代表回答正确或能力优秀。</p>
+            <p>正式评分验证状态：{report.scorerReleaseGate.status === "PASS" ? "已通过" : report.scorerReleaseGate.status === "FAIL" ? "未通过" : "尚未完成"}（{report.scorerReleaseGate.status}）。该状态用于说明评分器的验证进展，不是你的练习结果；正式验证完成前，不能声称它是经过验证的评分器或能预测招聘结果。</p>
+          </details>
         </aside>
       ) : null}
 
@@ -589,6 +599,7 @@ export function ReportView({ interviewId }: { interviewId: string }) {
             </div>
             <span className="legend">分数仅作训练参考</span>
           </div>
+          <p className="report-caption">分数是本轮多次回答形成的能力估计，经映射显示为 0–100，不是答对率或录用概率，也没有及格线。旁边的可靠性标签只对应该方向最近一次回答，不是能力等级；分数低也可以有可靠的评分证据。</p>
           <div className="skill-list">
             {view.skills.map((skill) => (
               <div className="skill-report-row" key={skill.key}>
@@ -602,14 +613,14 @@ export function ReportView({ interviewId }: { interviewId: string }) {
                     <span
                       className={`reliability ${skill.reliability.toLowerCase()}`}
                     >
-                      {skill.reliability}
+                      {reliabilityLabels[skill.reliability]}
                     </span>
                   </div>
                   <div className="report-track">
                     <span style={{ width: `${skill.value ?? 0}%` }} />
                   </div>
                   <p>
-                    {skill.note} 当前不确定性 {skill.uncertainty.toFixed(2)}。
+                    {skill.note} 能力估计不确定性 {skill.uncertainty.toFixed(2)}（越低越稳定，不等于证据可靠性）。
                   </p>
                 </div>
               </div>
@@ -629,7 +640,7 @@ export function ReportView({ interviewId }: { interviewId: string }) {
             ))}
           </ul>
           <p className="report-caption">
-            低可靠性结论不会写入长期能力档案；追问预算耗尽时，Agent 会拒绝评分。
+            低可靠性回答不会更新本轮能力估计；追问后仍缺少可靠证据时，系统会保留原状态，继续下一题。
           </p>
         </article>
 
@@ -648,7 +659,7 @@ export function ReportView({ interviewId }: { interviewId: string }) {
                 ]
             ).map((item, index) => (
               <blockquote key={`${item.question}-${index}`}>
-                <span>{item.reliability}</span>
+                <span>{reliabilityLabels[item.reliability]}</span>
                 <p>“{item.quote}”</p>
                 <small>{item.question}</small>
               </blockquote>

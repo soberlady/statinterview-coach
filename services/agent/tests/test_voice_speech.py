@@ -5,7 +5,17 @@ from statinterview_agent.voice_speech import (
     build_opening_prompt,
     find_speech_risks,
     prepare_question_for_speech,
+    prepare_interview_question_for_speech,
 )
+
+
+def test_follow_up_context_is_spoken_on_selection_and_reconnect() -> None:
+    question = "补跑一天后p值变大，能只保留前一天结果吗？"
+    spoken = prepare_interview_question_for_speech(question, "verification")
+    assert spoken.startswith("这是基于上一题的追问")
+    assert prepare_question_for_speech(question) in spoken
+    assert spoken in build_opening_prompt(6, question, "verification")
+    assert prepare_interview_question_for_speech(question, "adaptive") == prepare_question_for_speech(question)
 
 
 def test_opening_prompt_restores_real_sequence_number() -> None:

@@ -208,13 +208,25 @@ def prepare_question_for_speech(text: str) -> str:
     return re.sub(r"\s+([，。！？；：、])", r"\1", spoken)
 
 
+def prepare_interview_question_for_speech(
+    question_text: str,
+    question_type: str | None = None,
+) -> str:
+    """Add follow-up context only to speech, leaving approved content intact."""
+    spoken = prepare_question_for_speech(question_text)
+    if question_type == "verification":
+        return f"这是基于上一题的追问，请继续围绕刚才的场景回答。{spoken}"
+    return spoken
+
+
 def build_opening_prompt(
     sequence_number: int,
     question_text: str,
+    question_type: str | None = None,
 ) -> str:
     """Build a reconnect-safe greeting without ever claiming it is question one."""
 
-    spoken_question = prepare_question_for_speech(question_text)
+    spoken_question = prepare_interview_question_for_speech(question_text, question_type)
     if sequence_number <= 1:
         return (
             "你好，我会根据你的回答动态选择问题。"
