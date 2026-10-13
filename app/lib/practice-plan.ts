@@ -1,4 +1,5 @@
 import type { InterviewTurn, SkillState } from "@/db/schema";
+import { isAcceptedEvidence } from "./report-insights";
 import { getInterviewQuestion, listQuestions, SKILL_LABELS, COACHING_QUESTION_BANK_VERSION, CURRENT_QUESTION_BANK_VERSION, LEGACY_QUESTION_BANK_VERSION, type QuestionBankVersion, type SkillKey } from "./question-bank";
 
 export const COACHING_POLICY_VERSION = "coaching-v3";
@@ -72,7 +73,7 @@ export function createTrainingPlan(input: {
     try {
       const evaluation = JSON.parse(turn.evaluation);
       if (evaluation.evaluator === "DEMO_FIXTURE") return [];
-      const accepted = evaluation.action === "ACCEPT" && evaluation.evaluator === "RUBRIC_DOUBLE_PASS";
+      const accepted = isAcceptedEvidence({ ...turn, evaluation });
       const score = typeof evaluation.totalScore === "number" && Number.isFinite(evaluation.totalScore)
         ? evaluation.totalScore : 1;
       return [{ question, accepted, score }];

@@ -1,18 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { DiagnosticReportContent } from "./DiagnosticReportContent";
 import { useRouter } from "next/navigation";
 import { VoiceTranscriptDiagnostics } from "./VoiceTranscriptDiagnostics";
 import type { VoiceTranscriptDiagnostics as TranscriptDiagnostics } from "@/app/lib/voice-transcript-diagnostics";
 import { useEffect, useMemo, useState } from "react";
+import type { buildReportInsights } from "@/app/lib/report-insights";
 
 type Reliability = "HIGH" | "MEDIUM" | "LOW";
-
-const reliabilityLabels: Record<Reliability, string> = {
-  HIGH: "证据可靠性：高",
-  MEDIUM: "证据可靠性：中",
-  LOW: "证据可靠性：低",
-};
 
 type Interview = {
   id: string;
@@ -31,6 +27,7 @@ type SkillState = {
 };
 
 type Evaluation = {
+  action?: string;
   evaluator?: string;
   totalScore?: number;
   reliability?: Reliability;
@@ -39,6 +36,7 @@ type Evaluation = {
   gaps?: string[];
   disclaimer?: string;
   semantic?: {
+    criteria?: { criterion: string; score: number; evidence: string[] }[];
     transcriptRepair?: {
       applied: boolean;
       method: "raw" | "deterministic" | "model";
@@ -59,6 +57,7 @@ type Turn = {
   inputMode: string;
   reliability: Reliability | null;
   evaluation: Evaluation;
+  status?: string;
 };
 
 type PolicyCandidate = {
@@ -137,6 +136,8 @@ type PolicyAudit = {
 };
 
 type Report = {
+  diagnosis: ReturnType<typeof buildReportInsights>;
+  reviewGuidance: Record<string, string[]>;
   generatedAt: string;
   assessmentStatus: "INSUFFICIENT_EVIDENCE" | "AVAILABLE";
   interview: Interview;
@@ -271,54 +272,6 @@ export function ReportView({ interviewId }: { interviewId: string }) {
 
   const view = useMemo(() => {
     if (!report) return null;
-    const skills = report.skillStates.map((state) => {
-      const skillTurns = report.turns.filter(
-        (turn) => turn.skill === state.skill,
-      );
-      const latestTurn = skillTurns.at(-1);
-      const reliability = latestTurn?.reliability ?? "LOW";
-      const value =
-        state.sourceTurnCount > 0
-          ? Math.round(100 / (1 + Math.exp(-state.posteriorMean)))
-          : null;
-      const gaps = latestTurn?.evaluation.gaps ?? [];
-      const strengths = latestTurn?.evaluation.strengths ?? [];
-      const note =
-        strengths[0] ??
-        gaps[0] ??
-        (state.sourceTurnCount > 0
-          ? "已有可接受证据，但仍需要在后续训练中交叉验证。"
-          : "暂无足够可靠的证据，不生成稳定能力结论。");
-      return {
-        key: state.skill,
-        label: labels[state.skill] ?? state.skill,
-        reliability,
-        value,
-        note,
-        uncertainty: state.uncertainty,
-      };
-    });
-    const scoredSkills = skills.filter(
-      (skill): skill is typeof skill & { value: number } =>
-        skill.value !== null,
-    );
-    const weakest = [...scoredSkills].sort(
-      (left, right) => left.value - right.value,
-    )[0];
-    const gapItems = [
-      ...new Set(
-        report.turns.flatMap((turn) => turn.evaluation.gaps ?? []),
-      ),
-    ].slice(0, 4);
-    const evidenceItems = report.turns
-      .flatMap((turn) =>
-        (turn.evaluation.evidence ?? []).map((quote) => ({
-          question: turn.questionText,
-          quote,
-          reliability: turn.reliability ?? "LOW",
-        })),
-      )
-      .slice(0, 4);
     const usesFallback = report.turns.some(
       (turn) => turn.evaluation.evaluator === "STRUCTURE_HEURISTIC",
     );
@@ -332,10 +285,6 @@ export function ReportView({ interviewId }: { interviewId: string }) {
       );
 
     return {
-      skills,
-      weakest,
-      gapItems,
-      evidenceItems,
       usesFallback,
       usesSemanticScorer,
       usesDemoFixture,
@@ -370,7 +319,7 @@ export function ReportView({ interviewId }: { interviewId: string }) {
         <section className="completion-card">
           <p className="eyebrow">{error ? "报告不可用" : "正在生成报告"}</p>
           <h1>{error ? "暂时无法读取诊断结果。" : "正在整理回答证据…"}</h1>
-          <p>{error || "系统正在聚合能力状态、可靠性与策略事件。"}</p>
+          <p>{error || "正在整理本次表现、回答证据和训练建议。"}</p>
           {error ? (
             <Link className="secondary-button" href="/">
               返回首页
@@ -382,7 +331,8 @@ export function ReportView({ interviewId }: { interviewId: string }) {
   }
 
   const nextSkill = report.trainingRecommendation
-    ? labels[report.trainingRecommendation.focusSkill] : view.weakest?.label ?? "回答结构";
+    ? labels[report.trainingRecommendation.focusSkill] : "回答复盘";
+  const priorityGap = report.diagnosis.find(item => item.status === "practice");
   async function startTraining() {
     setStartingTraining(true);
     setTrainingError("");
@@ -440,31 +390,18 @@ export function ReportView({ interviewId }: { interviewId: string }) {
               ? "暂停检查点 · 阶段性证据"
               : report.trainingOutcome ? "专项训练与新场景复测" : "证据型能力诊断"}
           </p>
-          <h1>{report.interview.status === "PAUSED" ? "阶段性练习报告" : "本次练习报告"}</h1>
-          <p>
-            {report.assessmentStatus === "INSUFFICIENT_EVIDENCE"
-              ? `已完成 ${report.metrics.completedTurns} 轮回答，语义能力证据尚未建立。`
-              : `完成 ${report.metrics.completedTurns} 轮回答，其中 ${report.metrics.acceptedTurns} 轮进入能力后验。`}
-          </p>
-          <p>
-            这不是录用预测。每项结论都来自已保存的回答证据；
-            低可靠性回答不会直接改变能力状态。
-          </p>
-          <p>先看“本轮待补证据”，找到需要补充的知识与判断步骤，再按“建议下一步”练习。能力概览用于观察本轮表现，不必只盯着分数。</p>
-          <div className="report-status">
-            <span>
-              {view.usesDemoFixture
-                ? "确定性演示夹具"
-                : view.usesFallback
-                  ? "透明降级评估"
-                  : "语义量表评估"}
-            </span>
-            <span>{report.metrics.verificationTurns} 次可靠性追问</span>
-          </div>
+          <h1>{view.usesDemoFixture ? "了解诊断如何指导训练" : priorityGap ? `本次优先补强：${priorityGap.label}` : report.diagnosis.some(item => item.accepted.length) ? "把本次表现，带到新的场景里" : "先补充证据，再判断训练重点"}</h1>
+          <p className="diagnosis-role">目标岗位 · {report.interview.jobTitle}</p>
+          <p>{view.usesDemoFixture ? "演示回答用于说明报告结构，不代表你的实际能力。" : report.diagnosis.find(item => item.status === "practice")
+            ? `本次在“${report.diagnosis.find(item => item.status === "practice")!.label}”的回答中观察到待改进项。先查看对应证据，再选择练习。`
+            : report.diagnosis.some(item => item.accepted.length) ? "已有回答获得可靠评价。未观察到的不足不等于已经掌握，建议通过新场景继续确认。"
+            : "本次还不能形成可靠的能力结论。未测清楚的方向会标为待确认，不会直接视为短板。"}</p>
+          <div className="report-status"><span>{report.metrics.completedTurns} 轮回答</span><span>覆盖 {report.diagnosis.filter(item => item.answered.length).length} / 4 个方向</span><span>{report.diagnosis.filter(item => item.accepted.length).length} 个方向有可靠回答</span></div>
+          <p className="report-caption">仅反映本次回答；训练反馈不代表录用预测。低可靠性回答不会直接改变能力状态。</p>
         </div>
         <div className="report-summary">
           <span>建议下一步</span>
-          <strong>{report.trainingRecommendation ? `专项训练：${nextSkill}` : "复盘本次回答"}</strong>
+          <strong>{report.trainingRecommendation ? `${report.trainingRecommendation.kind === "insufficient_evidence" ? "补充诊断" : report.trainingRecommendation.kind === "gap" ? "优先练习" : "迁移巩固"}：${report.trainingRecommendation.topic}` : "复盘本次回答"}</strong><p>{report.trainingRecommendation ? `${nextSkill} · 约 10 分钟 · 两题练习＋一道新题复测` : "查看下方逐题复盘，整理回答中的判断依据。"}</p>
           <p>
             {report.trainingRecommendation?.reason ?? (view.usesDemoFixture
               ? "演示结束后，可以从首页开始一次自己的诊断。"
@@ -477,14 +414,14 @@ export function ReportView({ interviewId }: { interviewId: string }) {
           ) : null}
           {trainingError ? <p className="form-error" role="alert">{trainingError}</p> : null}
           <Link
-            className="primary-button"
+            className="secondary-button"
             href={
               report.interview.status === "PAUSED"
                 ? `/interview/${interviewId}`
                 : "/"
             }
           >
-            {report.interview.status === "PAUSED" ? "继续面试" : "再练一次"}
+            {report.interview.status === "PAUSED" ? "继续面试" : "开始新的完整诊断"}
           </Link>
         </div>
       </section>
@@ -497,9 +434,8 @@ export function ReportView({ interviewId }: { interviewId: string }) {
         </aside>
       ) : view.usesFallback ? (
         <aside className="evaluation-notice">
-          本次包含结构化降级评估：只测量回答长度、
-          领域术语和推理结构。这些反馈不会写入能力后验。配置模型后可启用实验性量表评分；
-          正式离线门禁通过前，不会把它宣称为已验证评分器。
+          本次部分回答仅完成表达结构检查，未用于能力判断。
+          请先核对原回答；这些反馈不能直接视为知识短板。
         </aside>
       ) : view.usesSemanticScorer ? (
         <aside className="evaluation-notice">
@@ -522,6 +458,60 @@ export function ReportView({ interviewId }: { interviewId: string }) {
             <Link href={`/report/${report.trainingOutcome.sourceInterviewId}`}>查看训练前的诊断证据</Link>
           </article>
         ) : null}
+
+        <DiagnosticReportContent report={report} />
+      </section>
+
+      {report.turns.some((turn) => turn.inputMode === "voice") ? (
+        <details className="transcript-audit-card">
+          <summary>查看语音原始转写与校对记录</summary>
+          <div className="policy-audit-heading">
+            <div>
+              <p className="card-index">TRANSCRIPT AUDIT</p>
+              <h2>语音转写与评分辅助文本</h2>
+              <p>
+                评分辅助文本只校正近音词、百分号、标点和专业术语；
+                原始转写永久保留，并仍是评分证据的唯一引用来源。
+              </p>
+            </div>
+          </div>
+          <div className="transcript-audit-list">
+            {report.turns
+              .filter((turn) => turn.inputMode === "voice")
+              .map((turn) => {
+                const repair = turn.evaluation.semantic?.transcriptRepair;
+                return (
+                  <article className="transcript-audit-item" key={turn.id}>
+                    <div className="transcript-audit-meta">
+                      <span>
+                        第 {turn.sequenceNumber} 题 · {labels[turn.skill] ?? turn.skill}
+                      </span>
+                      <span>
+                        {repair?.method === "model"
+                          ? "模型辅助校对"
+                          : repair?.method === "deterministic"
+                            ? "规则辅助校对"
+                            : "原始转写未改动"}
+                      </span>
+                    </div>
+                    <h3>{turn.questionText}</h3>
+                    <div className="transcript-copy repaired">
+                      <strong>评分辅助文本</strong>
+                      <p>{turn.scoringAnswerText ?? turn.answerText}</p>
+                    </div>
+                    <details>
+                      <summary>查看原始语音转写</summary>
+                      <div className="transcript-copy raw">
+                        <p>{turn.answerText}</p>
+                      </div>
+                    </details>
+                  </article>
+                );
+              })}
+          </div>
+        </details>
+      ) : null}
+
         <details className="report-technical report-card-wide">
           <summary>查看语音质量与连接记录</summary>
         {report.metrics.voiceTranscriptDiagnostics && (
@@ -591,131 +581,6 @@ export function ReportView({ interviewId }: { interviewId: string }) {
         ) : null}
 
         </details>
-        <article className="report-card report-card-wide">
-          <div className="section-heading">
-            <div>
-              <p className="card-index">能力概览</p>
-              <h2>{report.trainingOutcome ? "本轮练习状态与证据可靠性" : "能力状态与证据可靠性"}</h2>
-            </div>
-            <span className="legend">分数仅作训练参考</span>
-          </div>
-          <p className="report-caption">分数是本轮多次回答形成的能力估计，经映射显示为 0–100，不是答对率或录用概率，也没有及格线。旁边的可靠性标签只对应该方向最近一次回答，不是能力等级；分数低也可以有可靠的评分证据。</p>
-          <div className="skill-list">
-            {view.skills.map((skill) => (
-              <div className="skill-report-row" key={skill.key}>
-                <div className="skill-score">
-                  <strong>{skill.value ?? "—"}</strong>
-                  <span>{skill.value === null ? "证据不足" : "/ 100"}</span>
-                </div>
-                <div>
-                  <div className="skill-title">
-                    <strong>{skill.label}</strong>
-                    <span
-                      className={`reliability ${skill.reliability.toLowerCase()}`}
-                    >
-                      {reliabilityLabels[skill.reliability]}
-                    </span>
-                  </div>
-                  <div className="report-track">
-                    <span style={{ width: `${skill.value ?? 0}%` }} />
-                  </div>
-                  <p>
-                    {skill.note} 能力估计不确定性 {skill.uncertainty.toFixed(2)}（越低越稳定，不等于证据可靠性）。
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </article>
-
-        <article className="report-card">
-          <p className="card-index">WHY VERIFY</p>
-          <h2>本轮待补证据</h2>
-          <ul className="evidence-list">
-            {(view.gapItems.length > 0
-              ? view.gapItems
-              : ["当前没有额外待验证项，建议用新场景进行迁移回测。"]
-            ).map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
-          <p className="report-caption">
-            低可靠性回答不会更新本轮能力估计；追问后仍缺少可靠证据时，系统会保留原状态，继续下一题。
-          </p>
-        </article>
-
-        <article className="report-card">
-          <p className="card-index">SOURCE EVIDENCE</p>
-          <h2>结论来自哪里</h2>
-          <div className="evidence-quotes">
-            {(view.evidenceItems.length > 0
-              ? view.evidenceItems
-              : [
-                  {
-                    question: "尚无可引用证据",
-                    quote: "请完成一次回答较完整的诊断。",
-                    reliability: "LOW" as const,
-                  },
-                ]
-            ).map((item, index) => (
-              <blockquote key={`${item.question}-${index}`}>
-                <span>{reliabilityLabels[item.reliability]}</span>
-                <p>“{item.quote}”</p>
-                <small>{item.question}</small>
-              </blockquote>
-            ))}
-          </div>
-        </article>
-      </section>
-
-      {report.turns.some((turn) => turn.inputMode === "voice") ? (
-        <section className="transcript-audit-card">
-          <div className="policy-audit-heading">
-            <div>
-              <p className="card-index">TRANSCRIPT AUDIT</p>
-              <h2>语音转写与评分辅助文本</h2>
-              <p>
-                评分辅助文本只校正近音词、百分号、标点和专业术语；
-                原始转写永久保留，并仍是评分证据的唯一引用来源。
-              </p>
-            </div>
-          </div>
-          <div className="transcript-audit-list">
-            {report.turns
-              .filter((turn) => turn.inputMode === "voice")
-              .map((turn) => {
-                const repair = turn.evaluation.semantic?.transcriptRepair;
-                return (
-                  <article className="transcript-audit-item" key={turn.id}>
-                    <div className="transcript-audit-meta">
-                      <span>
-                        第 {turn.sequenceNumber} 题 · {labels[turn.skill] ?? turn.skill}
-                      </span>
-                      <span>
-                        {repair?.method === "model"
-                          ? "模型辅助校对"
-                          : repair?.method === "deterministic"
-                            ? "规则辅助校对"
-                            : "原始转写未改动"}
-                      </span>
-                    </div>
-                    <h3>{turn.questionText}</h3>
-                    <div className="transcript-copy repaired">
-                      <strong>评分辅助文本</strong>
-                      <p>{turn.scoringAnswerText ?? turn.answerText}</p>
-                    </div>
-                    <details>
-                      <summary>查看原始语音转写</summary>
-                      <div className="transcript-copy raw">
-                        <p>{turn.answerText}</p>
-                      </div>
-                    </details>
-                  </article>
-                );
-              })}
-          </div>
-        </section>
-      ) : null}
 
       <details className="policy-audit-card">
         <summary>查看 Agent 决策与回放</summary>

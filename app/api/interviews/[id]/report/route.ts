@@ -17,7 +17,8 @@ import { summarizeVoiceTelemetry } from "@/app/lib/voice-telemetry";
 import scoringBenchmark from "@/content/scoring-benchmark.json";
 import { inferJobWeights } from "@/app/lib/agent-policy";
 import { createTrainingPlan, readPolicyConfig, interviewQuestionBankVersion } from "@/app/lib/practice-plan";
-import { CURRENT_QUESTION_BANK_VERSION } from "@/app/lib/question-bank";
+import { CURRENT_QUESTION_BANK_VERSION, getInterviewQuestion } from "@/app/lib/question-bank";
+import { buildReportInsights, type DiagnosticTurn } from "@/app/lib/report-insights";
 import { ApiError, errorResponse, jsonResponse, parseJsonText } from "../../../_lib/http";
 import {
   serializeInterview,
@@ -131,6 +132,13 @@ export async function GET(_request: Request, context: RouteContext) {
             ? "INSUFFICIENT_EVIDENCE"
             : "AVAILABLE",
         interview: serializeInterview(interview),
+        diagnosis: buildReportInsights(turnRows.map(turn => ({ ...turn,
+          evaluation: parseJsonText<DiagnosticTurn["evaluation"]>(turn.evaluation, {}),
+        })), inferJobWeights(interview.jobDescription)),
+        reviewGuidance: Object.fromEntries(completedTurns.map(turn => {
+          const question = turn.questionId ? getInterviewQuestion(turn.questionId, interviewQuestionBankVersion(interview)) : undefined;
+          return [turn.id, question?.learningPoints?.length ? question.learningPoints : question?.rubric.map(item => item.criterion) ?? []];
+        })),
         trainingRecommendation: recommendation ? {
           focusSkill: recommendation.focusSkill, topic: recommendation.topic,
           kind: recommendation.kind, reason: recommendation.reason,
