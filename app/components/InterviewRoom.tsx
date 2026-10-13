@@ -25,7 +25,7 @@ import {
 import { TRANSCRIPT_BUFFER_VERSION } from "@/app/lib/voice-transcript-diagnostics";
 import { VoiceTranscriptBuffer } from "@/app/lib/voice-transcript-buffer";
 import { normalizeVoiceTranscriptForDisplay } from "@/app/lib/voice-transcript-display";
-import { parseVoiceProcessing, voiceProcessingLabels, VOICE_SAVE_CONFIRM_TIMEOUT_MS, type VoiceProcessingStage } from "@/app/lib/voice-processing";
+import { assessVoiceSync, parseVoiceProcessing, voiceProcessingLabels, VOICE_SAVE_CONFIRM_TIMEOUT_MS, type VoiceProcessingStage, type VoiceSyncMismatch } from "@/app/lib/voice-processing";
 
 type PublicQuestion = {
   id: string;
@@ -316,6 +316,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     if (inputChannel !== "voice" || voiceStatus === "idle") return;
     let cancelled = false;
     let timer: number | undefined;
+    let syncMismatch: VoiceSyncMismatch | null = null;
     const controller = new AbortController();
 
     async function syncVoiceState() {
@@ -404,6 +405,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
           voiceExpectedDisconnectRef.current = true;
           await voiceRoomRef.current?.disconnect();
           voiceRoomRef.current = null;
+          return;
         }
         const activeRoom = voiceRoomRef.current;
         const identity = voiceAgentIdentityRef.current;
@@ -413,8 +415,23 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
               destinationIdentity: identity, method: "statinterview.status",
               payload: "{}", responseTimeout: 2_000,
             }));
-            const stage = parseVoiceProcessing(status, result.nextQuestion?.id ?? null, (result.progress?.completedTurns ?? 0) + 1);
-            if (!stage && !cancelled && voiceRoomRef.current === activeRoom) {
+            const sync = assessVoiceSync(status, result.nextQuestion?.id ?? null, (result.progress?.completedTurns ?? 0) + 1, syncMismatch, performance.now());
+            const stage = sync.stage;
+            if (!stage) {
+              // The answer may have committed between HTTP polling and RPC.
+              // Confirm against a fresh checkpoint before diagnosing a mismatch.
+              const latestResponse = await fetch(`/api/interviews/${interviewId}/next-question`, {
+                cache: "no-store", signal: AbortSignal.any([controller.signal, AbortSignal.timeout(10_000)]),
+              });
+              const latest = (await latestResponse.json()) as NextQuestionResponse;
+              if (!latestResponse.ok || cancelled || voiceRoomRef.current !== activeRoom) return;
+              if (latest.progress?.completedTurns !== result.progress?.completedTurns || latest.nextQuestion?.id !== result.nextQuestion?.id) {
+                syncMismatch = null;
+                return; // Next poll applies the committed answer or normal completion.
+              }
+            }
+            syncMismatch = sync.pending;
+            if (sync.disconnect && !cancelled && voiceRoomRef.current === activeRoom) {
               voiceExpectedDisconnectRef.current = true;
               voiceRoomRef.current = null;
               voiceAgentReadyRef.current = false;
@@ -436,6 +453,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
               }
             }
           } catch {
+            syncMismatch = null;
             // Status transport is advisory; the persisted checkpoint remains authoritative.
           }
         }
