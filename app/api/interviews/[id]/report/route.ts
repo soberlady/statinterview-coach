@@ -18,7 +18,7 @@ import scoringBenchmark from "@/content/scoring-benchmark.json";
 import { inferJobWeights } from "@/app/lib/agent-policy";
 import { createTrainingPlan, readPolicyConfig, interviewQuestionBankVersion } from "@/app/lib/practice-plan";
 import { CURRENT_QUESTION_BANK_VERSION, getInterviewQuestion } from "@/app/lib/question-bank";
-import { buildReportInsights, type DiagnosticTurn } from "@/app/lib/report-insights";
+import { buildReportInsights, compareEvidence, criterionFeedback, isAcceptedEvidence, type DiagnosticTurn } from "@/app/lib/report-insights";
 import { ApiError, errorResponse, jsonResponse, parseJsonText } from "../../../_lib/http";
 import {
   serializeInterview,
@@ -74,6 +74,10 @@ export async function GET(_request: Request, context: RouteContext) {
     const completedTurns = turnRows.filter(
       (turn) => turn.status === "completed" && turn.answerText.trim().length > 0,
     );
+    const diagnosticTurns: DiagnosticTurn[] = turnRows.map(turn => ({ ...turn,
+      topic: turn.questionId ? getInterviewQuestion(turn.questionId, interviewQuestionBankVersion(interview))?.topic : undefined,
+      evaluation: parseJsonText<DiagnosticTurn["evaluation"]>(turn.evaluation, {}),
+    }));
     const acceptedEvaluations = completedTurns
       .map((turn) =>
         parseJsonText<{
@@ -123,6 +127,20 @@ export async function GET(_request: Request, context: RouteContext) {
     const transferTurn = trainingPlan
       ? completedTurns.find((turn) => turn.questionId === trainingPlan.questionIds[2]) : undefined;
     const transferEvaluation = transferTurn ? parseJsonText<{ action?: string; totalScore?: number }>(transferTurn.evaluation, {}) : null;
+    const transferDiagnostic = diagnosticTurns.find(turn => turn.id === transferTurn?.id);
+    const sourceTurns = trainingPlan ? await db.select().from(interviewTurns)
+      .where(eq(interviewTurns.interviewId, trainingPlan.sourceInterviewId)).orderBy(asc(interviewTurns.sequenceNumber)) : [];
+    const [sourceInterview] = trainingPlan ? await db.select().from(interviews)
+      .where(eq(interviews.id, trainingPlan.sourceInterviewId)).limit(1) : [];
+    const sourceTrainingPlan = sourceInterview ? readPolicyConfig(sourceInterview.policyConfig)?.trainingPlan : null;
+    const baselineTurns = sourceTurns.filter(turn => turn.skill === trainingPlan?.focusSkill
+      && sourceInterview && turn.questionId
+      && getInterviewQuestion(turn.questionId, interviewQuestionBankVersion(sourceInterview))?.topic === trainingPlan?.topic
+      && (!sourceTrainingPlan || turn.questionId === sourceTrainingPlan.questionIds[2]))
+      .map(turn => ({ ...turn, evaluation: parseJsonText<DiagnosticTurn["evaluation"]>(turn.evaluation, {}) }));
+    const evidenceComparison = compareEvidence(baselineTurns, transferDiagnostic);
+    const baselineEvidence = baselineTurns.filter(isAcceptedEvidence).flatMap(turn => criterionFeedback(turn)
+      .map(item => ({ criterion: item.criterion, label: item.label, quote: item.quote, sequenceNumber: turn.sequenceNumber })));
 
     return jsonResponse({
       report: {
@@ -132,9 +150,7 @@ export async function GET(_request: Request, context: RouteContext) {
             ? "INSUFFICIENT_EVIDENCE"
             : "AVAILABLE",
         interview: serializeInterview(interview),
-        diagnosis: buildReportInsights(turnRows.map(turn => ({ ...turn,
-          evaluation: parseJsonText<DiagnosticTurn["evaluation"]>(turn.evaluation, {}),
-        })), inferJobWeights(interview.jobDescription)),
+        diagnosis: buildReportInsights(diagnosticTurns, inferJobWeights(interview.jobDescription)),
         reviewGuidance: Object.fromEntries(completedTurns.map(turn => {
           const question = turn.questionId ? getInterviewQuestion(turn.questionId, interviewQuestionBankVersion(interview)) : undefined;
           return [turn.id, question?.learningPoints?.length ? question.learningPoints : question?.rubric.map(item => item.criterion) ?? []];
@@ -147,13 +163,15 @@ export async function GET(_request: Request, context: RouteContext) {
         trainingOutcome: trainingPlan ? {
           sourceInterviewId: trainingPlan.sourceInterviewId, focusSkill: trainingPlan.focusSkill,
           topic: trainingPlan.topic, completed: Boolean(transferTurn),
-          transferScore: transferEvaluation?.action === "ACCEPT" ? transferEvaluation.totalScore ?? null : null,
+          evidenceComparison,
+          baselineEvidence,
+          transferScore: transferDiagnostic && isAcceptedEvidence(transferDiagnostic) ? transferEvaluation?.totalScore ?? null : null,
           message: !transferTurn ? "尚未完成新场景复测。"
-            : transferEvaluation?.action !== "ACCEPT" ? "复测证据不足，暂不判断是否掌握；练习和追问不能代替独立复测。"
+            : !transferDiagnostic || !isAcceptedEvidence(transferDiagnostic) ? "复测证据不足，暂不判断是否掌握；练习和追问不能代替独立复测。"
               : "这是一次未见场景的独立回答结果。本轮能力状态包含有提示练习，仅用于过程反馈；不能与诊断后验直接比较，也不能据此宣称长期学习提升。",
         } : null,
         skillStates: stateRows.map(serializeSkillState),
-        turns: turnRows.map(serializeTurn),
+        turns: turnRows.map((turn, index) => ({ ...serializeTurn(turn), topic: diagnosticTurns[index].topic })),
         metrics: {
           totalTurns: turnRows.length,
           completedTurns: completedTurns.length,

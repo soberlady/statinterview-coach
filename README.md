@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/soberlady/statinterview-coach/actions/workflows/ci.yml/badge.svg)](https://github.com/soberlady/statinterview-coach/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Live demo](https://img.shields.io/badge/live-demo-0f766e.svg)](https://statinterview-coach-cn.keen-grass-7274.chatgpt.site/showcase)
+[![Private training](https://img.shields.io/badge/private-training-0f766e.svg)](https://statinterview-private-lab.keen-grass-7274.chatgpt.site/)
 
 **面向中文数据分析岗位的、不确定性感知的自适应面试训练 Agent。**
 
@@ -15,7 +15,7 @@ maintains an explicit ability state, chooses the next approved question under
 a fixed interview budget, verifies weak evidence, and preserves a replayable
 decision trail from raw answer to final report.
 
-[Try the 3-minute public demo](https://statinterview-coach-cn.keen-grass-7274.chatgpt.site/showcase)
+[最新个人训练站（私有）](https://statinterview-private-lab.keen-grass-7274.chatgpt.site/) · [报告改进与验证边界](docs/REPORT_REFINEMENT_ZH.md)
 · [Architecture](docs/ARCHITECTURE.md)
 · [Evaluation](docs/EVALUATION.md)
 · [中文项目导读](docs/PROJECT_GUIDE_ZH.md)

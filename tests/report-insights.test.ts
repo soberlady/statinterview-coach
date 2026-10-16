@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildReportInsights, type DiagnosticTurn } from "../app/lib/report-insights";
+import { buildReportInsights, criterionFeedback, confirmationReason, compareEvidence, type DiagnosticTurn } from "../app/lib/report-insights";
 
 function turn(overrides: Partial<DiagnosticTurn> = {}): DiagnosticTurn {
   return { id: "t1", sequenceNumber: 1, questionId: "sql_python_001", skill: "sql_python",
@@ -52,4 +52,52 @@ test("blank and unfinished answers never become diagnoses", () => {
   for (const input of [turn({ answerText: "  " }), turn({ status: "pending" })]) {
     assert.ok(buildReportInsights([input]).every(s => !s.accepted.length && s.status === "uncovered"));
   }
+});
+
+test("partial evidence is visible, while wrong or unsupported quotes are not strengths", () => {
+  const input = turn();
+  input.evaluation.semantic!.criteria![0].score = 2;
+  assert.equal(criterionFeedback(input)[0].label, "部分体现");
+  assert.match(buildReportInsights([input])[0].goal, /^部分体现/);
+  input.evaluation.semantic!.criteria![0].score = 0;
+  assert.equal(criterionFeedback(input)[0].state, "revisit");
+  input.evaluation.semantic!.criteria![0].score = 4;
+  input.evaluation.semantic!.criteria![0].evidence = ["捏造原话"];
+  assert.equal(criterionFeedback(input)[0].state, "uncertain");
+  assert.equal(criterionFeedback(input)[0].quote, null);
+  input.reliability = "LOW";
+  input.evaluation.semantic!.criteria![0].evidence = ["直接删除重复行"];
+  assert.equal(criterionFeedback(input)[0].state, "uncertain");
+});
+
+test("pending reasons distinguish transcript problems, scorer fallback and reviewer disagreement", () => {
+  const input = turn({ reliability: "LOW" });
+  input.evaluation.gaps = ["语音转写置信度较低，需要通过追问验证核心结论"];
+  assert.equal(confirmationReason(input)?.code, "transcript");
+  input.evaluation.gaps = [];
+  input.evaluation.evaluator = "STRUCTURE_HEURISTIC";
+  assert.equal(confirmationReason(input)?.code, "scorer");
+  input.evaluation.evaluator = "RUBRIC_DOUBLE_PASS";
+  input.evaluation.signals = { reviewDisagreement: .9 };
+  assert.equal(confirmationReason(input)?.code, "disagreement");
+  input.evaluation.signals = {};
+  assert.equal(confirmationReason(input)?.code, "evidence");
+  assert.equal(confirmationReason(turn()), null);
+});
+
+test("transfer compares exact criteria only, excludes unreliable baselines and preserves conflicts", () => {
+  const before = turn();
+  const after = turn({ id: "new", questionId: "sql_python_999" });
+  after.evaluation = { ...after.evaluation, semantic: { criteria: [
+    { criterion: "说明业务主键", score: 3, evidence: ["直接删除重复行"] },
+    { criterion: "其他要求", score: 2, evidence: ["直接删除重复行"] },
+  ] } };
+  const result = compareEvidence([before], after);
+  assert.equal(result[0].before, "尚未充分体现");
+  assert.equal(result[0].after, "已体现");
+  assert.match(result[1].before, /暂不比较/);
+  assert.match(compareEvidence([turn({ reliability: "LOW" })], after)[0].before, /暂不比较/);
+  assert.match(compareEvidence([before, after], after)[0].before, /不一致/);
+  assert.equal(compareEvidence([before], { ...after, reliability: "LOW" })[0].after, "无法判断");
+  assert.deepEqual(compareEvidence([before]), []);
 });

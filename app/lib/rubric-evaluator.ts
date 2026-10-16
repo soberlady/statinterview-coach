@@ -301,6 +301,7 @@ export function combineRubricPasses(input: {
       primaryScore: primaryResult.score,
       reviewScore: reviewResult.score,
       evidence,
+      note: reviewResult.note,
     };
   });
 
@@ -381,6 +382,7 @@ export function combineRubricPasses(input: {
         criterion: criterion.criterion,
         score: round(criterion.score),
         evidence: criterion.evidence,
+        note: typeof criterion.note === "string" ? criterion.note.slice(0, 800) : undefined,
       })),
       primaryScore: round(primaryScore),
       reviewScore: round(reviewScore),

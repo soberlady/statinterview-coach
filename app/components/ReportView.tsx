@@ -149,6 +149,8 @@ type Report = {
   trainingOutcome?: {
     sourceInterviewId: string; focusSkill: string; topic: string;
     completed: boolean; transferScore: number | null; message: string;
+    evidenceComparison?: { criterion: string; before: string; beforeQuote: string | null; after: string; afterQuote: string | null }[];
+    baselineEvidence?: { criterion: string; label: string; quote: string | null; sequenceNumber: number }[];
   } | null;
   skillStates: SkillState[];
   turns: Turn[];
@@ -390,13 +392,14 @@ export function ReportView({ interviewId }: { interviewId: string }) {
               ? "暂停检查点 · 阶段性证据"
               : report.trainingOutcome ? "专项训练与新场景复测" : "证据型能力诊断"}
           </p>
-          <h1>{view.usesDemoFixture ? "了解诊断如何指导训练" : priorityGap ? `本次优先补强：${priorityGap.label}` : report.diagnosis.some(item => item.accepted.length) ? "把本次表现，带到新的场景里" : "先补充证据，再判断训练重点"}</h1>
+          <h1>{view.usesDemoFixture ? "了解诊断如何指导训练" : report.trainingOutcome ? `新场景复测：${report.trainingOutcome.topic}` : report.trainingRecommendation ? `${report.trainingRecommendation.kind === "insufficient_evidence" ? "本次先确认" : "本次先练"}：${report.trainingRecommendation.topic}` : priorityGap ? `先复盘：${priorityGap.topics?.[0] ?? priorityGap.label}` : report.diagnosis.some(item => item.accepted.length) ? "把本次表现，带到新的场景里" : "先补充证据，再判断训练重点"}</h1>
           <p className="diagnosis-role">目标岗位 · {report.interview.jobTitle}</p>
           <p>{view.usesDemoFixture ? "演示回答用于说明报告结构，不代表你的实际能力。" : report.diagnosis.find(item => item.status === "practice")
-            ? `本次在“${report.diagnosis.find(item => item.status === "practice")!.label}”的回答中观察到待改进项。先查看对应证据，再选择练习。`
+            ? "下面的建议来自本次具体题目的回答，不代表整个方向的能力结论。先核对已体现的内容，再练尚未说清的部分。"
             : report.diagnosis.some(item => item.accepted.length) ? "已有回答获得可靠评价。未观察到的不足不等于已经掌握，建议通过新场景继续确认。"
             : "本次还不能形成可靠的能力结论。未测清楚的方向会标为待确认，不会直接视为短板。"}</p>
-          <div className="report-status"><span>{report.metrics.completedTurns} 轮回答</span><span>覆盖 {report.diagnosis.filter(item => item.answered.length).length} / 4 个方向</span><span>{report.diagnosis.filter(item => item.accepted.length).length} 个方向有可靠回答</span></div>
+          <div className="report-status"><span>{report.metrics.completedTurns} 轮回答</span><span>覆盖 {report.diagnosis.filter(item => item.answered.length).length} / 4 个方向</span><span>{report.diagnosis.reduce((sum, item) => sum + item.accepted.length, 0)} 轮可用于判断</span><span>{report.diagnosis.reduce((sum, item) => sum + item.answered.length - item.accepted.length, 0)} 轮待确认</span></div>
+          {report.diagnosis.some(item => item.answered.length > item.accepted.length) && <a href="#pending-evidence" className="report-caption">查看待确认原因与下一步 →</a>}
           <p className="report-caption">仅反映本次回答；训练反馈不代表录用预测。低可靠性回答不会直接改变能力状态。</p>
         </div>
         <div className="report-summary">
@@ -409,7 +412,7 @@ export function ReportView({ interviewId }: { interviewId: string }) {
           </p>
           {report.trainingRecommendation ? (
             <button className="primary-button" type="button" disabled={startingTraining} onClick={startTraining}>
-              {startingTraining ? "正在准备专项训练…" : "开始两题练习与新题复测"}
+              {startingTraining ? "正在准备专项训练…" : report.trainingRecommendation.kind === "insufficient_evidence" ? "补充诊断并用新题确认" : "开始两题练习与新题复测"}
             </button>
           ) : null}
           {trainingError ? <p className="form-error" role="alert">{trainingError}</p> : null}
@@ -455,6 +458,19 @@ export function ReportView({ interviewId }: { interviewId: string }) {
             <p>{report.trainingOutcome.topic} · {report.trainingOutcome.transferScore === null
               ? "尚无可靠复测分数" : `新场景复测 ${(report.trainingOutcome.transferScore * 4).toFixed(1)} / 4`}</p>
             <p>{report.trainingOutcome.message}</p>
+            {!!report.trainingOutcome.evidenceComparison?.length && <div className="evidence-comparison">
+              <h3>同一评分点的证据对照</h3><p>只比较相同评分要求；不把不同题目的总分差解释为能力提升。</p>
+              {!!report.trainingOutcome.baselineEvidence?.length && <details className="diagnosis-estimates"><summary>回看训练前同主题的具体证据</summary>
+                <p>新场景的要求可能不同。以下保留初次回答的原要求与原话，供你对照；不自动判定进步。</p>
+                {report.trainingOutcome.baselineEvidence.map((item, index) => <section key={index}><h4>第 {item.sequenceNumber} 题 · {item.label}</h4><p>{item.criterion}</p>{item.quote && <blockquote>“{item.quote}”</blockquote>}</section>)}
+              </details>}
+              {report.trainingOutcome.evidenceComparison.map((item, index) => <section className="comparison-item" key={index}>
+                <h4>{item.criterion}</h4><div className="comparison-columns">
+                  <div><strong>训练前 · {item.before}</strong>{item.beforeQuote && <blockquote>“{item.beforeQuote}”</blockquote>}</div>
+                  <div><strong>独立复测 · {item.after}</strong>{item.afterQuote && <blockquote>“{item.afterQuote}”</blockquote>}</div>
+                </div>
+              </section>)}
+            </div>}
             <Link href={`/report/${report.trainingOutcome.sourceInterviewId}`}>查看训练前的诊断证据</Link>
           </article>
         ) : null}

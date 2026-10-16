@@ -55,6 +55,7 @@ export type AnswerEvaluation = {
       criterion: string;
       score: number;
       evidence: string[];
+      note?: string;
     }>;
     primaryScore: number;
     reviewScore: number;

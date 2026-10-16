@@ -186,3 +186,19 @@ body:has(.practice-ui) { background: #f6f7f9; }
   .practice-ui .diagnosis-priority-grid, .practice-ui .diagnosis-skill-grid { grid-template-columns: 1fr; }
   .practice-ui .diagnosis-focus, .practice-ui .diagnosis-skill { padding: 18px; }
 }
+/* Evidence feedback keeps partial answers visible without implying full mastery. */
+.practice-ui .criterion-feedback { display: grid; gap: 12px; }
+.practice-ui .criterion-item { padding: 16px; border: 1px solid var(--line); border-left: 3px solid #aeb9b1; border-radius: 10px; }
+.practice-ui .criterion-demonstrated { border-left-color: #568b71; background: #f4f8f5; }
+.practice-ui .criterion-partial { border-left-color: #b38a45; background: #fbf8f0; }
+.practice-ui .criterion-label { font-size: 13px; font-weight: 700; }
+.practice-ui .criterion-item blockquote, .practice-ui .comparison-item blockquote { margin: 10px 0; padding: 10px 14px; background: #f4f6f3; line-height: 1.8; overflow-wrap: anywhere; }
+.practice-ui .diagnosis-reason, .practice-ui .answer-rehearsal { padding: 18px; margin-top: 18px; background: #f4f6f3; border-radius: 10px; }
+.practice-ui .answer-rehearsal textarea { display: block; width: 100%; box-sizing: border-box; padding: 12px; border: 1px solid #cdd5dd; border-radius: 6px; resize: vertical; font: inherit; background: white; color: var(--ink); }
+.practice-ui .answer-rehearsal small { display: block; margin-top: 8px; color: #59675f; }
+.practice-ui .pending-reasons, .practice-ui .comparison-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.practice-ui .pending-reasons section, .practice-ui .comparison-item { border-top: 1px solid var(--line); padding-top: 16px; margin-top: 16px; min-width: 0; }
+.practice-ui .pending-reasons a { display: inline-block; padding: 10px 8px 10px 0; text-decoration: underline; color: #17573e; }
+.practice-ui .pending-evidence { scroll-margin-top: 24px; }
+.practice-ui .comparison-columns strong { font-size: 14px; line-height: 1.8; }
+@media (max-width: 700px) { .practice-ui .pending-reasons, .practice-ui .comparison-columns { grid-template-columns: 1fr; } }
