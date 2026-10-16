@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { criterionFeedback, confirmationReason, type buildReportInsights, type DiagnosticTurn } from "@/app/lib/report-insights";
+import { criterionFeedback, confirmationReason, verificationFollowups, type buildReportInsights, type DiagnosticTurn } from "@/app/lib/report-insights";
 
 type Report = {
   diagnosis: ReturnType<typeof buildReportInsights>;
@@ -21,18 +21,18 @@ export function DiagnosticReportContent({ report }: { report: Report }) {
         const group = pending.filter(item => item.reason!.code === code);
         return <section key={code}><h3>{group[0].reason!.title} · {group.length} 轮</h3>
           <p>{group[0].reason!.action}</p>
-          {group.map(({ turn }) => <a key={turn.id} href={`#review-${turn.id}`} onClick={() => document.getElementById(`review-${turn.id}`)?.setAttribute("open", "")}>查看第 {turn.sequenceNumber} 题 → </a>)}
+          {group.map(({ turn }) => <div key={turn.id}><a href={`#review-${turn.id}`} onClick={() => document.getElementById(`review-${turn.id}`)?.setAttribute("open", "")}>查看第 {turn.sequenceNumber} 题 → </a><FollowupEvidence turn={turn} turns={completed} /></div>)}
         </section>;
       })}</div>
     </article>}
     <article className="report-card report-card-wide diagnosis-priorities">
       <p className="card-index">先处理最值得投入的地方</p><h2>本次训练重点</h2>
-      <p className="report-caption">结合岗位相关性与本次回答证据排序。待确认项需要补测；练习题组以上方建议为准。</p>
+      <p className="report-caption">首项与上方训练建议一致，结合岗位相关性、回答证据与可用新题选择。其他方向供后续复盘。</p>
       <div className="diagnosis-priority-grid">{report.diagnosis.slice(0, 2).map((item, index) => {
-        const observation = item.observations[0];
+        const observation = item.focusTopic ? item.observations.find(entry => entry.turn.topic === item.focusTopic) : item.observations[0];
         return <section className="diagnosis-focus" key={item.skill}>
           <span className="diagnosis-index">0{index + 1} · {statusLabel(item.status)}</span>
-          <h3>{observation?.turn.topic ?? item.topics?.[0] ?? item.label}</h3>
+          <h3>{item.focusTopic ?? observation?.turn.topic ?? item.topics?.[0] ?? item.label}</h3>
           <p className="report-caption">{item.label} · {item.confidence}</p><p>{item.goal}</p>
           {observation ? <>
             <p className="report-caption">依据：第 {observation.turn.sequenceNumber} 题 · {observation.turn.questionText}</p>
@@ -71,6 +71,7 @@ export function DiagnosticReportContent({ report }: { report: Report }) {
             <h3>你的原回答</h3><p className="diagnosis-answer">{turn.answerText}</p>
             <h3>{accepted ? "从这次回答观察到" : "待核对的反馈"}</h3>
             {reason && <aside className="diagnosis-reason"><strong>{reason.title}</strong><p>{reason.explanation}</p><p>下一步：{reason.action}</p></aside>}
+            {reason && <FollowupEvidence turn={turn} turns={completed} />}
             {feedback.length ? <div className="criterion-feedback">{feedback.map((item, i) => <section key={i} className={`criterion-item criterion-${item.state}`}>
               <span className="criterion-label">{item.label}</span><h4>{item.criterion}</h4>
               {item.quote ? <blockquote>相关原话：“{item.quote}”</blockquote> : <p>暂无可核对的原话证据。</p>}
@@ -88,6 +89,18 @@ export function DiagnosticReportContent({ report }: { report: Report }) {
       {!completed.length && <p>还没有已保存的回答。继续诊断后，这里会展示逐题复盘。</p>}
     </article>
   </>;
+}
+
+function FollowupEvidence({ turn, turns }: { turn: DiagnosticTurn; turns: DiagnosticTurn[] }) {
+  const followups = verificationFollowups(turn, turns);
+  if (!followups.length) return null;
+  return <aside className="diagnosis-reason"><strong>已有后续追问证据</strong>
+    <p>追问只支持它具体考察的判断，不会把原题全部评分点自动改为已掌握。</p>
+    {followups.map(followup => <div key={followup.id}>
+      <a href={`#review-${followup.id}`} onClick={() => document.getElementById(`review-${followup.id}`)?.setAttribute("open", "")}>第 {followup.sequenceNumber} 题：{followup.questionText}</a>
+      <ul>{criterionFeedback(followup).filter(item => item.state !== "uncertain").map((item, index) => <li key={index}>{item.label}：{item.criterion}</li>)}</ul>
+    </div>)}
+  </aside>;
 }
 
 function AnswerRehearsal({ focus, topic, uncertain }: { focus?: string; topic?: string; uncertain: boolean }) {

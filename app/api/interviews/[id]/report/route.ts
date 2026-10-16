@@ -150,7 +150,7 @@ export async function GET(_request: Request, context: RouteContext) {
             ? "INSUFFICIENT_EVIDENCE"
             : "AVAILABLE",
         interview: serializeInterview(interview),
-        diagnosis: buildReportInsights(diagnosticTurns, inferJobWeights(interview.jobDescription)),
+        diagnosis: buildReportInsights(diagnosticTurns, inferJobWeights(interview.jobDescription), recommendation),
         reviewGuidance: Object.fromEntries(completedTurns.map(turn => {
           const question = turn.questionId ? getInterviewQuestion(turn.questionId, interviewQuestionBankVersion(interview)) : undefined;
           return [turn.id, question?.learningPoints?.length ? question.learningPoints : question?.rubric.map(item => item.criterion) ?? []];

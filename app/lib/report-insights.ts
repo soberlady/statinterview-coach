@@ -87,7 +87,14 @@ export function isAcceptedEvidence(turn: DiagnosticTurn) {
     && ["HIGH", "MEDIUM"].includes(turn.reliability ?? turn.evaluation.reliability ?? "LOW");
 }
 
-export function buildReportInsights(turns: DiagnosticTurn[], jobWeights: Record<string, number> = {}) {
+export function verificationFollowups(turn: DiagnosticTurn, turns: DiagnosticTurn[]) {
+  if (!turn.questionId || turn.questionType === "verification") return [];
+  return turns.filter(candidate => candidate.sequenceNumber > turn.sequenceNumber
+    && candidate.questionType === "verification" && isAcceptedEvidence(candidate)
+    && candidate.questionId?.replace(/__verify_(?:v3_)?\d+$/, "") === turn.questionId);
+}
+
+export function buildReportInsights(turns: DiagnosticTurn[], jobWeights: Record<string, number> = {}, recommendation?: { focusSkill: string; topic: string; reason: string } | null) {
   return Object.entries(SKILL_LABELS).map(([key, label]) => {
     const skill = key as SkillKey;
     const answered = turns.filter(t => t.skill === skill && t.answerText.trim() && (!t.status || t.status === "completed"));
@@ -99,7 +106,9 @@ export function buildReportInsights(turns: DiagnosticTurn[], jobWeights: Record<
       const displayGap = feedback ? `${feedback.label}：${feedback.criterion}` : gap;
       return { gap: displayGap, turn, quote: quote ?? null };
     }));
-    const unique = observations.filter((item, index) => observations.findIndex(other => other.gap === item.gap) === index);
+    const unique = observations.filter((item, index) => observations.findIndex(other => other.gap === item.gap && other.turn.topic === item.turn.topic) === index);
+    const preferred = recommendation?.focusSkill === skill ? recommendation : null;
+    if (preferred) unique.sort((a, b) => Number(b.turn.topic === preferred.topic) - Number(a.turn.topic === preferred.topic));
     const status = !answered.length ? "uncovered" : !accepted.length ? "uncertain" : unique.length ? "practice" : "transfer";
     // Follow-up answers to the same source question do not count as independent coverage.
     const independent = new Set(accepted.map(t => (t.questionId ?? t.id).replace(/__(verify_(?:v3_)?\d+|role_anchor)$/, ""))).size;
@@ -108,8 +117,10 @@ export function buildReportInsights(turns: DiagnosticTurn[], jobWeights: Record<
     const goal = unique[0]?.gap ?? (status === "uncovered" ? `补充考察${label}，先建立回答证据。` : status === "uncertain" ? `用一道新题重新说明${label}的判断过程，确认当前表现。` : `换一个场景练习${label}，检查能否独立迁移。`);
     const weight = jobWeights[skill] ?? .25;
     const topics = [...new Set(answered.map(t => t.topic).filter((topic): topic is string => Boolean(topic)))];
-    return { skill, label, topics, answered, accepted, observations: unique, status, confidence, strength, goal,
+    return { skill, label, topics, answered, accepted, observations: unique, status, confidence, strength,
+      focusTopic: preferred?.topic,
+      goal: preferred && unique[0]?.turn.topic !== preferred.topic ? preferred.reason : goal,
       priority: weight * (status === "practice" ? 3 : status === "uncertain" ? 2.5 : status === "uncovered" ? 2 : 1),
       kind: status === "practice" ? "practice" as const : status === "transfer" ? "transfer" as const : "verify" as const };
-  }).sort((a, b) => b.priority - a.priority || a.skill.localeCompare(b.skill));
+  }).sort((a, b) => Number(b.skill === recommendation?.focusSkill) - Number(a.skill === recommendation?.focusSkill) || b.priority - a.priority || a.skill.localeCompare(b.skill));
 }

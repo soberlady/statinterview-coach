@@ -11,6 +11,7 @@ import {
   useState,
 } from "react";
 import { useRouter } from "next/navigation";
+import { loadVoiceSdk, preloadVoiceSdk } from "@/app/lib/voice-sdk";
 import type { GuidedDemoPayload } from "@/app/lib/guided-demo";
 import type { publicTrainingContext } from "@/app/lib/practice-plan";
 import { browserDraftStorage, clearAnswerDraft, loadAnswerDraft, saveAnswerDraft } from "@/app/lib/answer-draft";
@@ -587,6 +588,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
 
     try {
       // Every switch back to voice starts a new room, never a stale muted session.
+      preloadVoiceSdk();
       const previousRoom = voiceRoomRef.current;
       voiceRoomRef.current = null;
       if (previousRoom) await previousRoom.disconnect();
@@ -611,7 +613,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         `/api/interviews/${interviewId}/voice-token`,
         { method: "POST", signal: AbortSignal.timeout(20_000) },
       ).then((response) => ({ response, completedAt: performance.now() }));
-      const sdkPromise = import("livekit-client").then((sdk) => ({
+      const sdkPromise = loadVoiceSdk().then((sdk) => ({
         sdk,
         completedAt: performance.now(),
       }));
@@ -741,22 +743,34 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         void (async () => {
         if (voiceRoomRef.current !== room) return;
         if (track.kind !== Track.Kind.Audio) return;
+        const trackSubscribedAt = performance.now();
+        let validationCompletedAt = trackSubscribedAt;
+        let microphoneCompletedAt = trackSubscribedAt;
         try {
-          const checkpointResponse = await fetch(`/api/interviews/${interviewId}/next-question`, { cache: "no-store", signal: AbortSignal.timeout(10_000) });
-          const checkpoint = (await checkpointResponse.json()) as NextQuestionResponse;
-          if (!checkpointResponse.ok || !checkpoint.nextQuestion || !checkpoint.progress) throw new Error("checkpoint unavailable");
-          const status = JSON.parse(await room.localParticipant.performRpc({
-            destinationIdentity: participant.identity, method: "statinterview.status",
-            payload: "{}", responseTimeout: 5_000,
-          }));
+          // Independent reads can overlap; the microphone still waits for both
+          // snapshots to agree, preserving the stale-room protection.
+          const [checkpoint, statusText] = await Promise.all([
+            fetch(`/api/interviews/${interviewId}/next-question`, { cache: "no-store", signal: AbortSignal.timeout(10_000) }).then(async response => {
+              if (!response.ok) throw new Error("checkpoint unavailable");
+              return await response.json() as NextQuestionResponse;
+            }),
+            room.localParticipant.performRpc({
+              destinationIdentity: participant.identity, method: "statinterview.status",
+              payload: "{}", responseTimeout: 5_000,
+            }),
+          ]);
+          if (!checkpoint.nextQuestion || !checkpoint.progress) throw new Error("checkpoint unavailable");
+          const status = JSON.parse(statusText);
           if (!parseVoiceProcessing(status, checkpoint.nextQuestion.id, checkpoint.progress.completedTurns + 1)) throw new Error("question mismatch");
           if (voiceRoomRef.current !== room) return;
+          validationCompletedAt = performance.now();
           setQuestion(checkpoint.nextQuestion);
           setProgress(checkpoint.progress);
           voiceCompletedTurnsRef.current = checkpoint.progress.completedTurns;
           voiceQuestionIdRef.current = checkpoint.nextQuestion.id;
           voiceQuestionTextRef.current = checkpoint.nextQuestion.text;
           await room.localParticipant.setMicrophoneEnabled(true);
+          microphoneCompletedAt = performance.now();
         } catch {
           fallBackToText("voice.agent_disconnected", "暂时无法确认语音面试官与当前题目一致，已切回文本。请以页面题目为准；语音 Agent 可能需要更新或重新同步。");
           return;
@@ -781,6 +795,9 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
             voiceSessionId: credentials.voiceSessionId,
             roomName: credentials.roomName,
             agentIdentity: participant.identity,
+            trackSubscribedMs: Math.round(trackSubscribedAt - connectionStartedAt),
+            checkpointValidationMs: Math.round(validationCompletedAt - trackSubscribedAt),
+            microphoneEnableMs: Math.round(microphoneCompletedAt - validationCompletedAt),
             roomConnectedToAgentAudioMs:
               roomConnectedAt === null
                 ? null
@@ -935,7 +952,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
           voiceSessionId: credentials.voiceSessionId,
           roomName: credentials.roomName,
           completedTurnsAtConnect: progress.completedTurns,
-          measurement: "token-request-to-room-connected",
+          measurement: "connection-start-to-room-connected",
           tokenRequestMs: Math.max(
             0,
             Math.round(tokenResult.completedAt - connectionStartedAt),

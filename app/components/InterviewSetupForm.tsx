@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { GUIDED_DEMO_REQUEST } from "@/app/lib/guided-demo";
+import { preloadVoiceSdk } from "@/app/lib/voice-sdk";
 
 type CreateInterviewResponse = {
   interview?: {
@@ -49,6 +50,7 @@ export function InterviewSetupForm() {
   ) {
     setError("");
     setSubmittingKind(kind);
+    if (kind === "diagnostic") preloadVoiceSdk();
 
     try {
       const response = await fetch("/api/interviews", {

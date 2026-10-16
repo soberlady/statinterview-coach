@@ -557,12 +557,12 @@ export function ReportView({ interviewId }: { interviewId: string }) {
                 )}
               </span>
               <span>
-                房间与麦克风 p50 {formatLatency(
+                房间连接 p50 {formatLatency(
                   report.metrics.voiceTelemetry.connectionLatency.p50Ms,
                 )}
               </span>
               <span>
-                房间与麦克风 p95 {formatLatency(
+                房间连接 p95 {formatLatency(
                   report.metrics.voiceTelemetry.connectionLatency.p95Ms,
                 )}
               </span>

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildReportInsights, criterionFeedback, confirmationReason, compareEvidence, type DiagnosticTurn } from "../app/lib/report-insights";
+import { buildReportInsights, criterionFeedback, confirmationReason, compareEvidence, verificationFollowups, type DiagnosticTurn } from "../app/lib/report-insights";
 
 function turn(overrides: Partial<DiagnosticTurn> = {}): DiagnosticTurn {
   return { id: "t1", sequenceNumber: 1, questionId: "sql_python_001", skill: "sql_python",
@@ -8,6 +8,30 @@ function turn(overrides: Partial<DiagnosticTurn> = {}): DiagnosticTurn {
     evaluation: { evaluator: "RUBRIC_DOUBLE_PASS", action: "ACCEPT", gaps: ["待补充：说明业务主键"],
       semantic: { criteria: [{ criterion: "说明业务主键", score: 1, evidence: ["直接删除重复行"] }] } }, ...overrides };
 }
+
+test("training priority follows the executable recommendation and its topic", () => {
+  const result = buildReportInsights([
+    turn({ topic: "数据质量" }),
+    turn({ id: "retention", topic: "留存口径", sequenceNumber: 2 }),
+    turn({ id: "business", skill: "business_analysis" }),
+  ], { sql_python: .1, business_analysis: .8 }, { focusSkill: "sql_python", topic: "留存口径", reason: "先练留存" });
+  assert.equal(result[0].skill, "sql_python");
+  assert.equal(result[0].focusTopic, "留存口径");
+  // Duplicate criterion wording in another topic must not hide target evidence.
+  assert.equal(result[0].observations[0].turn.id, "retention");
+});
+
+test("verification links only later accepted followups of the exact source", () => {
+  const parent = turn({ reliability: "LOW" });
+  const followup = turn({ id: "followup", sequenceNumber: 2, questionType: "verification", questionId: "sql_python_001__verify_v3_0" });
+  assert.deepEqual(verificationFollowups(parent, [parent, followup,
+    { ...followup, id: "other", questionId: "sql_python_002__verify_v3_0" },
+    { ...followup, id: "unreliable", reliability: "LOW" },
+    { ...followup, id: "before", sequenceNumber: 0 },
+  ]).map(item => item.id), ["followup"]);
+  assert.equal(criterionFeedback(parent)[0].state, "uncertain");
+  assert.deepEqual(verificationFollowups(turn({ questionId: null }), [followup]), []);
+});
 
 test("uncertain, untested and observed gaps remain distinct", () => {
   const result = buildReportInsights([turn(), turn({ id: "t2", skill: "statistics_ml", reliability: "LOW" })]);
