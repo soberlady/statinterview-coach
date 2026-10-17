@@ -44,7 +44,7 @@
     "react-loading-skeleton": "3.5.0"
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "1.62.5",
+    "@cloudflare/vite-plugin": "1.64.0",
     "@tailwindcss/postcss": "4.2.1",
     "@types/node": "22.19.19",
     "@types/react": "19.2.14",
@@ -61,7 +61,7 @@
     "typescript": "5.9.3",
     "vinext": "1.0.1",
     "vite": "8.3.2",
-    "wrangler": "4.147.0"
+    "wrangler": "4.149.0"
   },
   "overrides": {
     "@esbuild-kit/core-utils@3.3.2": {
