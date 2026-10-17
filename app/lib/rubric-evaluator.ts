@@ -5,6 +5,7 @@ import {
 } from "./agent-policy";
 import { estimateTokenCost, type TokenCostEstimate } from "./model-cost";
 import type { InterviewQuestion } from "./question-bank";
+import { normalizeVoiceTranscriptForDisplay } from "./voice-transcript-display";
 
 type CriterionResult = {
   criterionIndex: number;
@@ -13,10 +14,11 @@ type CriterionResult = {
   note: string;
 };
 
-export const RUBRIC_PROMPT_VERSION = "rubric-double-pass-v3";
-export const TRANSCRIPT_REPAIR_PROMPT_VERSION = "transcript-repair-v1";
+export const RUBRIC_PROMPT_VERSION = "rubric-double-pass-v4";
+export const TRANSCRIPT_REPAIR_PROMPT_VERSION = "transcript-repair-v2";
 
 export type AnswerEvaluationOptions = {
+  // Retained for transport compatibility; never trusted as scoring input.
   transcriptScoringHint?: string;
   enableTranscriptRepair?: boolean;
 };
@@ -157,8 +159,9 @@ export async function evaluateAnswerStrict(
   }
 
   const startedAt = Date.now();
-  const deterministicHint =
-    options.transcriptScoringHint?.trim() || answer.trim();
+  // Client/transport hints are untrusted. They must never replace the raw
+  // factual baseline, including when repair fails or is disabled.
+  const deterministicHint = answer.trim();
   let transcriptRepair: TranscriptRepair = {
     repairedText: deterministicHint,
     applied: deterministicHint !== answer.trim(),
@@ -287,21 +290,29 @@ export function combineRubricPasses(input: {
   const combined = question.rubric.map((criterion, index) => {
     const primaryResult = primary.criteria[index];
     const reviewResult = review.criteria[index];
+    const primaryEvidence = primaryResult.evidence
+      .map((quote) => quote.trim())
+      .filter((quote) => quote.length > 0 && answer.includes(quote));
+    const reviewEvidence = reviewResult.evidence
+      .map((quote) => quote.trim())
+      .filter((quote) => quote.length > 0 && answer.includes(quote));
+    // A quotation from the other pass cannot ground this pass's score.
+    // Missing evidence is unknown, including a zero with no quoted error.
+    const evidenceSupported = primaryEvidence.length > 0 && reviewEvidence.length > 0;
     const evidence = [
-      ...new Set(
-        [...primaryResult.evidence, ...reviewResult.evidence]
-          .map((quote) => quote.trim())
-          .filter((quote) => quote.length > 0 && answer.includes(quote)),
-      ),
+      ...new Set([...primaryEvidence, ...reviewEvidence]),
     ].slice(0, 3);
     return {
       criterion: criterion.criterion,
       weight: criterion.weight,
-      score: (primaryResult.score + reviewResult.score) / 2,
+      // Numeric fields remain compatible; this is only the grounded subtotal.
+      // Any unknown criterion blocks the whole answer's posterior update.
+      score: evidenceSupported ? (primaryResult.score + reviewResult.score) / 2 : 0,
       primaryScore: primaryResult.score,
       reviewScore: reviewResult.score,
       evidence,
-      note: reviewResult.note,
+      evidenceSupported,
+      note: evidenceSupported ? reviewResult.note : "证据不足，暂不判断此评分项；不等于回答错误。",
     };
   });
 
@@ -335,8 +346,9 @@ export function combineRubricPasses(input: {
         Math.abs(criterion.primaryScore - criterion.reviewScore),
     0,
   );
+  const hasMissingEvidence = combined.some((criterion) => !criterion.evidenceSupported);
   const reliability: Reliability =
-    evidenceCoverage >= 0.75 &&
+    hasMissingEvidence ? "LOW" : evidenceCoverage >= 0.75 &&
     reviewDisagreement <= 0.4 &&
     answer.trim().length > 0
       ? "HIGH"
@@ -346,12 +358,14 @@ export function combineRubricPasses(input: {
         ? "MEDIUM"
         : "LOW";
   const strengths = combined
-    .filter((criterion) => criterion.score >= 3)
+    .filter((criterion) => criterion.evidenceSupported && criterion.score >= 3)
     .map((criterion) => `已提供证据：${criterion.criterion}`)
     .slice(0, 3);
   const gaps = combined
-    .filter((criterion) => criterion.score < 2.5)
-    .map((criterion) => `待补充：${criterion.criterion}`)
+    .filter((criterion) => !criterion.evidenceSupported || criterion.score < 2.5)
+    .map((criterion) => criterion.evidenceSupported
+      ? `待补充：${criterion.criterion}`
+      : `证据不足，暂不判断：${criterion.criterion}`)
     .slice(0, 4);
 
   return {
@@ -420,7 +434,9 @@ export function combineRubricPasses(input: {
       pricingVersion: costEstimate.pricingVersion,
     },
     disclaimer:
-      "本轮经过初评与角色分离的复核两遍量表评分；证据必须能在回答原文中精确定位。结果仅用于训练反馈。",
+      hasMissingEvidence
+        ? "部分评分项证据不足，暂不判断，不等于回答错误；数值仅为有证据项的小计，不能作为完整评分，也不会写入能力后验。"
+        : "本轮经过初评与角色分离的复核两遍量表评分；证据必须能在回答原文中精确定位。结果仅用于训练反馈。",
   };
 }
 
@@ -475,14 +491,10 @@ async function callTranscriptRepairModel(input: {
     throw new Error("transcript repair response is invalid");
   }
   const validatedText = validateTranscriptRepair(
-    input.deterministicHint,
+    input.answer,
     parsed.repairedTranscript,
   );
-  const repairedText =
-    validatedText === input.answer.trim() &&
-    input.deterministicHint !== input.answer.trim()
-      ? input.deterministicHint
-      : validatedText;
+  const repairedText = validatedText;
   return {
     repairedText,
     applied: repairedText !== input.answer.trim(),
@@ -524,8 +536,10 @@ export function buildTranscriptRepairRequestBody(input: {
         role: "system",
         content: [
           "你是中文数据分析面试的语音转写校对器，不是回答生成器。",
-          "只修复明显的语音识别错误：同音字、漏掉的百分号、标点和中英混合专业术语。",
+          "只做下述明确允许的格式和术语校正，不做开放式改写。",
           "必须保持原句顺序、观点、因果关系、数字和否定含义；不得补充新知识、步骤、结论或例子。",
+          "仅允许既有PRR到PR-AUC校正、英文术语格式规范和原文明示百分之的格式转换；其他中文实词、单位、否定位置或因果表达不得改动。",
+          "原文未说明百分比时，不得根据题目补出百分号；无法确定的转写必须保持原文。",
           "题目和量表只用于辨认术语，不代表候选人说过其中内容。",
           "不能确定时保留原文。不要润色表达，不要删除口误或重复。",
           "只输出JSON对象：{\"repairedTranscript\":\"...\"}。",
@@ -548,14 +562,10 @@ export function validateTranscriptRepair(
   source: string,
   candidate: string,
 ): string {
-  const left = source.trim();
-  const right = candidate.trim();
-  if (!right || right.length > 20_000) {
+  const left = normalizeVoiceTranscriptForDisplay(source.trim());
+  const right = normalizeVoiceTranscriptForDisplay(candidate.trim());
+  if (!right || candidate.trim().length > 20_000) {
     throw new Error("transcript repair is empty or too long");
-  }
-  const ratio = right.length / Math.max(1, left.length);
-  if (ratio < 0.72 || ratio > 1.28) {
-    throw new Error("transcript repair changed too much text");
   }
   const sourceNumbers = (left.match(/\d+(?:[.。]\d+)?/g) ?? []).map(
     (value) => value.replace("。", "."),
@@ -573,35 +583,27 @@ export function validateTranscriptRepair(
   ) {
     throw new Error("transcript repair changed negation evidence");
   }
-  if (characterSimilarity(left, right) < 0.68) {
-    throw new Error("transcript repair is not traceable to the source");
+  // Similarity and equal negation counts cannot prove factual equivalence:
+  // they allow moving a negation, reversing causality, or dropping a % unit.
+  // Permit only explicit technical/format normalization; otherwise keep raw.
+  if (canonicalRepairText(left) !== canonicalRepairText(right)) {
+    throw new Error("transcript repair changed semantic evidence");
   }
-  return right;
+  return candidate.trim();
 }
 
-function characterSimilarity(left: string, right: string): number {
-  if (left === right) return 1;
-  if (!left || !right) return 0;
-  const leftPairs = characterPairs(left);
-  const rightPairs = characterPairs(right);
-  let overlap = 0;
-  for (const [pair, count] of leftPairs) {
-    overlap += Math.min(count, rightPairs.get(pair) ?? 0);
-  }
-  const leftCount = [...leftPairs.values()].reduce((sum, count) => sum + count, 0);
-  const rightCount = [...rightPairs.values()].reduce((sum, count) => sum + count, 0);
-  return (2 * overlap) / Math.max(1, leftCount + rightCount);
-}
-
-function characterPairs(value: string): Map<string, number> {
-  const compact = value.replace(/\s+/g, "");
-  const pairs = new Map<string, number>();
-  if (compact.length === 1) pairs.set(compact, 1);
-  for (let index = 0; index < compact.length - 1; index += 1) {
-    const pair = compact.slice(index, index + 2);
-    pairs.set(pair, (pairs.get(pair) ?? 0) + 1);
-  }
-  return pairs;
+function canonicalRepairText(value: string): string {
+  return value.normalize("NFKC")
+    // Preserve the existing, explicit PRR ASR correction without allowing
+    // arbitrary word substitutions or changes in sentence/negation order.
+    .replace(/\b(?:prr|pr[\s_-]*auc)\b/gi, "PR-AUC")
+    .replace(/\brow[\s_-]*number\b/gi, "ROW_NUMBER")
+    .replace(/\bdense[\s_-]*rank\b/gi, "DENSE_RANK")
+    .replace(/\broc[\s_-]*auc\b/gi, "ROC-AUC")
+    .replace(/。/g, ".")
+    // Keep word boundaries: "now here" and "nowhere" are different facts.
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 async function callRubricModel(input: {
@@ -737,6 +739,7 @@ export function buildRubricMessages(input: {
         "评分与证据可靠性不同：明确错误或明确表示不会也可以有原文证据。对错误论述给0分并引用错误原话，在note说明矛盾；完全未提及才使用空证据。",
         "按题目要求判断回答是否完整，不按字数给分；简短但准确的限定追问可以得满分。",
         "evidence只能逐字引用回答原文，不能引用转写理解辅助；无证据时必须为空数组。",
+        "空证据表示尚无依据，不能支持正分；明确错误应引用错误原话并给0分，不得把证据缺失当成已确认错误。",
         "只输出JSON对象，格式为 {\"criteria\":[{\"criterionIndex\":0,\"score\":0,\"evidence\":[],\"note\":\"\"}]}。",
       ].join("\n"),
     },

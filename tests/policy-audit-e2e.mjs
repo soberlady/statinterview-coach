@@ -592,7 +592,7 @@ try {
       (turn) =>
         turn.evaluation.evaluator === "RUBRIC_DOUBLE_PASS" &&
         turn.evaluation.semantic?.promptVersion ===
-          "rubric-double-pass-v3" &&
+          "rubric-double-pass-v4" &&
         /^[a-f0-9]{64}$/.test(
           turn.evaluation.semantic?.questionFingerprint ?? "",
         ) &&
