@@ -76,6 +76,43 @@ Vinext 1.x 将开发启动委托给 Vite，默认端口随之改变。启动包�
 
 配置检查中 LiveKit 与真实语义评分服务仍未配置；本地回归使用合成回答和模拟评分服务。真实语音质量、评分准确性和学习效果仍需人工验证，不能由依赖升级推导。
 
+## 2026-10-19：Python 测试依赖与审计（F5）
+
+`pytest>=8,<9` 会排除 CVE-2025-71176 的修复版。pytest 上游的
+[9.0.3 发布记录](https://github.com/pytest-dev/pytest/releases/tag/9.0.3)
+确认修复了 UNIX 临时目录权限问题；
+[安全公告](https://github.com/advisories/GHSA-6w46-j5rx-g56g)列出的受影响范围为 `<9.0.3`。
+这是本地开发/CI 工具风险，不是面试 API 的远程漏洞。
+
+开发依赖现声明 `pytest>=9.0.3,<10`，允许安全补丁及同一主版本内升级；
+审计工具固定为 `pip-audit==2.10.1`。没有更改生产语音依赖文件或业务代码。
+本轮在 Windows / Python 3.12 上分别验证了最低修复版 `9.0.3` 和当前解析版
+`9.1.1`，两者均通过全部 107 项 Python 测试。依赖范围不等于完整锁文件。
+
+在项目根目录用专用虚拟环境安装并审计完整环境：
+
+```powershell
+python -m venv services/agent/.venv
+services/agent/.venv/Scripts/python.exe -m pip install --upgrade pip
+services/agent/.venv/Scripts/python.exe -m pip install -e "./services/agent[dev]" -r services/agent/requirements.txt
+services/agent/.venv/Scripts/python.exe -m pip check
+npm run audit:python
+```
+
+Linux/macOS 对应解释器为 `services/agent/.venv/bin/python`。
+审计复用测试的 Python 解释器，扫描已安装的运行、语音、测试和审计工具及其传递依赖，
+而非只扫描 requirements.txt 中的四个直接依赖。CI 在安装生产语音依赖后执行
+`pip check`、`npm run audit:python`，并重跑 Python 测试以覆盖可选语音控制测试。
+
+门禁会校验审计报告，只有本项目 `statinterview-agent` 因 editable 安装而跳过是允许的，
+其代码按仓库源码审查；不允许第三方包被静默跳过。已知漏洞、工具/网络失败、
+空或不完整报告均返回失败；没有 Python 漏洞忽略清单，也不会自动修复环境。
+安全门禁需要 PyPI 网络访问，独立于离线的 `npm run verify`。
+
+审计仅反映当前系统实际安装的包和查询时的已知公告；Windows 的本地结果不能代替
+Ubuntu CI 的平台依赖检查。尚未引入全量传递依赖锁与哈希，也不证明无未知漏洞。
+上文 npm 的临时例外仍独立生效，本轮不延长例外期限。
+
 ## 上游依据
 
 - [Next Windows 服务端漏洞公告](https://github.com/vercel/next.js/security/advisories/GHSA-p293-qw3h-jr36)

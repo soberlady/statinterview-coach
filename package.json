@@ -12,7 +12,7 @@
     "start": "node scripts/run-vinext.mjs start",
     "doctor": "node scripts/config-doctor.mjs",
     "validate:content": "node content/validate-question-bank.mjs",
-    "test": "npm run build && node --test tests/dependency-audit.test.mjs tests/toolchain-compat.test.mjs tests/config-doctor.test.mjs tests/rendered-html.test.mjs && tsx --test tests/http.test.ts tests/policy-parity.test.ts tests/rubric-evaluator.test.ts tests/livekit-token.test.ts tests/voice-readiness.test.ts tests/voice-transcript-display.test.ts tests/voice-telemetry.test.ts tests/cost-telemetry.test.ts tests/model-cost.test.ts tests/decision-audit.test.ts tests/guided-demo.test.ts tests/public-showcase.test.ts tests/agent-demo.test.ts tests/voice-transcript-buffer.test.ts tests/voice-transcript-diagnostics.test.ts tests/coaching-policy.test.ts tests/voice-processing.test.ts tests/answer-draft.test.ts tests/question-bank-version.test.ts tests/report-insights.test.ts",
+    "test": "npm run build && node --test tests/dependency-audit.test.mjs tests/python-dependency-audit.test.mjs tests/toolchain-compat.test.mjs tests/config-doctor.test.mjs tests/rendered-html.test.mjs && tsx --test tests/http.test.ts tests/policy-parity.test.ts tests/rubric-evaluator.test.ts tests/livekit-token.test.ts tests/voice-readiness.test.ts tests/voice-transcript-display.test.ts tests/voice-telemetry.test.ts tests/cost-telemetry.test.ts tests/model-cost.test.ts tests/decision-audit.test.ts tests/guided-demo.test.ts tests/public-showcase.test.ts tests/agent-demo.test.ts tests/voice-transcript-buffer.test.ts tests/voice-transcript-diagnostics.test.ts tests/coaching-policy.test.ts tests/voice-processing.test.ts tests/answer-draft.test.ts tests/question-bank-version.test.ts tests/report-insights.test.ts",
     "test:agent": "node scripts/run-python.mjs -m pytest services/agent",
     "test:e2e": "npm run db:local && node tests/policy-audit-e2e.mjs",
     "test:policy": "tsx --test tests/http.test.ts tests/policy-parity.test.ts tests/rubric-evaluator.test.ts tests/livekit-token.test.ts tests/voice-readiness.test.ts tests/voice-transcript-display.test.ts tests/voice-telemetry.test.ts tests/cost-telemetry.test.ts tests/model-cost.test.ts tests/decision-audit.test.ts tests/guided-demo.test.ts tests/public-showcase.test.ts tests/agent-demo.test.ts tests/voice-transcript-buffer.test.ts tests/voice-transcript-diagnostics.test.ts tests/coaching-policy.test.ts tests/voice-processing.test.ts tests/answer-draft.test.ts tests/question-bank-version.test.ts tests/report-insights.test.ts",
@@ -31,7 +31,8 @@
     "test:demo": "tsx --test tests/agent-demo.test.ts",
     "verify:code": "npm run validate:content && npm run lint && npm run typecheck && npm run test:agent && npm test && npm run test:e2e && npm run verify:artifacts",
     "eval:coaching": "tsx experiments/run_coaching_benchmark.ts",
-    "audit:dependencies": "node scripts/check-dependency-audit.mjs"
+    "audit:dependencies": "node scripts/check-dependency-audit.mjs",
+    "audit:python": "node scripts/check-python-dependency-audit.mjs"
   },
   "dependencies": {
     "@livekit/protocol": "^1.43.4",

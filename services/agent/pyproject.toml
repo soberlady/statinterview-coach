@@ -18,7 +18,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-  "pytest>=8,<9"
+  "pytest>=9.0.3,<10",
+  "pip-audit==2.10.1"
 ]
 voice = [
   "httpx>=0.28,<1",
