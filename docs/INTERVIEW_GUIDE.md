@@ -1,156 +1,35 @@
-# Interview guide
+# Agent 设计问答
 
-## Current release boundary
+本文件供技术评审定位设计取舍，不包含个人简历模板或投递安排。可运行入口见[README](../README.md)，模块路线见[代码导读](PROJECT_GUIDE_ZH.md)。
 
-The product is a personal interview-training Agent, demonstrated on Chinese data-analysis interviews. It is a portfolio project for an Agent developer role, not a hiring-screening product.
-The current coaching-v3 release has 48 main questions, 97 follow-ups and a two-practice / one-unseen-transfer loop. All 3.83% MAE references below describe the historical frozen v2 / 24-question simulation. Do not attribute them to v3 or to real learning outcomes. See [the upgrade and acceptance notes](COACHING_UPGRADE_ZH.md).
+## 为什么是 Agent
 
-This document keeps the project explainable by one student. Do not memorize
-marketing language; be able to derive and modify the decisions below.
+系统有显式能力状态、受约束的动作集合、工具调用、回答反馈后的下一步选择以及可恢复检查点。模型负责语义评阅与语音对话，但没有任意选题或写分权限；服务端复算允许的问题和状态。可从离线演示观察 VERIFY → ABSTAIN → ACCEPT，而不是只看 prompt。
 
-Chinese readers: [项目导读与简历写法](PROJECT_GUIDE_ZH.md) ·
-[投递前行动清单](NEXT_STEPS_ZH.md). For a deterministic terminal demo, run
-`npm run demo:agent`; it executes the edge policy with fixture scores.
+## 为什么是 2+2+3
 
-## 90-second project introduction
+两个公共锚点保留共同覆盖；两个岗位基线在回答前冻结，避免回答反过来污染基线；最后三题根据后验、信息增益、岗位权重、覆盖、难度和预计耗时选题。七题是正式题预算，验证追问另计；时间项是选题成本，不是严格墙钟截止。题库规模有限、难度尚未真人校准，需保留这些限制。
 
-> I built StatInterview Coach, an adaptive interview-training Agent for Chinese
-> data-analysis internships. The problem I focus on is not generating more
-> questions, but deciding what to ask under a seven-question budget and refusing
-> to score weak evidence. Two public anchors establish comparable coverage,
-> then two JD-directed baseline questions are frozen before answers can affect
-> routing. A
-> discrete Bayesian ability state stores both mean and uncertainty. The Agent
-> then selects three posterior-adaptive follow-ups using expected information
-> gain, job relevance, coverage, difficulty match and time cost. If answer evidence is unreliable, a bounded
-> verification policy asks an approved follow-up or abstains instead of
-> updating ability. The web flow, D1 checkpoints, evidence report and LiveKit
-> browser/worker boundary are implemented. The final report deterministically
-> replays every decision, decomposes the top candidate utilities and generates
-> a SHA-256 reproducibility fingerprint; a counterfactual test proves that a legal but
-> non-selected question is detected. I also wrote Python and TypeScript parity
-> fixtures and a reproducible 4,000-candidate simulation. Under the
-> stated assumptions, adaptive selection reduced job-weighted MAE by 3.83%
-> versus a fixed sequence; the effect varied by role profile, which is an
-> important limitation rather than something I hide.
+## 后验和信息增益从何而来
 
-## The technical throughline
+在离散能力网格上使用 Rasch sigmoid 响应模型，将量表分数作为 fractional likelihood 更新。选题比较当前熵与按预测概率加权的答对/答错后验熵。数学可以复算，但模型假设与难度有效性必须由真人数据另行检验。
 
-```mermaid
-flowchart LR
-  A["Raw answer / final transcript"] --> B["Evidence evaluator"]
-  B --> C{"Reliability policy"}
-  C -->|"ACCEPT"| D["Bayesian ability update"]
-  C -->|"VERIFY"| E["Approved follow-up"]
-  C -->|"ABSTAIN"| F["Keep prior"]
-  D --> G["Expected-information-gain selector"]
-  E --> B
-  F --> G
-  G --> H["Persist checkpoint and reason"]
-```
+## 双遍评分如何约束
 
-Every module exists to support one of these decisions. UI polish, camera
-preview and future user history are secondary.
+不信任模型自报置信度；每遍评分的每项引用都要能在原文找到，任一项无有效证据即不更新整次后验。有证据的错误回答可可靠地得到低分，缺证据则是未知。两遍模型不必统计独立，也不替代专家双标。转写修复始终以原文校验，客户端提示不能改变事实。
 
-## Five questions you must answer from first principles
+## 事务与幂等能保证什么
 
-### Why is this an Agent rather than a form workflow?
+D1 batch 将回答、后验、检查点与内部事件原子提交，版本比较阻止评分期间的取消被迟到响应覆盖。已保存的相同回答可只读重放，最终完成失败也无需重答。但两个在途重复请求仍可能都调用评分；唯一约束保护存储，不能宣称外部调用 exactly-once。后续工程项见[路线图](NEXT_STEPS_ZH.md)。
 
-It maintains an explicit belief state, observes evidence, chooses among
-multiple actions, invokes tools, changes the next question based on state and
-persists a recoverable decision trace. The language model controls
-conversation, but it cannot bypass the deterministic policy API.
+## 为什么两套语言
 
-### Why two public anchors and two JD-directed baselines?
+TypeScript 适配 Cloudflare 业务 API，Python 承担数学实验与 LiveKit worker，代价是重复合同及漂移风险。golden fixtures 覆盖后验、信息增益与效用信号，不验证全会话等价。详见[架构](ARCHITECTURE.md)。
 
-Without public anchors, a personalized path may be efficient but incomparable.
-The two public questions preserve a minimum common baseline. The next two
-questions cover the JD's highest-weight dimensions and are frozen before
-answers can affect routing, so they remain baselines rather than adaptive
-questions. Three of seven formal questions then remain posterior-adaptive.
+## 重放与实验能证明什么
 
-### What does expected information gain mean?
+重放使用保存的评分重新计算策略和后验，不重新调用模型判断回答正确性；SHA-256 是可复现指纹，不是数字签名。4,000 个候选人、3.83% 加权 MAE 降幅只属于冻结 v2 / 24 题 Rasch 仿真，不能写成当前 v3 真人准确率、招聘效度或训练收益。当前 v3 的 12 场景仅验证路由敏感性、预算和重放。
 
-For each candidate question, compute current posterior entropy. Simulate the
-posterior after a correct and incorrect response, weight both entropies by
-their predictive probability, and subtract from current entropy. Questions
-near the current ability usually reduce uncertainty more.
+## 推荐演示证据
 
-### Why not trust the LLM's confidence?
-
-Self-reported confidence is not calibrated. Reliability is based on observable
-signals such as evidence coverage, transcript completeness, answer units,
-schema validity and double-pass score disagreement. Low reliability blocks the
-ability update.
-
-### Is the 3.83% result meaningful?
-
-It is evidence that the implementation behaves as intended under a Rasch
-simulation. It is not a user-learning or hiring-validity result. Gains vary
-across profiles and are strongest for data engineering, so the result cannot
-be generalized beyond the frozen simulation.
-
-## Five-minute demo
-
-1. Open the landing page, state the narrow problem and choose **进入引导演示**.
-2. Explain the banner: all preloaded answers and `DEMO_FIXTURE` scores are
-   synthetic presentation data, not hidden model output.
-3. Load the recommended weak answer; show `VERIFY`, then load the still-weak
-   verification answer and show `ABSTAIN` without a posterior update.
-4. Use the remaining recommended complete answers and show that accepted
-   evidence changes the ability state.
-5. Show how the two frozen JD baselines cover the SQL-heavy role, then how the
-   final three adaptive questions respond to posterior uncertainty; open
-   the decision reason.
-6. Pause the session, reopen it and show that the persisted checkpoint enters
-   `RECOVERING` before the next answer is accepted.
-7. Open the report and trace a conclusion to the exact answer excerpt.
-8. Expand the decision audit; show 8/8 replay for the guided path, then explain why the final three
-   questions outranked their alternatives.
-9. Open `/lab`; explain the fixed/random ablation and the balanced-role
-   limitation, then show the scorer release gate and why 12 synthetic fixtures
-   remain `NOT_READY`; formal release metrics would use only a frozen
-   `locked_test` split.
-10. If LiveKit credentials and the worker are running, return home, create a
-   normal diagnosis and switch one turn to voice. Otherwise explicitly say the
-   media code is complete but the hosted credential-dependent call has not
-   been measured.
-
-## Honest resume wording
-
-> StatInterview Coach — uncertainty-aware adaptive interview training Agent
->
-> - Built an explicit Agent state machine with two public anchors, two frozen
->   JD-directed baselines, three posterior-adaptive questions, bounded
->   verification/abstention and D1 checkpoint recovery; reports trace conclusions
->   to verbatim answer evidence.
-> - Implemented a discrete Bayesian/Rasch ability state and a constrained
->   expected-information-gain selector; added shared Python/TypeScript golden
->   fixtures to prevent edge-policy drift.
-> - Built deterministic decision replay with five invariants, counterfactual
->   candidate rankings and a SHA-256 fingerprint; added a tamper test that
->   detects a bank-approved question not chosen by the policy.
-> - Ran a deterministic 4,000-candidate paired simulation under a seven-question
->   budget; adaptive selection reduced job-weighted MAE by 3.83% versus a fixed
->   sequence, with gains concentrated in uneven job profiles.
-> - Integrated a short-lived LiveKit room-token endpoint and Python Agent worker
->   that stores final raw transcripts and delegates scoring/selection to the
->   policy API.
-> - Added a secret-safe configuration preflight, deployment health endpoint and
->   one-command CI gate; 99 Python tests plus TypeScript, rendered-output and
->   local D1 end-to-end tests cover recovery and policy-tamper failure paths.
-
-Do not write “production-grade voice system,” “validated hiring predictor,” or
-“forked and shipped LiveKit Meet” until those statements become true.
-
-## Before applying
-
-- Run all tests and the benchmark from a clean checkout.
-- Run `npm run doctor` and `npm run verify`; be able to explain why a green CI
-  build still does not satisfy the real-user release gates.
-- Practice changing one selection weight and predicting the effect.
-- Practice adding one question and explaining its difficulty mapping.
-- Prepare one failure story: low evidence, interrupted session or policy
-  parity drift.
-- Recruit at least 10 users if time permits and report the raw sample size,
-  disagreements and negative cases.
+运行离线命令，说明合成评分标签；观察追问、弃权和三次自适应选题；查看候选排名与合法替换检测。需要数据库的恢复与训练流程可在本地引导演示中运行；真实语音必须另配服务并按[语音协议](VOICE_EVALUATION.md)测量。最新自动测试与人工门禁见[评测](EVALUATION.md)。

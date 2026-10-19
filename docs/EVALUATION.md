@@ -1,111 +1,73 @@
-# Evaluation plan
+# Evaluation and evidence boundaries
 
-The project should not claim “better interviewing” from screenshots. Each claim
-maps to a measurable offline or online test.
+Reviewed 2026-10-19. Engineering correctness, synthetic policy behavior and human
+validity are separate claims. This document changes no experiment or gate.
 
-## Current automated checks
+## Verified engineering baseline
 
-- question-bank schema: 24 questions, four skills, with two public anchors;
-- Python policy kernel, scoring evaluator and voice helpers: 88 tests covering state
-  transitions, ability updates, selection, reliability, verification budget,
-  agreement metrics, strict dataset validation and shared golden fixtures;
-- TypeScript policy: three shared golden parity fixtures for posterior update,
-  uncertainty, information gain and utility signals;
-- web production build;
-- local end-to-end API scenario: create interview, reject an approved but
-  policy-inconsistent question before persistence, score seven turns through a
-  deterministic semantic-scorer stub, retrieve the evidence report and
-  reproduce all seven question decisions;
-- D1 batch fault injection: force the final event write to violate a unique
-  key, then verify that turn, posterior and interview counters all remain
-  unchanged;
-- concurrent lifecycle fault injection: block semantic scoring, cancel the
-  interview, release the scorer, and verify that the stale turn is rejected
-  without changing the cancellation or posterior;
-- pause/resume lifecycle: a paused active interview rejects turns, resumes,
-  accepts the expected next answer, and a paused finalizing interview can only
-  complete when the deterministic policy has no remaining question;
-- guided-demo isolation: the recommended deterministic path triggers
-  `VERIFY`, then `ABSTAIN`, completes six accepted fixture turns and three
-  adaptive turns, replays all 8/8 decisions, makes zero scorer calls and
-  rejects attempts to save demo feedback;
-- policy audit checks: deterministic 7/7 replay, stable SHA-256 fingerprint,
-  sorted candidate utilities and detection of an approved-but-counterfactual
-  replacement question;
-- missing-credential voice fallback: token endpoint returns an explicit 503
-  while leaving text mode usable.
-- voice observability: client events record connection, final transcript,
-  checkpoint commit and recovery timings without copying raw answers; unit
-  tests verify percentile aggregation and the API end-to-end scenario verifies
-  persisted report metrics.
-- voice-turn fault injection: a transport-independent controller proves that
-  verbatim evidence crosses the API boundary, stale writes reload the
-  authoritative checkpoint, malformed 2xx responses cannot falsely complete
-  an interview, and a saved final answer is never requested again solely
-  because lifecycle finalization timed out.
-- voice-quality fixture: deterministic character error rate, domain-term,
-  checkpoint, duplicate-turn and latency calculations with a synthetic-only
-  `NOT_MEASURED` gate and a 30-sample consented-pilot minimum.
-- inference cost telemetry: final LiveKit session usage is priced by the
-  provider's actual billing unit, semantic-scorer calls use an explicit custom
-  token-price profile, unknown models stay unpriced, and unit plus API
-  end-to-end checks distinguish `NOT_MEASURED`, `PARTIAL`, `AVAILABLE` and
-  `UNAVAILABLE` instead of reporting missing data as zero cost.
-- semantic scorer fixture: 12 synthetic answers, two fixture annotations per
-  answer, strict no-fallback predictions, grouped bootstrap, baselines,
-  risk-coverage and a deliberate `NOT_READY` release status.
-- formal scorer gate tests: dev predictions cannot affect release metrics,
-  mixed run/model/prompt versions fail, and perturbation parents cannot cross
-  participant groups, questions or data splits.
+[CI for code baseline 17368d4](https://github.com/soberlady/statinterview-coach/actions/runs/39247270245)
+passed on Ubuntu / Node 22.13 / Python 3.11. Final counts were 107 Python tests
+after voice extras, 30 engineering JavaScript tests and 132 TypeScript tests.
+The initial kernel-only run had 106 passes and one optional-runtime skip; the
+later voice run had no skips. These counts are dated execution evidence, not a
+coverage percentage or a promise that future versions keep identical counts.
 
-## Completed synthetic policy benchmark
+| Contract | Executable evidence |
+| --- | --- |
+| Current 48-main / 97-follow-up bank and frozen legacy versions | `npm run validate:content`, question-bank version tests |
+| Types, toolchain and rendered output | `npm run lint`, `npm run typecheck`, production build and engineering JS tests |
+| Evidence gating and raw transcript repair | rubric-evaluator tests: missing quotes, grounded incorrect answers, numeric/negation/semantic changes and provider fallback |
+| API resource boundary | HTTP tests and actual streamed oversized request returning 413 in local E2E |
+| Policy and report interpretation | policy, report-insights and demo tests; legacy/JD verification association and transfer evidence |
+| Transaction and concurrency safety | D1 unique-event fault rolls back the whole batch; cancellation during scoring rejects the stale write |
+| Recovery | saved-answer replay, paused/finalizing state, draft refresh, lost response, final completion failure and browser training recovery |
+| Voice controller | raw transcripts, participant/question-bound controls, malformed success, checkpoint restore and late-response recovery |
+| Dependency safety | npm gate plus complete installed Python audit, including test/build/voice tools; explicit handling of skipped source package |
 
-The reproducible script is `experiments/run_policy_benchmark.py`; generated
-results are checked into `content/policy-benchmark.json`.
+`npm run verify` runs the code gate, local D1/browser E2E and artifact regeneration.
+The [workflow](../.github/workflows/ci.yml) separately installs production voice
+dependencies, checks imports and compatibility, audits Python and reruns its
+tests. Frozen evidence must leave no diff. [Development setup](../CONTRIBUTING.md)
+documents prerequisites; audits require network access. No paid model call is
+required for these regressions.
 
-| Strategy | Job-weighted MAE | Job-weighted RMSE | Mean selected job weight |
-| --- | ---: | ---: | ---: |
-| Adaptive | 0.672 | 0.841 | 0.281 |
-| Fixed | 0.699 | 0.873 | 0.169 |
-| Random valid | 0.688 | 0.861 | 0.240 |
+## Evidence sources
 
-With 4,000 simulated candidates, adaptive minus fixed weighted MAE was
-`-0.0268`, paired 95% interval `[-0.0312, -0.0223]`, a relative reduction of
-3.83%. The nominal 90% credible interval coverage was 90.0%.
+| Evidence | Current result | What it can establish |
+| --- | --- | --- |
+| [Agent trace](../content/agent-demo.json) | 8/8 replay, 3 adaptive decisions; legal-question substitution detected | Production TS policy behavior with fixture scores |
+| [Frozen v2 policy benchmark](EXPERIMENT_RESULTS.md) | 4,000 simulated candidates, seven-question budget; weighted MAE 0.672 adaptive vs 0.699 fixed, relative reduction 3.83%; paired difference 95% interval [-0.0312, -0.0223] | Behavior under the stated Rasch assumptions and original 24-question bank |
+| [Current coaching-v3 regression](../content/coaching-benchmark.json) | 12 injected-score scenarios; budget and 7/7 replay per scenario | Routing sensitivity, not MAE or learning gains |
+| [Scorer protocol](SCORING_EVALUATION.md) | 12 synthetic answers; release gate NOT_READY | Metric/data-validation pipeline, not model accuracy or expert agreement |
+| [Voice protocol](VOICE_EVALUATION.md) | 6 synthetic samples; NOT_MEASURED | Evaluation calculations, not actual audio quality |
+| [Cost protocol](COST_OBSERVABILITY.md) | Distinguishes measured, partial and unpriced data | Reported usage accounting boundaries, not a complete provider bill |
 
-Interpretation: the benefit varies by role profile and is largest for the
-data-engineering profile. The experiment validates the policy under a
-one-parameter logistic response simulation; it does not establish real
-interview validity.
+## Uncompleted human gates
 
-## Release gates
+- Scoring: independent double-labeled 48–72 answer pilot, then 200 consented,
+  anonymized answers under the existing frozen split/run protocol. The formal
+  gate uses locked_test only and the existing κ ≥0.65 plus governance/telemetry checks.
+- Voice: the existing 30-session protocol, with raw sample sizes, failures,
+  character error rate, technical-term accuracy, checkpoint recovery and latency percentiles.
+- Usefulness: blind follow-up preference (>60% over a random valid question is
+  the planned gate), report comprehension and task completion; not yet measured.
+- Training: separate guided practice from unhinted transfer; record attrition
+  and negative cases before making learning claims.
 
-| Claim | Dataset / test | Metric | Initial gate |
-| --- | --- | --- | --- |
-| Rubric scoring agrees with experts | 200 consented, anonymized answers, blindly double labeled; ≥40 per skill | weighted kappa, Spearman, latency/tokens | κ ≥ 0.65 plus governance and telemetry checks |
-| Reliability policy detects unsafe scores | disagreement / transcript corruption set | risk-coverage curve | error falls as coverage falls |
-| Adaptive questions are useful to humans | blind expert pairwise review | preference rate | > 60% over random valid question |
-| Anchors remain comparable | repeated anchor responses | score drift | monitor by question/version |
-| Recovery is real | forced refresh/network interruption | resumed turn accuracy | 100% checkpoint recovery |
-| Voice is usable | 30 Chinese sessions | character error rate, domain-term accuracy, p95 turn latency | publish measured values only |
-| Users find reports actionable | beta feedback + interviews | ≥4/5 share, task completion | report raw sample size |
+The protocols retain their existing ablations: random/uncertainty/full utility,
+single/double-pass scoring with reliability, generated versus verbatim evidence,
+and text versus voice. No result here changes those frozen rules.
 
-## Required ablations
+## Limits
 
-1. random valid question versus uncertainty-only selection;
-2. uncertainty-only versus full utility with JD/time constraints;
-3. single-pass score versus reliability verification;
-4. generated summary evidence versus verbatim source evidence;
-5. text input versus LiveKit voice transcription.
+Question difficulties are authored rather than calibrated from people. Shared
+Python/TS fixtures check mathematics and utility signals, not full policy
+equivalence; the Python utility golden test evaluates the formula rather than
+the complete selector. SHA-256 replay fingerprints do not validate semantic
+scoring or prevent an administrator rewriting evidence. Unique stored turns
+do not eliminate duplicate in-flight scorer calls. Synthetic observations,
+one successful voice session or one transfer score do not establish hiring
+validity, production reliability or lasting learning improvement.
 
-## Known limitations
-
-- question difficulty is expert-authored, not psychometrically calibrated;
-- the current fallback evaluator measures structure and terminology, not
-  semantic correctness, and is prohibited from changing the ability posterior;
-- no employment-validity claim is made;
-- ability posteriors become externally meaningful only after real-answer
-  calibration; current parity tests establish implementation consistency, not
-  psychometric validity.
-- `DEMO_FIXTURE` posteriors are presentation fixtures and must never be mixed
-  with real-user calibration or scoring-validation claims.
+Outstanding work is consolidated in the [roadmap](NEXT_STEPS_ZH.md), with
+separate [release checks](RELEASE_CHECKLIST.md) and [security scope](../SECURITY.md).

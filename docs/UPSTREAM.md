@@ -27,7 +27,7 @@
 - evidence-linked report and D1 audit schema;
 - Chinese data-analysis internship product surface.
 
-## Resume wording rule
+## Integration claim boundary
 
 The browser room and token endpoint are now implemented, but this remains an
 original integration rather than a LiveKit Meet fork. Describe it as

@@ -10,14 +10,16 @@ Run `npm run verify` from a clean checkout. The gate must pass all of the
 following:
 
 - configuration shape and browser-secret preflight;
-- 24-question bank validation;
+- current 48-main / 97-follow-up bank validation and legacy snapshot compatibility;
 - lint, full TypeScript checking with generated Worker types, and production build;
 - Python policy, scoring, cost, transcript and voice-turn tests;
 - TypeScript policy parity, telemetry, replay and guided-demo tests;
 - local D1 end-to-end flow, including `/api/health`, rollback, stale-checkpoint
   recovery, pause/resume and policy tamper detection;
 - deterministic regeneration of policy, scorer, voice and Agent demo evidence artifacts;
-- separate production voice dependency install and worker import smoke check in CI.
+- separate production voice dependency install, worker import, pip check,
+  complete installed Python dependency audit and Python test rerun in CI;
+- npm security audit including build tools, with any existing exception explicitly visible.
 
 GitHub Actions runs the same gate on every push and pull request and verifies
 that generation leaves the repository unchanged.

@@ -35,12 +35,17 @@ pytest
 The voice extra follows the current LiveKit `AgentServer` / `AgentSession`
 interface. It is optional so the deterministic kernel remains lightweight.
 
+Run from the repository root, using the dedicated environment:
+
 ```powershell
-python -m pip install -e ".[voice,dev]"
-Copy-Item ..\..\.env.example ..\..\.env
-# Fill LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET and an interview id.
-python -m statinterview_agent.livekit_worker console
+services\agent\.venv\Scripts\python.exe -m pip install -e "./services/agent[dev]" -r services/agent/requirements.txt
+services\agent\.venv\Scripts\python.exe -m statinterview_agent.livekit_worker console
 ```
+
+Configure private local service values following the
+[LiveKit runbook](../../docs/LIVEKIT_RUNBOOK.md). The worker loads `.env.local`
+and `.env` relative to its working directory, preserving inherited variables.
+Never commit those files. Installation alone does not connect or measure audio.
 
 For a deployed room, use the name
 `statinterview--<interview_id>`. The worker reads the initial question from the

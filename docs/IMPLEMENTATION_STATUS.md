@@ -1,153 +1,32 @@
 # Implementation status
 
-Updated: 2026-09-08
+Reviewed against code baseline `17368d4`, 2026-10-19. This is a source/verification inventory, not a deployment announcement.
 
-## Complete
+## Implemented
 
-- polished responsive landing, interview and report surfaces;
-- D1 schema, generated migration and local migration command;
-- create/read/update interview APIs with atomic session-plus-prior
-  initialization;
-- turn, event, report and feedback APIs;
-- approved 24-question Chinese bank and validator;
-- two public anchors, two frozen JD-directed baselines, three posterior-adaptive
-  questions, bounded verification and abstention;
-- versioned per-turn checkpoints and resume endpoint;
-- evidence-linked report based on persisted data;
-- Python deterministic policy kernel, scorer evaluator and voice helpers with 99 passing
-  tests;
-- shared Python/TypeScript golden parity fixtures for posterior and utility
-  signals;
-- optional double-pass semantic rubric scorer with verbatim-evidence
-  validation, reviewer-disagreement gating, version fingerprints, strict
-  offline mode and provider-failure fallback;
-- LiveKit 1.6 AgentServer worker using raw final transcripts;
-- reconnect-safe LiveKit rooms, lossless committed-transcript accumulation,
-  Mandarin-first TTS and mixed Chinese/English term normalization;
-- transport-independent voice-turn controller with offline failure injection:
-  raw-evidence preservation, short transcript, timeout, rejected response,
-  409 checkpoint restore, malformed-success recovery and durable final-turn
-  behavior when lifecycle completion is temporarily unavailable;
-- browser microphone/room connection and short-lived token endpoint with
-  explicit Agent dispatch;
-- privacy-bounded voice observability for connection, final-transcript,
-  checkpoint, disconnect and recovery events, with separate p50/p95 report
-  metrics and end-to-end coverage;
-- deterministic Chinese transcript evaluator for character error rate,
-  domain-term accuracy, recovery correctness, duplicate commits and p95
-  latency; synthetic fixtures are hard-gated as `NOT_MEASURED`;
-- final LiveKit session-usage export with per-model token, audio-duration and
-  character counts; versioned Build/Ship or Scale list-price estimation,
-  optional semantic-scorer token pricing, idempotent persistence and explicit
-  partial/unavailable completed-interview cost coverage;
-- deterministic 4,000-candidate adaptive/fixed/random benchmark;
-- in-product `/lab` experiment page with assumptions, ablation and claim
-  boundary;
-- deterministic policy replay from persisted turns, SHA-256 decision
-  fingerprint, invariant checks and top-three candidate utility breakdowns;
-- counterfactual tamper test that replaces a selected question with another
-  approved question and verifies that the audit detects the mismatch;
-- write-time policy guard that rejects an approved but policy-inconsistent
-  question and an out-of-order turn before state mutation;
-- atomic D1 turn batch covering the turn, posterior, checkpoint and Agent
-  event, with end-to-end rollback and concurrent-cancel fault-injection tests;
-- checkpoint-version compare-and-swap prevents a stale semantic-scoring
-  response from overwriting a concurrent pause or cancel;
-- client-facing interview updates restricted to matching
-  complete/pause/resume/cancel state transitions; clients cannot overwrite
-  posterior or checkpoint data, or reserve internal event idempotency keys;
-- the interview UI writes a durable pause before exiting, automatically enters
-  recovery on return, and safely completes a paused finalizing checkpoint only
-  when the policy has no remaining question;
-- structure-only fallback that provides feedback but cannot update ability;
-- isolated `guided_demo` mode with server-generated synthetic answer options,
-  a deterministic `DEMO_FIXTURE` evaluator, visible report disclaimers and a
-  server-side prohibition on saving demo feedback as user-study data;
-- guided-demo end-to-end proof: eight stored turns, one verification, six
-  accepted fixture turns, three adaptive decisions, 8/8 policy replay and zero
-  semantic-model calls;
-- bounded one-criterion rubrics for verification questions;
-- self-contained local API end-to-end test using a deterministic strict scorer
-  for seven accepted turns and a 7/7 replay;
-- frozen three-file semantic-scoring dataset protocol, strict inference runner,
-  12-answer synthetic smoke fixture, grouped bootstrap, baselines,
-  risk-coverage and a deliberate `NOT_READY` gate;
-- formal scoring metrics use only `locked_test`; the gate requires a separate
-  dev split, one frozen run/model/prompt, and perturbation-parent split
-  integrity;
-- successful production build;
-- secret-safe local configuration doctor with all-or-none credential checks,
-  URL/range validation and browser-secret detection;
-- non-secret `/api/health` readiness endpoint covered by the local D1
-  end-to-end test;
-- one-command clean-checkout verification and GitHub Actions CI across Node,
-  Python, build, local D1 and deterministic evidence regeneration;
-- public-repository hygiene: Apache-2.0 license, security boundary,
-  contribution rules, dependency updates and a release checklist.
-- read-only public portfolio route that interactively replays
-  `VERIFY -> ABSTAIN -> ACCEPT`, adaptive ranking and policy fingerprints with
-  fixed synthetic data; a Worker-level showcase switch blocks operational
-  APIs and redirects interview/report pages without changing the owner-only
-  full deployment behavior.
+| Area | Current behavior | Reference |
+| --- | --- | --- |
+| Decision policy | coaching-v3, 48 main questions / 97 verification questions, 2+2+3 substantive budget and bounded verification | [Architecture](ARCHITECTURE.md) |
+| Scoring | Two rubric passes, per-pass evidence gates, raw-answer repair baseline; structure-only fallback cannot update ability | [Report design](REPORT_REFINEMENT_ZH.md) |
+| Persistence | D1 batch, checkpoint CAS, frozen question-bank versions, saved-answer replay and recoverable completion | [Architecture](ARCHITECTURE.md) |
+| Training | Persisted two-practice / one-unhinted-transfer plan with exclusions and separate interpretation | [Report design](REPORT_REFINEMENT_ZH.md) |
+| Voice | LiveKit worker, raw final transcripts, question-bound controls, checkpoint recovery and observability | [Runbook](LIVEKIT_RUNBOOK.md) |
+| Audit/demo | Production policy with synthetic scores, replay, candidate rankings and reproducibility fingerprint | [Code guide](PROJECT_GUIDE_ZH.md) |
+| Verification | Types, build, unit/integration/browser tests, frozen evidence regeneration, npm/Python security gates | [Evaluation](EVALUATION.md) |
 
-## Voice display diagnostics (2026-09-08, local source)
+## Verified code baseline
 
-- Browser streams render incremental deltas and isolate saved-turn buffers.
-- The latest persisted answer is available separately from live display text.
-- Reports compare per-turn stored lengths with versioned browser checkpoints;
-  missing, legacy, conflicting and capped telemetry stays unmeasured.
-- Diagnostic counts do not represent ASR accuracy and cannot affect policy or ability state.
-- Synthetic unit and API integration coverage is included; deployment and a fresh
-  human voice regression are separate outstanding release steps.
+[CI for 17368d4](https://github.com/soberlady/statinterview-coach/actions/runs/39247270245) passed on Ubuntu 24.04.5 / Python 3.11.17 / Node 22.13.0: 30 engineering JavaScript tests, 132 TypeScript tests and 107 Python tests after production voice dependencies were installed. The earlier kernel-only pass had 106 passing and one optional test skipped; the final voice pass had no skips. Python audit checked 96 packages, excluding only this editable source package.
 
-## Portfolio and verification improvements (2026-09-08)
+The same workflow exercised local D1/browser recovery and regenerated frozen artifacts without a diff. This does not measure real audio, model accuracy or user learning. See [dependency risk](DEPENDENCY_UPGRADE_ZH.md) for the existing npm exception and Python locking limits.
 
-- Credential-free `npm run demo:agent` executes the production edge policy
-  with labeled fixture scores: eight turns, three adaptive decisions, complete
-  replay and approved-question tamper detection.
-- Public showcase values and fingerprint come from the generated trace;
-  CI detects stale artifacts instead of relying on hand-entered display values.
-- Full TypeScript checking now participates in the machine gate, with
-  Wrangler-generated runtime types and consistent LiveKit SDK imports.
-- Pure API authentication tests no longer import the optional native voice SDK.
-  CI separately checks the worker with pinned production voice dependencies.
-- `verify:code` separates code verification from optional deployment
-  credential preflight, while `verify` retains both gates.
-- Chinese project and next-step guides give reviewers a runnable example,
-  source map, claim boundaries and an application preparation checklist.
+## Not yet established
 
-These are source changes. Check actual GitHub CI and deployment status before
-claiming they are published. Local unit tests do not validate the native voice
-runtime; the current Windows machine blocks a LiveKit native DLL import.
+- Expert-calibrated question difficulty and human-labeled scorer validity (`NOT_READY`).
+- Formal 30-session voice-quality measurements (`NOT_MEASURED`).
+- Long-term learning gains, blind usefulness results or hiring validity.
+- Cross-instance in-flight scoring-call deduplication; saved-turn uniqueness is narrower.
+- Multi-user ownership, public-beta authorization and complete retention/deletion rules.
+- Full Python/TypeScript session-policy equivalence.
 
-## Human-dependent next steps
-
-1. run the frozen 30-session voice protocol and publish measured latency,
-   disconnect recovery, Chinese character error rate and domain-term accuracy;
-2. run a 48–72 answer double-labeled scorer pilot, freeze the protocol, then
-   collect 200 consented anonymous answers for the formal release gate;
-3. recruit 10–20 beta users and run the blind follow-up usefulness study;
-4. calibrate question difficulties from real answers;
-5. add authenticated per-user history only after the core experiment is
-   complete.
-
-## Credential-dependent work
-
-The following values are intentionally not invented or committed:
-
-- `LIVEKIT_URL`
-- `LIVEKIT_API_KEY`
-- `LIVEKIT_API_SECRET`
-
-The browser token endpoint, room connection and explicit dispatch are
-implemented. A developer-local LiveKit project has produced audible calls, but
-formal aggregate voice-quality claims remain blocked on the 30-session
-protocol. The browser remains fully usable through the text channel.
-
-## Access boundary
-
-The full data-bearing Sites deployment remains owner-only. A separate public
-read-only showcase exposes synthetic data only. Per-user ownership and service
-authentication must be added before a public beta; until then the project
-should be described as a private interview demo and offline experiment system,
-not a multi-tenant public service.
+The full data-bearing system remains owner-only; public showcase mode is synthetic/read-only. Current next steps live in the [validation roadmap](NEXT_STEPS_ZH.md), with separate [release gates](RELEASE_CHECKLIST.md). Historical changes are indexed in [archive](archive/README.md).

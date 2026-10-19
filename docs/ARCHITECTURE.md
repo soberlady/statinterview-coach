@@ -92,6 +92,12 @@ questions were already persisted, a paused/finalizing checkpoint may move to
 
 JSON is validated by the API and stored as text for D1/SQLite portability.
 
+The JSON reader counts actual stream bytes and cancels bodies beyond 128 KiB;
+Content-Length is only an early rejection hint, not the enforcement boundary.
+Question-bound browser drafts are separate from committed records: they have
+a 24-hour validity check on access and are cleared after confirmed submission
+or explicit removal. They do not replace server checkpoints.
+
 The existing `interviews.mode` field separates `guided_demo` sessions without
 adding a parallel schema. In that mode, the API returns versioned synthetic
 answer options and bypasses external scorers with an explicitly labeled
@@ -115,10 +121,10 @@ non-deterministic semantic model again. The audit checks five invariants:
 4. the expected and actual question ids match;
 5. the final replay reaches `COMPLETE`.
 
-For JD-directed and adaptive turns, the report stores the top three candidates,
+For JD-directed and adaptive turns, the report exposes the top three candidates,
 the policy version and selection phase. Adaptive utility is decomposed into
 normalized information gain, JD relevance, coverage need, difficulty match and
-time cost; the report stores only the bounded background route, not an extra
+time cost; the report exposes only the bounded background route, not an extra
 background score. A SHA-256 fingerprint makes two replays easy to compare. It is a
 reproducibility fingerprint, not a signed security attestation.
 
@@ -137,6 +143,11 @@ complete, pause, resume or cancel transitions; posterior and checkpoint writes
 remain server-authoritative. Client events cannot use the reserved internal
 idempotency namespace.
 
+Saved-answer replay does not imply in-flight scorer deduplication. Two concurrent
+requests may both call the external evaluator before one wins the checkpoint
+comparison. Storage remains unique, but external calls are not exactly-once.
+This remains a separate engineering limitation, not a guarantee of the batch.
+
 ```mermaid
 flowchart LR
   T["Persisted turns"] --> R["Policy replay"]
@@ -150,13 +161,28 @@ flowchart LR
 
 ## Dual implementation
 
-`services/agent` contains the higher-fidelity Python policy kernel. The web API
-uses `app/lib/agent-policy.ts` plus `app/lib/rasch-policy.ts`, an edge-compatible
-mirror, so the text product runs without a separate container. Shared golden
-fixtures currently prove parity for posterior updates, uncertainty summaries,
-information gain and utility signals. State transitions, reliability actions
+`services/agent` contains the Python mathematics/experiment kernel and voice
+adapter. The web API runs the production session policy in
+`app/lib/agent-policy.ts` plus `app/lib/rasch-policy.ts`, so text interviews do
+not require a Python API server. Shared golden fixtures check posterior updates,
+uncertainty summaries, information gain and utility signals; the Python utility
+golden test calculates the shared formula rather than exercising its entire selector.
+State transitions, reliability actions
 and selected question ids remain covered by implementation-specific tests and
 should not yet be described as full cross-language parity.
+
+## Evidence scoring and reports
+
+Each pass must independently ground each criterion in raw-answer quotations.
+An unsupported criterion contributes no grounded positive score and blocks the
+entire answer's posterior update; missing evidence is unknown, not a demonstrated
+wrong answer. A grounded incorrect answer can be a reliable low score. Repair
+validation always uses the original answer as the factual baseline, including
+failure paths; client auxiliary text cannot supply a replacement baseline.
+
+Report interpretation, legacy/JD verification links and transfer comparison are
+specified in [report design](REPORT_REFINEMENT_ZH.md). Reports do not rescore
+historical answers or treat a narrow follow-up as whole-question mastery.
 
 ## LiveKit transport
 

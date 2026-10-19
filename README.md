@@ -1,247 +1,103 @@
 # StatInterview Coach
 
-[![CI](https://github.com/soberlady/statinterview-coach/actions/workflows/ci.yml/badge.svg)](https://github.com/soberlady/statinterview-coach/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Private training](https://img.shields.io/badge/private-training-0f766e.svg)](https://statinterview-private-lab.keen-grass-7274.chatgpt.site/)
+**面向中文数据分析岗位的自适应面试训练 Agent。** 在七题预算内选择下一题，对不可靠证据追问或弃权，并保留从原始回答到能力状态、训练建议的可重放记录。
 
-**面向中文数据分析岗位的、不确定性感知的自适应面试训练 Agent。**
+这是个人训练与 Agent 工程作品，不用于招聘筛选。重点是**有状态决策、证据门控、持久化恢复与可复现评测**，而非无限生成问题。
 
-产品服务于个人面试前的诊断、练习和复测；作为个人作品，它展示的是
-Agent 的状态管理、受约束决策、可靠性控制与可重放执行，不用于企业筛选候选人。
-当前版本与真人验收步骤见 [本次训练闭环升级](docs/COACHING_UPGRADE_ZH.md)。
+[技术文档](docs/README.md) · [代码导读](docs/PROJECT_GUIDE_ZH.md) · [设计问答](docs/INTERVIEW_GUIDE.md) · [许可证](LICENSE)
 
-StatInterview Coach does more than generate questions and a final score. It
-maintains an explicit ability state, chooses the next approved question under
-a fixed interview budget, verifies weak evidence, and preserves a replayable
-decision trail from raw answer to final report.
+## 无需密钥的可运行演示
 
-[最新个人训练站（私有）](https://statinterview-private-lab.keen-grass-7274.chatgpt.site/) · [报告改进与验证边界](docs/REPORT_REFINEMENT_ZH.md)
-· [Architecture](docs/ARCHITECTURE.md)
-· [Evaluation](docs/EVALUATION.md)
-· [中文项目导读](docs/PROJECT_GUIDE_ZH.md)
-· [投递前行动清单](docs/NEXT_STEPS_ZH.md)
-· [Interview guide](docs/INTERVIEW_GUIDE.md)
-· [语音排障案例](docs/VOICE_DISPLAY_DIAGNOSTICS_ZH.md)
-
-<p align="center">
-  <img src="public/og.png" alt="StatInterview Coach public portfolio demo" width="900" />
-</p>
-
-## Run the Agent in two minutes
-
-After cloning, install the locked Node.js dependencies and run the real edge
-policy against labeled synthetic answers:
+需要 Node.js ≥22.13，首次安装需要网络：
 
 ```sh
+git clone https://github.com/soberlady/statinterview-coach.git
+cd statinterview-coach
 npm ci
 npm run demo:agent
+npm run demo:agent -- --check
 ```
 
-No API key, Python, database or microphone is needed for this demo. Initial
-installation requires internet access. The run produces **8/8 matching
-selections**, **3 adaptive decisions**, preserved posteriors for
-`VERIFY / ABSTAIN`, and detection of an approved but policy-inconsistent
-replacement question. The evaluator uses synthetic fixture scores; selection,
-posterior updates and replay execute the production TypeScript policy.
+演示执行实际 TypeScript 策略，以标记为 `DEMO_FIXTURE` 的合成评分驱动：
 
-The public showcase reads the same [generated trace](content/agent-demo.json),
-including its calculated rankings and fingerprint. Run
-`npm run demo:agent -- --check` to verify that the artifact matches the code.
-For a Chinese walkthrough and source-reading map, start with
-[中文项目导读](docs/PROJECT_GUIDE_ZH.md).
+```text
+VERIFY → ABSTAIN → ACCEPT → ACCEPT → ACCEPT → ACCEPT → ACCEPT → ACCEPT
+Replay: 8/8; adaptive: 3; terminal: COMPLETE
+Approved-question tamper: DETECTED
+```
 
-## What makes it an Agent
+七道正式题加一次验证追问；前两轮不更新后验，后六轮接受合成证据。无需 Python、数据库、麦克风或模型调用。它验证决策机制，不验证真实评分质量。[完整轨迹](content/agent-demo.json)供网页 `/showcase` 使用。
 
-| Capability | Implementation |
-| --- | --- |
-| Adaptive decisions | Two public anchors, two frozen JD-directed baselines, then three posterior-adaptive questions selected with uncertainty, information gain, relevance, coverage, difficulty and time constraints. |
-| Reliability control | Weak or conflicting evidence triggers a bounded approved follow-up or `ABSTAIN`; an LLM's self-reported confidence is never trusted. |
-| Auditable execution | Every answer, state transition, ranking and checkpoint is persisted. Reports replay the complete path, verify five invariants and fingerprint the policy trace with SHA-256. |
-| Realtime voice | LiveKit browser audio and a Python Agents worker preserve final raw transcripts, wait for transcript stability, recover checkpoints and fall back safely to text. |
-| Evidence-bound scoring | A bounded ASR repair pass precedes two role-separated rubric scoring passes, while quoted evidence must remain a verbatim substring of the original answer. |
-| Practice loop | A report creates two guided text exercises and one unseen transfer question, with persisted plans, feedback and a separately interpreted transfer result. |
-
-## Measured result
-
-For the **frozen v2 policy and original 24-question bank**, a deterministic paired simulation of **4,000 candidates** under the same
-seven-question budget, the three-stage adaptive policy reduced job-weighted
-MAE by **3.83%** versus a fixed sequence. The paired absolute-difference 95%
-interval was `[-0.0312, -0.0223]`, and the 90% posterior interval covered
-90.0% of simulated latent abilities.
-
-This is evidence about the frozen simulation and implementation—not proof of
-hiring validity or real-user learning impact. The effect varies by job profile,
-and the formal human-data scorer gate remains `NOT_READY`. See the
-[experiment report](docs/EXPERIMENT_RESULTS.md) and
-[release checklist](docs/RELEASE_CHECKLIST.md).
-
-The current **coaching-v3 / 48-question** release has a separate
-[12-scenario sensitivity regression](content/coaching-benchmark.json): all four
-role profiles select different routes for injected low and high scores, with
-7/7 matching replay decisions per scenario. This is a behavioral regression,
-not a new MAE result or evidence of real-user learning gains.
-
-## System flow
+## 架构与技术栈
 
 ```mermaid
 flowchart LR
-  C["Candidate: text or voice"] --> UI["Interview UI"]
-  UI --> API["Interview API"]
-  LK["LiveKit Agent worker"] --> API
-  API --> EVAL["Evidence evaluator"]
-  EVAL --> REL{"Reliability policy"}
-  REL -->|ACCEPT| BAYES["Bayesian ability update"]
-  REL -->|VERIFY| FOLLOW["Approved follow-up"]
-  REL -->|ABSTAIN| KEEP["Keep prior state"]
-  BAYES --> SELECT["Constrained question selector"]
-  FOLLOW --> EVAL
-  KEEP --> SELECT
-  SELECT --> D1["D1 checkpoint + audit trace"]
-  D1 --> REPORT["Evidence-linked report"]
+  UI[React 文本界面] --> API[TypeScript Interview API]
+  Voice[LiveKit / Python Worker] --> API
+  API --> Score[证据校验 / 双遍量表评分]
+  Score --> Policy[可靠性门控 / 能力后验 / 约束选题]
+  Policy --> DB[D1 原子写入 / 版本检查点]
+  DB --> Report[决策重放 / 证据报告 / 专项训练]
 ```
 
-The Python kernel defines the policy mathematics and supports experiments.
-The TypeScript policy runs the web API on Cloudflare. Shared golden fixtures
-check posterior updates, information gain and utility parity; they do not
-claim full session-policy equivalence across both implementations.
+| 层 | 技术与职责 |
+| --- | --- |
+| Web | React、Next.js API/路由约定、Vinext/Vite；文本作答、恢复与报告 |
+| 决策与存储 | TypeScript、Cloudflare Workers、D1/SQLite、Drizzle；生产 API 和选题策略 |
+| Python | Python ≥3.11、Pydantic；数学/实验内核及 LiveKit Agents 语音适配器 |
+| 验证 | pytest、Node/tsx tests、ESLint、tsc、Playwright、GitHub Actions、npm/Python 依赖审计 |
 
-## What works now
+Python 与 TypeScript 的 golden fixtures 检查后验、信息增益和效用信号，不代表两端会话策略完全等价。详见[架构](docs/ARCHITECTURE.md)。
 
-- end-to-end Chinese text and LiveKit voice interview flows with text fallback;
-- 48 curated data-analysis questions and 97 follow-ups with independent weighted rubrics, topic/family metadata and learning points; newly authored content awaits human review;
-- report-driven text training: two guided exercises and one unseen transfer question, with exclusions carried through the training chain;
-- refresh-safe D1 checkpoints, pause/resume recovery and atomic turn writes;
-- question-scoped local drafts with 24-hour validity, replay-safe answer retries and recoverable completion confirmation;
-- immutable, session-pinned question-bank snapshots for scoring and historical replay;
-- deterministic adaptive selection, bounded verification and explicit
-  `ABSTAIN`;
-- evidence-linked reports with uncertainty, top-three counterfactual rankings,
-  policy replay and tamper detection;
-- auditable ASR repair that preserves raw transcripts and protects numeric,
-  percentage, negation and causal evidence;
-- model, latency and marginal-cost telemetry for voice and semantic scoring;
-- Python Agent tests plus TypeScript parity, rendered-output, fault-injection
-  and local D1 end-to-end coverage;
-- a one-click synthetic guided path and an isolated read-only public showcase;
-- a clean-checkout GitHub Actions gate that rebuilds all frozen evidence.
+## Agent 如何决策
 
-Without a semantic model key, the application enters a labeled structure-only
-fallback that cannot update the ability posterior. With an OpenAI-compatible
-scorer, two role-separated passes score each rubric criterion; reviewer
-disagreement lowers reliability.
+- **2 + 2 + 3**：两个公共锚点、回答前冻结的两个岗位基线、三个后验自适应问题；效用结合信息增益、岗位相关性、覆盖、难度和时间成本。当前题库为 48 道主问题、97 条追问。
+- **证据与正确性分开**：双遍评分各自需要原文引用；有评分项缺少有效证据就阻止整次后验更新。明确且有证据的错误回答可以形成可靠低分。低可靠回答进入有界验证；每次诊断最多两次、每个原题最多一次，仍不足则 `ABSTAIN`。
+- **原文是事实基准**：转写辅助不能替换原始回答或改变数字、否定和关键语义；模型故障使用保守回退，无语义评分时仅给结构反馈，不更新能力。
+- **可恢复、可解释**：D1 batch、检查点版本比较和唯一约束保护写入；重放验证题目与状态，SHA-256 用于复现比较，不是安全签名。报告创建“两题有提示练习 + 一题无提示复测”。
 
-## Public demo and safety boundary
+实现入口与取舍见[代码导读](docs/PROJECT_GUIDE_ZH.md)，报告证据规则见[报告设计](docs/REPORT_REFINEMENT_ZH.md)。
 
-The public demo replays `VERIFY -> ABSTAIN -> ACCEPT`, posterior updates,
-adaptive rankings and decision audit entirely from fixed synthetic fixtures.
-It performs no model calls, database writes, microphone access or candidate
-data collection. Operational interview APIs are blocked at the Worker boundary.
-The complete data-bearing deployment remains owner-only until per-user
-authorization and the human-study release gates are complete.
+## 测试与实验结果
 
-## Local development
+代码基线 `17368d4` 的 [Ubuntu / Python 3.11 CI](https://github.com/soberlady/statinterview-coach/actions/runs/39247270245) 已通过：107 项 Python、30 项工程 JavaScript、132 项 TypeScript 测试，以及 lint、typecheck、生产构建、本地 D1/浏览器故障注入与冻结产物重建。Python 全量结果来自安装语音依赖后的复测。
 
-Prerequisites: Node.js `>=22.13`, Python `>=3.11`.
+| 证据 | 结果 | 适用边界 |
+| --- | --- | --- |
+| 冻结 v2 / 原 24 题仿真 | 4,000 个合成候选人，同一七题预算，加权 MAE 较固定题序降低 3.83% | 仅为 Rasch 仿真，不能外推至当前 v3、真人准确率或学习收益 |
+| 当前 coaching-v3 回归 | 12 个注入分数场景，预算与 7/7 决策重放通过 | 行为敏感性，不是新的 MAE 实验 |
+| 真人评分 / 语音质量 | `NOT_READY` / `NOT_MEASURED` | 合成夹具不能替代人工双标和真实语音协议 |
 
-```powershell
+实验假设、区间及复现命令见[实验报告](docs/EXPERIMENT_RESULTS.md)；完整证据边界见[评测](docs/EVALUATION.md)。
+
+## 本地网页与工程验证
+
+```sh
 npm ci
 npm run db:local
 npm run dev
 ```
 
-Open `http://localhost:3000`.
+打开 `http://localhost:3000`，选择“进入引导演示”；只读回放位于 `/showcase`。正常语义评分和实时语音需要独立配置，详见[开发指南](CONTRIBUTING.md)及[语音运行手册](docs/LIVEKIT_RUNBOOK.md)。不配置模型时不会获得可靠语义评分。
 
-On Windows, double-click `Start-Local-Preview.cmd` to prepare the local database
-and start the preview at `http://localhost:4175/`. Keep its terminal window open
-while practicing; closing it stops the local service. The launcher reuses an
-already running healthy preview. After restarting the computer, start it again
-before submitting the setup form.
+完整验证需 Python ≥3.11，并在专用环境安装运行及测试依赖：
 
-For a repeatable interview demo, choose **进入引导演示** on the landing page
-and use the answer option marked **推荐步骤**. The first weak answer triggers a
-bounded verification, the verification remains insufficient and abstains, and
-the remaining fixture answers establish evidence before three adaptive turns.
-
-Agent kernel:
-
-```powershell
-Set-Location services\agent
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -e ".[dev]"
-pytest
-```
-
-Voice worker:
-
-```powershell
-python -m pip install -e ".[voice,dev]"
-Copy-Item ..\..\.env.example ..\..\.env
-python -m statinterview_agent.livekit_worker console
-```
-
-The browser requests a short-lived room token from
-`/api/interviews/:id/voice-token`. The token explicitly dispatches the
-`statinterview-coach` worker. Without LiveKit credentials the endpoint returns
-`503 VOICE_NOT_CONFIGURED` and the text interview remains available.
-
-Optional semantic scoring uses the three
-`STATINTERVIEW_SCORER_*` values documented in `.env.example`. Provider failure
-automatically falls back to the labeled structure heuristic.
-
-## Verification
-
-```powershell
-npm run doctor
-npm run audit:dependencies
+```sh
+python -m pip install --upgrade pip
+python -m pip install -e "./services/agent[dev]" -r services/agent/requirements.txt
 npx playwright install chromium
 npm run verify
+npm run audit:dependencies
+npm run audit:python
 ```
 
-`doctor` validates configuration groups and deployment files without printing
-secret values. `verify` is the clean-checkout gate used by GitHub Actions: it
-validates content, checks all TypeScript types, builds the app, runs
-Python/TypeScript/rendered-output tests,
-exercises the local D1 API and browser recovery paths end to end and regenerates all frozen synthetic
-evidence. `/api/health` provides a non-secret database/question-bank/policy
-readiness check for a running deployment.
+推荐的虚拟环境与平台命令见[开发指南](CONTRIBUTING.md)。`verify` 含配置预检；部分可选配置会使预检失败，`verify:code` 可单独检查代码，但不隔离本地环境文件。两项审计需要网络。
 
-If optional local credentials are only partially configured, `doctor` will
-fail. Use `npm run verify:code` to run the complete code gate without the
-configuration preflight; deployment readiness still requires `doctor`.
-`verify:code` does not isolate the process from local environment files.
-Install the Python test dependencies first:
-`python -m pip install -e "./services/agent[dev]"`.
+## 真实限制
 
-Browser regressions use Playwright with synthetic demo answers and the local
-mock scorer. On Windows, Chrome at its standard installation path can be used
-without downloading Chromium; `STATINTERVIEW_BROWSER_EXECUTABLE` overrides the
-executable. CI installs Chromium automatically. Tests cover draft restore,
-response loss, terminal-state retries, completion failures, narrow screens and
-the unhinted transfer boundary. Voice processing tests are included in the main
-TypeScript test entry point.
+- 题目难度与评分量表尚未完成真人校准；两遍模型评分不等于独立专家双标，复测分差也不等于长期学习效果。
+- 完整数据系统限定可信单一拥有者使用；开放多人访问前仍需主体认证、资源归属和配额。公开展示模式只允许合成回放，参见[安全边界](SECURITY.md)。
+- 已保存回答可以幂等重放，但在途重复提交仍可能重复调用外部评分；存储幂等不等于模型调用恰好一次。
+- npm 仍有已披露的上游漏洞临时例外，Python 传递依赖尚未完全锁定；详见[依赖风险](docs/DEPENDENCY_UPGRADE_ZH.md)。
 
-CI also audits the complete npm dependency tree, including build tools. A
-time-limited, narrowly scoped exception remains for one unfixed upstream
-`braces` advisory; it is printed explicitly and expires on 2026-11-04. New
-advisories and unavailable audit reports fail the gate. This is not a zero-
-vulnerability result. See [dependency upgrade and remaining risk](docs/DEPENDENCY_UPGRADE_ZH.md)
-for versions, compatibility checks and the exception boundary.
-
-See [architecture](docs/ARCHITECTURE.md),
-[evaluation plan](docs/EVALUATION.md),
-[semantic scorer protocol](docs/SCORING_EVALUATION.md),
-[voice evaluation protocol](docs/VOICE_EVALUATION.md),
-[inference cost protocol](docs/COST_OBSERVABILITY.md), and
-[implementation status](docs/IMPLEMENTATION_STATUS.md). The
-[release checklist](docs/RELEASE_CHECKLIST.md) keeps machine gates separate
-from human-study gates. For interview
-preparation, use [INTERVIEW_GUIDE.md](docs/INTERVIEW_GUIDE.md).
-
-## Upstream and licenses
-
-The realtime architecture follows the official
-[LiveKit Agents Python starter](https://github.com/livekit-examples/agent-starter-python)
-and [LiveKit Meet](https://github.com/livekit-examples/meet) interaction model.
-The current repository is an original implementation, not a hidden fork.
-See [UPSTREAM.md](docs/UPSTREAM.md) for the exact reuse boundary.
+未完成事项集中于[验证路线图](docs/NEXT_STEPS_ZH.md)。上游参考与复用边界见[UPSTREAM](docs/UPSTREAM.md)。
