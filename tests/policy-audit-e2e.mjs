@@ -135,6 +135,27 @@ try {
   assert.equal(health.checks.database, "ready");
   assert.equal(health.checks.questionBank.approvedQuestionCount, 48);
   assert.equal(health.checks.policy, "ready");
+  // A streaming fetch has no Content-Length and is sent chunked by Node.
+  // UTF-8 input stays below 128 KiB in characters but exceeds it in bytes.
+  const oversizedBody = new TextEncoder().encode(JSON.stringify({
+    jobTitle: "Synthetic request-limit fixture", jobDescription: "SQL",
+    unused: "汉".repeat(50_000),
+  }));
+  const oversizedResponse = await fetch(`${baseUrl}/api/interviews`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: new ReadableStream({
+      start(controller) {
+        for (let offset = 0; offset < oversizedBody.length; offset += 16_384) {
+          controller.enqueue(oversizedBody.slice(offset, offset + 16_384));
+        }
+        controller.close();
+      },
+    }),
+    duplex: "half",
+  });
+  assert.equal(oversizedResponse.status, 413);
+  assert.equal((await oversizedResponse.json()).error.code, "PAYLOAD_TOO_LARGE");
   const interviewPayload = {
     jobTitle: "数据分析实习生",
     jobDescription:

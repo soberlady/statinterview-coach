@@ -89,9 +89,12 @@ export function isAcceptedEvidence(turn: DiagnosticTurn) {
 
 export function verificationFollowups(turn: DiagnosticTurn, turns: DiagnosticTurn[]) {
   if (!turn.questionId || turn.questionType === "verification") return [];
+  // Both historical and coaching banks use the same source ID underneath
+  // the JD baseline wrapper. Do not resolve old records against today's bank.
+  const sourceId = turn.questionId.replace(/__role_anchor$/, "");
   return turns.filter(candidate => candidate.sequenceNumber > turn.sequenceNumber
     && candidate.questionType === "verification" && isAcceptedEvidence(candidate)
-    && candidate.questionId?.replace(/__verify_(?:v3_)?\d+$/, "") === turn.questionId);
+    && candidate.questionId?.match(/^(.+)__verify_(?:v3_)?\d+$/)?.[1] === sourceId);
 }
 
 export function buildReportInsights(turns: DiagnosticTurn[], jobWeights: Record<string, number> = {}, recommendation?: { focusSkill: string; topic: string; reason: string } | null) {

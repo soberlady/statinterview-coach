@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { buildReportInsights, criterionFeedback, confirmationReason, compareEvidence, verificationFollowups, type DiagnosticTurn } from "../app/lib/report-insights";
+import { getInterviewQuestion, LEGACY_QUESTION_BANK_VERSION, COACHING_QUESTION_BANK_VERSION } from "../app/lib/question-bank";
 
 function turn(overrides: Partial<DiagnosticTurn> = {}): DiagnosticTurn {
   return { id: "t1", sequenceNumber: 1, questionId: "sql_python_001", skill: "sql_python",
@@ -31,6 +32,38 @@ test("verification links only later accepted followups of the exact source", () 
   ]).map(item => item.id), ["followup"]);
   assert.equal(criterionFeedback(parent)[0].state, "uncertain");
   assert.deepEqual(verificationFollowups(turn({ questionId: null }), [followup]), []);
+});
+
+for (const version of [LEGACY_QUESTION_BANK_VERSION, COACHING_QUESTION_BANK_VERSION] as const) {
+  for (const roleAnchor of [false, true]) {
+    test(`followup source association preserves ${version} / ${roleAnchor ? "JD baseline" : "ordinary question"}`, () => {
+      const parentId = `sql_python_001${roleAnchor ? "__role_anchor" : ""}`;
+      const followupId = `sql_python_001__verify_${version === LEGACY_QUESTION_BANK_VERSION ? "0" : "v3_0"}`;
+      const parentQuestion = getInterviewQuestion(parentId, version);
+      const followupQuestion = getInterviewQuestion(followupId, version);
+      assert.ok(parentQuestion);
+      assert.ok(followupQuestion);
+      assert.equal(parentQuestion.sourceQuestionId, followupQuestion.sourceQuestionId);
+      const parent = turn({ questionId: parentId, reliability: "LOW", sequenceNumber: 3 });
+      const followup = turn({ id: "accepted-followup", questionId: followupId, questionType: "verification", sequenceNumber: 4 });
+      const candidates = [parent, followup,
+        { ...followup, id: "different-source", questionId: "sql_python_002__verify_0" },
+        { ...followup, id: "before-parent", sequenceNumber: 2 },
+        { ...followup, id: "unreliable", reliability: "LOW" },
+      ];
+      assert.deepEqual(verificationFollowups(parent, candidates).map(item => item.id), ["accepted-followup"]);
+      assert.equal(criterionFeedback(parent)[0].state, "uncertain");
+      assert.deepEqual(verificationFollowups(followup, candidates), []);
+    });
+  }
+}
+
+test("verification flags alone cannot link a main question or malformed followup ID", () => {
+  const parent = turn();
+  const candidate = turn({ id: "malformed", sequenceNumber: 2, questionType: "verification" });
+  assert.deepEqual(verificationFollowups(parent, [candidate,
+    { ...candidate, questionId: "sql_python_001__verify_v3_0junk" },
+  ]), []);
 });
 
 test("uncertain, untested and observed gaps remain distinct", () => {

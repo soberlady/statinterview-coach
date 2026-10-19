@@ -25,6 +25,7 @@ export async function readJsonObject(request: Request): Promise<JsonObject> {
     Number.isFinite(Number(contentLength)) &&
     Number(contentLength) > MAX_JSON_BODY_BYTES
   ) {
+    if (request.body) void request.body.cancel().catch(() => {});
     throw new ApiError(
       413,
       "PAYLOAD_TOO_LARGE",
@@ -33,10 +34,33 @@ export async function readJsonObject(request: Request): Promise<JsonObject> {
   }
 
   let payload: unknown;
+  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
   try {
-    payload = await request.json();
-  } catch {
+    reader = request.body?.getReader();
+    let bytesRead = 0;
+    let text = "";
+    const decoder = new TextDecoder();
+    if (reader) {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        bytesRead += value.byteLength;
+        if (bytesRead > MAX_JSON_BODY_BYTES) {
+          // Do not wait for an untrusted upstream's cancellation promise.
+          // No oversized chunk is decoded or retained in the JSON text.
+          void reader.cancel().catch(() => {});
+          throw new ApiError(413, "PAYLOAD_TOO_LARGE", "Request body exceeds the 128 KiB limit.");
+        }
+        text += decoder.decode(value, { stream: true });
+      }
+    }
+    text += decoder.decode();
+    payload = JSON.parse(text);
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
     throw new ApiError(400, "INVALID_JSON", "Request body must be valid JSON.");
+  } finally {
+    reader?.releaseLock();
   }
 
   if (!isJsonObject(payload)) {
