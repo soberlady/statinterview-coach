@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=83.0.0,<84"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -19,7 +19,8 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
   "pytest>=9.0.3,<10",
-  "pip-audit==2.10.1"
+  "pip-audit==2.10.1",
+  "setuptools>=83.0.0,<84"
 ]
 voice = [
   "httpx>=0.28,<1",

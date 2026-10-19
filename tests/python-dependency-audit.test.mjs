@@ -17,17 +17,21 @@ test("Python audit covers test, runtime and audit tools while identifying local 
   });
 });
 
-test("a vulnerable pytest or transitive runtime package blocks the audit", () => {
-  for (const name of ["pytest", "runtime-transitive-fixture"]) {
+test("vulnerable test, build or transitive runtime packages block the audit", () => {
+  for (const [name, version, id, fix] of [
+    ["pytest", "8.4.2", "PYSEC-2026-1845", "9.0.3"],
+    ["setuptools", "79.0.1", "PYSEC-2026-3447", "83.0.0"],
+    ["runtime-transitive-fixture", "0.1", "GHSA-fixture", "0.2"],
+  ]) {
     const report = cleanReport();
-    report.dependencies.push({ name, version: "0.1", vulns: [
-      { id: "GHSA-fixture", fix_versions: ["9.0.3"] },
+    report.dependencies.push({ name, version, vulns: [
+      { id, fix_versions: [fix] },
     ] });
     if (name === "pytest") report.dependencies.shift();
     const result = checkPythonAudit(report);
     assert.equal(result.failures.length, 1);
-    assert.match(result.failures[0], /GHSA-fixture/);
-    assert.match(result.failures[0], /9\.0\.3/);
+    assert.ok(result.failures[0].includes(id));
+    assert.ok(result.failures[0].includes(fix));
   }
 });
 

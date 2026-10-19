@@ -89,6 +89,12 @@ Vinext 1.x 将开发启动委托给 Vite，默认端口随之改变。启动包�
 本轮在 Windows / Python 3.12 上分别验证了最低修复版 `9.0.3` 和当前解析版
 `9.1.1`，两者均通过全部 107 项 Python 测试。依赖范围不等于完整锁文件。
 
+首次 Ubuntu / Python 3.11 CI 的安全门禁还发现 runner 预装的 `setuptools 79.0.1`
+命中 [PYSEC-2026-3447](https://github.com/pypa/advisory-database/blob/main/vulns/setuptools/PYSEC-2026-3447.yaml)，
+公告修复版为 `83.0.0`。构建后端及 dev 依赖因此统一限定为 `setuptools>=83.0.0,<84`：
+构建隔离环境和执行测试的环境都应安装安全版本，不能仅更新隔离构建后仍保留旧 runner 工具。
+此限制只作用于构建/测试工具，不加入项目运行依赖，也不放宽审计门禁。
+
 在项目根目录用专用虚拟环境安装并审计完整环境：
 
 ```powershell
